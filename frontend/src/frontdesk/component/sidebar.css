@@ -1,0 +1,205 @@
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background: #0a0a0d;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: "Inter", "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+/* Logo */
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 20px 18px;
+}
+
+.logo-icon {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.logo-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.logo-title-accent {
+  color: #e11d2e;
+}
+
+.logo-subtitle {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: #6b6b70;
+  margin-top: 2px;
+}
+
+/* Nav */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  color: #9a9aa2;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.sidebar-link.active {
+  background: linear-gradient(90deg, #e11d2e, #b3121f);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(225, 29, 46, 0.35);
+}
+
+.sidebar-icon {
+  flex-shrink: 0;
+}
+
+/* Banner */
+.sidebar-banner {
+  position: relative;
+  margin: 18px 14px 0;
+  flex: 1;
+  min-height: 220px;
+  border-radius: 14px;
+  overflow: hidden;
+  background-image: url("../../assets/gym-banner.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+.banner-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 10, 13, 0.15) 0%,
+    rgba(10, 10, 13, 0.55) 55%,
+    rgba(10, 10, 13, 0.9) 100%
+  );
+}
+
+.banner-text {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #ffffff;
+  text-transform: uppercase;
+  z-index: 1;
+}
+
+.banner-italic {
+  font-style: italic;
+  font-weight: 700;
+  color: #e5e5e7;
+}
+
+.banner-accent {
+  color: #e11d2e;
+}
+
+/* Footer */
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #0a0a0d;
+}
+
+.footer-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.footer-avatar {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #2a2a30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.footer-status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e11d2e;
+  border: 2px solid #0a0a0d;
+}
+
+.footer-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.footer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.footer-role {
+  font-size: 11px;
+  color: #7a7a80;
+}
+
+.footer-logout {
+  background: transparent;
+  border: none;
+  color: #9a9aa2;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.footer-logout:hover {
+  background: rgba(225, 29, 46, 0.15);
+  color: #e11d2e;
+}

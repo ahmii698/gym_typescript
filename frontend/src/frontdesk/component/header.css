@@ -1,0 +1,12 @@
+.app-header {
+  padding: 16px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e5e8;
+}
+
+.app-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a1d;
+}
