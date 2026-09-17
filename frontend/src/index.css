@@ -11,4 +11,9 @@ html, body, #root {
 
 body {
   background: #0a0a0d;
+  overflow: hidden;
+}
+
+#root {
+  overflow: hidden;
 }

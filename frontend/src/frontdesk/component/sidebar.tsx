@@ -13,15 +13,19 @@ import {
 } from "lucide-react";
 import "./sidebar.css";
 
+// Images import
+import logo from "../../assets/logo.png";
+import gymBanner from "../../assets/gym-banner1.png";
+
 const navItems = [
   { to: "/frontdesk/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/frontdesk/add-member", label: "Add Member", icon: UserPlus },
   { to: "/frontdesk/attendance", label: "Attendance", icon: CalendarCheck },
   { to: "/frontdesk/fee-collection", label: "Fee Collection", icon: Layers },
   { to: "/frontdesk/packages", label: "Packages", icon: Package },
-  { to: "/frontdesk/reports", label: "Reports", icon: BarChart3 },
+
   { to: "/frontdesk/trainers", label: "Trainers", icon: Users },
-  { to: "/frontdesk/settings", label: "Settings", icon: Settings },
+
 ];
 
 const Sidebar: React.FC = () => {
@@ -34,23 +38,7 @@ const Sidebar: React.FC = () => {
     <aside className="sidebar">
       {/* Logo */}
       <div className="sidebar-logo">
-        <div className="logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M2 12h2M4 8v8M6 6v12M9 10v4M15 10v4M18 6v12M20 8v8M22 12h-2M9 12h6"
-              stroke="#e11d2e"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-        <div className="logo-text">
-          <span className="logo-title">
-            FIT<span className="logo-title-accent">ZONE</span>
-          </span>
-          <span className="logo-subtitle">GYM MANAGEMENT SYSTEM</span>
-        </div>
+        <img src={logo} alt="FITZONE Logo" className="logo-img" />
       </div>
 
       {/* Nav */}
@@ -70,7 +58,10 @@ const Sidebar: React.FC = () => {
       </nav>
 
       {/* Banner */}
-      <div className="sidebar-banner">
+      <div
+        className="sidebar-banner"
+        style={{ backgroundImage: `url(${gymBanner})` }}
+      >
         <div className="banner-overlay" />
         <p className="banner-text">
           <span className="banner-italic">YOUR</span>
@@ -95,7 +86,11 @@ const Sidebar: React.FC = () => {
             <span className="footer-role">Front Desk</span>
           </div>
         </div>
-        <button className="footer-logout" onClick={handleLogout} aria-label="Logout">
+        <button
+          className="footer-logout"
+          onClick={handleLogout}
+          aria-label="Logout"
+        >
           <LogOut size={18} strokeWidth={2} />
         </button>
       </div>

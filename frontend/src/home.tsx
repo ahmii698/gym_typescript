@@ -1,7 +1,7 @@
 import { Outlet } from "react-router-dom";
 import Sidebar from "./frontdesk/component/sidebar";
 import Header from "./frontdesk/component/header";
-import Footer from "./frontdesk/component/footer";
+
 import "./home.css";
 
 const Home = () => {
@@ -13,7 +13,7 @@ const Home = () => {
         <div className="home-content">
           <Outlet />
         </div>
-        <Footer />
+      
       </div>
     </div>
   );

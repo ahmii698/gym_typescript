@@ -1,12 +1,112 @@
-.app-header {
-  padding: 16px 24px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e5e8;
+.fd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 24px;
+  background-color: #0d0f14;
+  border-bottom: 1px solid #1e2129;
+  box-sizing: border-box;
 }
 
-.app-header h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a1a1d;
+.fd-header-left {
+  flex: 1;
+}
+
+.fd-header-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+/* Notification bell */
+.fd-notification {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.fd-icon {
+  color: #c9cdd6;
+}
+
+.fd-notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  background-color: #e53935;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+/* Date / time */
+.fd-datetime {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.3;
+}
+
+.fd-date {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e4e6eb;
+}
+
+.fd-time {
+  font-size: 12px;
+  color: #8a8f9c;
+}
+
+/* Admin section */
+.fd-admin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding-left: 16px;
+  border-left: 1px solid #1e2129;
+}
+
+.fd-admin-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background-color: #2a2e38;
+  color: #c9cdd6;
+}
+
+.fd-admin-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.fd-admin-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.fd-admin-role {
+  font-size: 11px;
+  color: #8a8f9c;
+}
+
+.fd-chevron {
+  color: #8a8f9c;
 }

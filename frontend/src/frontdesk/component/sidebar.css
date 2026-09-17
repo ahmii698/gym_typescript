@@ -13,41 +13,15 @@
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 22px 20px 18px;
-}
-
-.logo-icon {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
   justify-content: center;
+  padding: 24px 20px 20px;
 }
 
-.logo-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-}
-
-.logo-title {
-  font-size: 18px;
-  font-weight: 800;
-  color: #ffffff;
-  letter-spacing: 0.5px;
-}
-
-.logo-title-accent {
-  color: #e11d2e;
-}
-
-.logo-subtitle {
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 1.5px;
-  color: #6b6b70;
-  margin-top: 2px;
+.logo-img {
+  width: 170px;
+  height: auto;
+  object-fit: contain;
+  display: block;
 }
 
 /* Nav */
@@ -94,9 +68,9 @@
   min-height: 220px;
   border-radius: 14px;
   overflow: hidden;
-  background-image: url("../../assets/gym-banner.jpg");
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
 }
 
 .banner-overlay {
@@ -110,22 +84,26 @@
   );
 }
 
+/* ✅ Updated banner text — height barha di */
 .banner-text {
   position: absolute;
-  top: 18px;
-  left: 18px;
+  top: 22px;
+  left: 22px;
+  right: 22px;
   margin: 0;
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.15;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.65;
+  letter-spacing: 0.5px;
   color: #ffffff;
   text-transform: uppercase;
   z-index: 1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
 }
 
 .banner-italic {
   font-style: italic;
-  font-weight: 700;
+  font-weight: 800;
   color: #e5e5e7;
 }
 
