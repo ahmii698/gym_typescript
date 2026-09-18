@@ -1,0 +1,181 @@
+.sidebar-wrapper {
+  width: 240px;
+  min-width: 240px;
+  height: 100vh;
+  background: #000000;
+  border-right: 1px solid #1a1a1a;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px;
+  box-sizing: border-box;
+  color-scheme: dark;
+  /* If the screen is too short, the sidebar scrolls instead of squeezing the image */
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.sidebar-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-logo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0 24px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo img {
+  height: 52px;
+  width: auto;
+  object-fit: contain;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  color: #9aa3b8;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-nav-icon {
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.sidebar-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+
+.sidebar-nav-item.active {
+  background: rgba(239, 35, 60, 0.12);
+  color: #ef233c;
+  font-weight: 600;
+}
+
+.sidebar-nav-item.active .sidebar-nav-icon {
+  color: #ef233c;
+}
+
+/* ---------------------- Inventory group / submenu ---------------------- */
+
+.sidebar-group-btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-group-btn.has-active-child {
+  color: #ef233c;
+  font-weight: 600;
+}
+
+.sidebar-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.sidebar-chevron.open {
+  transform: rotate(180deg);
+}
+
+.sidebar-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px 22px;
+  padding-left: 12px;
+  border-left: 1px solid #262626;
+}
+
+.sidebar-sub-item {
+  padding: 9px 12px;
+  font-size: 13px;
+  gap: 10px;
+}
+
+/* ------------------------------ Promo ------------------------------ */
+
+/* Fixed size: never shrinks when the Inventory dropdown opens */
+.sidebar-promo {
+  position: relative;
+  margin-top: auto;
+  padding-top: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  height: 360px;
+  border: 1px solid #1a1a1a;
+}
+
+/* Keeps a minimum gap between the menu and the image */
+.sidebar-nav {
+  margin-bottom: 24px;
+}
+
+.sidebar-promo-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.sidebar-promo-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.75) 0%,
+    rgba(0, 0, 0, 0.2) 40%,
+    rgba(0, 0, 0, 0.65) 100%
+  );
+}
+
+.sidebar-promo-content {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.sidebar-promo-text {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.9;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sidebar-promo-underline {
+  display: block;
+  width: 32px;
+  height: 3px;
+  background: #ef233c;
+  margin-top: 8px;
+  border-radius: 2px;
+}

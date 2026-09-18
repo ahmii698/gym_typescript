@@ -4,12 +4,15 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
 }
 
 body {
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
   background: #0a0a0d;
   overflow: hidden;
 }

@@ -1,0 +1,493 @@
+.members-page {
+  /* Height is set precisely from JS; this is only the pre-measure fallback */
+  height: calc(100vh - 130px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 28px 24px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 80% 0%, rgba(239, 35, 60, 0.08), transparent 45%),
+    #050505;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.members-page::-webkit-scrollbar {
+  width: 8px;
+}
+
+.members-page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.members-page::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 999px;
+}
+
+.members-page::-webkit-scrollbar-thumb:hover {
+  background: #ef233c;
+}
+
+.members-page *,
+.members-page *::before,
+.members-page *::after {
+  box-sizing: border-box;
+}
+
+/* ------------------------------- Header ------------------------------- */
+
+.mem-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.mem-title {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.mem-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #a1a1aa;
+}
+
+.mem-datetime {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #d4d4d8;
+}
+
+.mem-datetime-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.5;
+}
+
+.mem-date {
+  font-size: 13px;
+  color: #d4d4d8;
+}
+
+.mem-time {
+  font-size: 13px;
+  color: #a1a1aa;
+}
+
+/* ---------------------------- Stat cards ---------------------------- */
+
+.mem-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* All 4 cards share the same red box; only the icon color differs */
+.mem-stat-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 22px 20px;
+  border: 1px solid rgba(239, 35, 60, 0.35);
+  background: linear-gradient(135deg, rgba(239, 35, 60, 0.1), rgba(12, 12, 12, 0.9) 60%);
+  border-radius: 14px;
+  transition: transform 0.2s ease;
+}
+
+.mem-stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.mem-stat-icon {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.mem-stat-icon.red {
+  background: rgba(239, 35, 60, 0.18);
+  color: #ff3b57;
+}
+.mem-stat-icon.green {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+.mem-stat-icon.amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+.mem-stat-icon.orange {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ff5a4d;
+}
+
+.mem-stat-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mem-stat-title {
+  font-size: 14px;
+  color: #d4d4d8;
+}
+
+.mem-stat-period {
+  margin: 2px 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.mem-stat-value {
+  margin-bottom: 8px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.mem-stat-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.mem-stat-change.good {
+  color: #22c55e;
+}
+
+.mem-stat-change.bad {
+  color: #ef233c;
+}
+
+.mem-stat-vs {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #8a8a93;
+}
+
+/* ------------------------------- Panel ------------------------------- */
+
+.mem-panel {
+  padding: 20px;
+  background: rgba(12, 12, 12, 0.95);
+  border: 1px solid #1f1f1f;
+  border-radius: 14px;
+}
+
+/* ------------------------------ Toolbar ------------------------------ */
+
+.mem-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.mem-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mem-tab {
+  height: 38px;
+  padding: 0 18px;
+  background: #0f0f0f;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  color: #d4d4d8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.mem-tab:hover {
+  border-color: #ef233c;
+  color: #ffffff;
+}
+
+.mem-tab.active {
+  background: #ef233c;
+  border-color: #ef233c;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
+}
+
+.mem-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mem-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 300px;
+  height: 38px;
+  padding: 0 14px;
+  background: #0f0f0f;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  color: #a1a1aa;
+  transition: border-color 0.2s ease;
+}
+
+.mem-search:focus-within {
+  border-color: #ef233c;
+}
+
+.mem-search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.mem-search input::placeholder {
+  color: #71717a;
+}
+
+.mem-select-wrap {
+  position: relative;
+}
+
+.mem-select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 38px;
+  padding: 0 34px 0 14px;
+  background: #0f0f0f;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  color: #d4d4d8;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  color-scheme: dark;
+}
+
+.mem-select:focus {
+  border-color: #ef233c;
+}
+
+.mem-select-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #a1a1aa;
+  pointer-events: none;
+}
+
+/* ------------------------------- Table ------------------------------- */
+
+.mem-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #1a1a1a;
+  border-radius: 12px;
+}
+
+.mem-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.mem-table thead tr {
+  background: #0f0f0f;
+}
+
+.mem-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  color: #a1a1aa;
+  white-space: nowrap;
+}
+
+.mem-table td {
+  padding: 14px 16px;
+  color: #d4d4d8;
+  border-bottom: 1px solid #1a1a1a;
+  white-space: nowrap;
+}
+
+.mem-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.mem-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mem-table .center {
+  text-align: center;
+}
+
+.mem-table .muted {
+  color: #8a8a93;
+}
+
+.mem-table .member-name {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.mem-empty {
+  padding: 40px 16px !important;
+  text-align: center;
+  color: #8a8a93 !important;
+}
+
+/* Status badges */
+
+.mem-status {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mem-status.active {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #22c55e;
+}
+
+.mem-status.inactive {
+  background: rgba(239, 35, 60, 0.15);
+  border: 1px solid rgba(239, 35, 60, 0.35);
+  color: #ff5a70;
+}
+
+/* ------------------------------ Footer ------------------------------ */
+
+.mem-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.mem-showing {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+
+.mem-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mem-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  background: #0f0f0f;
+  border: 1px solid #262626;
+  border-radius: 8px;
+  color: #d4d4d8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.mem-page-btn:hover:not(:disabled):not(.dots):not(.active) {
+  border-color: #ef233c;
+  color: #ffffff;
+}
+
+.mem-page-btn.active {
+  background: #ef233c;
+  border-color: #ef233c;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.mem-page-btn.dots {
+  cursor: default;
+}
+
+.mem-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------------------------- Responsive ---------------------------- */
+
+@media (max-width: 1280px) {
+  .mem-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .mem-toolbar-right {
+    width: 100%;
+  }
+
+  .mem-search {
+    flex: 1;
+    width: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .members-page {
+    padding: 20px 14px;
+  }
+
+  .mem-header {
+    flex-direction: column;
+  }
+
+  .mem-datetime-text {
+    align-items: flex-start;
+  }
+
+  .mem-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .mem-title {
+    font-size: 22px;
+  }
+
+  .mem-toolbar-right {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

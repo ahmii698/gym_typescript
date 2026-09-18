@@ -1,0 +1,268 @@
+.admin-register-wrapper {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  background: #000000;
+  color-scheme: dark;
+}
+
+/* Back button (top-left of the whole page) */
+.admin-back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  background: rgba(10, 10, 10, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.admin-back-btn:hover {
+  border-color: #ef233c;
+  color: #ef233c;
+  background: rgba(10, 10, 10, 0.9);
+}
+
+.admin-back-btn:active {
+  transform: scale(0.97);
+}
+
+.admin-back-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.admin-back-btn:hover svg {
+  transform: translateX(-2px);
+}
+
+.admin-register-banner {
+  flex: 1;
+  background-size: cover;
+  background-position: center;
+  display: none;
+}
+
+.admin-register-formside {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.admin-register-card {
+  width: 100%;
+  max-width: 480px;
+  background: #000000;
+  border: 1px solid #1a1a1a;
+  border-radius: 16px;
+  padding: 36px 40px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.admin-register-logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.admin-register-logo img {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+}
+
+.admin-register-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(239, 35, 60, 0.12);
+  color: #ef233c;
+}
+
+.admin-register-title {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.admin-register-title span {
+  color: #ef233c;
+}
+
+.admin-register-subtitle {
+  margin: 0 0 28px;
+  font-size: 14px;
+  color: #8b96ab;
+}
+
+.admin-form-group {
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+.admin-form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #d3d9e6;
+}
+
+.admin-form-group label .required {
+  color: #ef233c;
+  margin-left: 2px;
+}
+
+.admin-input-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #0a0a0a;
+  border: 1px solid #222222;
+  border-radius: 10px;
+  padding: 0 14px;
+  height: 46px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-input-box:focus-within {
+  border-color: #ef233c;
+  box-shadow: 0 0 0 3px rgba(239, 35, 60, 0.15);
+}
+
+.admin-input-box.error {
+  border-color: #ef233c;
+}
+
+.admin-input-box .input-icon {
+  color: #6b7690;
+  flex-shrink: 0;
+}
+
+.admin-input-box input {
+  flex: 1;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  font-size: 14px;
+  caret-color: #ffffff !important;
+  color-scheme: dark;
+}
+
+.admin-input-box input::placeholder {
+  color: #5c6680;
+}
+
+/* Fix Chrome/Edge autofill forcing white bg + black text */
+.admin-input-box input:-webkit-autofill,
+.admin-input-box input:-webkit-autofill:hover,
+.admin-input-box input:-webkit-autofill:focus,
+.admin-input-box input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  box-shadow: 0 0 0 1000px #0a0a0a inset !important;
+  -webkit-box-shadow: 0 0 0 1000px #0a0a0a inset !important;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Firefox autofill */
+.admin-input-box input:autofill {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+}
+
+.toggle-visibility {
+  background: transparent;
+  border: none;
+  color: #6b7690;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.toggle-visibility:hover {
+  color: #a0aac0;
+}
+
+.error-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ef233c;
+}
+
+.admin-register-btn {
+  width: 100%;
+  height: 48px;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #ff2d4d, #d90429);
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.1s ease;
+}
+
+.admin-register-btn:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.admin-register-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.admin-register-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-login-hint {
+  margin-top: 20px;
+  font-size: 13px;
+  color: #8b96ab;
+}
+
+.admin-login-hint a {
+  color: #ef233c;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-login-hint a:hover {
+  text-decoration: underline;
+}
+
+@media (min-width: 900px) {
+  .admin-register-banner {
+    display: block;
+  }
+}
