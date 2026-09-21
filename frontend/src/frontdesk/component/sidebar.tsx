@@ -1,14 +1,13 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   UserPlus,
   CalendarCheck,
   Layers,
   Package,
-  BarChart3,
+  CupSoda,
   Users,
-  Settings,
   LogOut,
 } from "lucide-react";
 import "./sidebar.css";
@@ -23,15 +22,18 @@ const navItems = [
   { to: "/frontdesk/attendance", label: "Attendance", icon: CalendarCheck },
   { to: "/frontdesk/fee-collection", label: "Fee Collection", icon: Layers },
   { to: "/frontdesk/packages", label: "Packages", icon: Package },
-
+  { to: "/frontdesk/drinks", label: "Drinks & Beverages", icon: CupSoda },
   { to: "/frontdesk/trainers", label: "Trainers", icon: Users },
-
 ];
 
 const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
+
   const handleLogout = () => {
-    // apna logout logic yahan lagao
-    console.log("Logout clicked");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    sessionStorage.clear();
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -90,6 +92,7 @@ const Sidebar: React.FC = () => {
           className="footer-logout"
           onClick={handleLogout}
           aria-label="Logout"
+          title="Logout"
         >
           <LogOut size={18} strokeWidth={2} />
         </button>

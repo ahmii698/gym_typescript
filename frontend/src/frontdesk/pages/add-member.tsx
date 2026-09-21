@@ -1,4 +1,6 @@
-import React, { useState, ChangeEvent, FormEvent } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, ChangeEvent, FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { API_URL } from "../../../config";
 import "./add-member.css";
 
 type MemberType = "normal" | "normal-trainer" | "package-trainer" | "package-only";
@@ -21,6 +23,21 @@ interface FormState {
   feeAmount: string;
   paymentStatus: string;
 }
+
+interface PackageItem {
+  id: number;
+  name: string;
+  duration_days: number;
+  price: string | number;
+}
+
+interface TrainerItem {
+  id: number;
+  name: string;
+}
+
+type FormErrors = Partial<Record<keyof FormState, string>>;
+type AlertState = { type: "error" | "success"; text: string } | null;
 
 const initialState: FormState = {
   fullName: "",
@@ -48,34 +65,245 @@ const memberTypeOptions: { value: MemberType; title: string; desc: string }[] = 
   { value: "package-only", title: "Package Only", desc: "With Package (No Trainer)" },
 ];
 
+// Frontend value -> Laravel value
+const memberTypeToApi: Record<MemberType, string> = {
+  normal: "normal_user",
+  "normal-trainer": "normal_trainer",
+  "package-trainer": "package_trainer",
+  "package-only": "package_only",
+};
+
+// Laravel field name -> form field name (errors ke liye)
+const apiFieldToForm: Record<string, keyof FormState> = {
+  full_name: "fullName",
+  cnic: "cnic",
+  cnic_front: "cnicFront",
+  cnic_back: "cnicBack",
+  contact_number: "contactNumber",
+  email: "email",
+  date_of_birth: "dob",
+  gender: "gender",
+  package_id: "package",
+  start_date: "startDate",
+  end_date: "endDate",
+  notes: "notes",
+  member_type: "memberType",
+  trainer_id: "trainer",
+  fee_amount: "feeAmount",
+  payment_status: "paymentStatus",
+};
+
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+
+const authHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem("token");
+  return {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
+const formatCnic = (value: string): string => {
+  const digits = value.replace(/\D/g, "").slice(0, 13);
+  if (digits.length <= 5) return digits;
+  if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+};
+
+const firstError = (json: any): string => {
+  if (json?.errors) {
+    const first = Object.values(json.errors)[0] as string[] | undefined;
+    if (first?.[0]) return first[0];
+  }
+  return json?.message ?? "Something went wrong. Please try again.";
+};
+
+const BOTTOM_GAP = 24;
+
 function AddMember() {
+  const navigate = useNavigate();
+  const pageRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLElement>(null);
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
+
   const [form, setForm] = useState<FormState>(initialState);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [alert, setAlert] = useState<AlertState>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+
+  const [packages, setPackages] = useState<PackageItem[]>([]);
+  const [trainers, setTrainers] = useState<TrainerItem[]>([]);
+  const [showTrainerModal, setShowTrainerModal] = useState(false);
+
+  const needsTrainer = form.memberType === "normal-trainer" || form.memberType === "package-trainer";
+
+  /* make the page its own scroll container, same as Members / Payments */
+  useLayoutEffect(() => {
+    const updateHeight = () => {
+      if (!pageRef.current) return;
+      const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
+      setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
+    };
+
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [pRes, tRes] = await Promise.all([
+          fetch(`${API_URL}/packages`, { headers: authHeaders() }),
+          fetch(`${API_URL}/trainers`, { headers: authHeaders() }),
+        ]);
+        if (pRes.ok) setPackages(await pRes.json());
+        if (tRes.ok) setTrainers(await tRes.json());
+        if (pRes.status === 401 || tRes.status === 401) {
+          showAlert("error", "Session expire ho gaya hai, dobara login karo.");
+        }
+      } catch {
+        showAlert("error", "Packages aur trainers load nahi ho sake. Backend chal raha hai?");
+      }
+    };
+    load();
+  }, []);
+
+  const showAlert = (type: "error" | "success", text: string) => {
+    setAlert({ type, text });
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const updateField = <K extends keyof FormState>(field: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
   };
 
-  const handleInput = (field: keyof FormState) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    updateField(field, e.target.value as FormState[typeof field]);
+  const handleInput =
+    (field: keyof FormState) =>
+    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+      updateField(field, e.target.value as FormState[typeof field]);
+    };
+
+  const handleCnic = (e: ChangeEvent<HTMLInputElement>) => {
+    updateField("cnic", formatCnic(e.target.value));
   };
 
   const handleFile = (field: "cnicFront" | "cnicBack") => (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
+    if (file && file.size > MAX_FILE_SIZE) {
+      setErrors((prev) => ({ ...prev, [field]: "Image 2MB se zyada nahi honi chahiye." }));
+      return;
+    }
     updateField(field, file);
   };
 
-  const handleReset = () => setForm(initialState);
+  const handlePackageChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    updateField("package", id);
+    const pkg = packages.find((p) => String(p.id) === id);
+    if (pkg && (form.feeAmount === "" || Number(form.feeAmount) === 0)) {
+      updateField("feeAmount", String(Number(pkg.price)));
+    }
+  };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleReset = () => {
+    setForm(initialState);
+    setErrors({});
+    setAlert(null);
+    setFormKey((k) => k + 1);
+  };
+
+  const handleTrainerCreated = (trainer: TrainerItem) => {
+    setTrainers((prev) => [...prev, trainer].sort((a, b) => a.name.localeCompare(b.name)));
+    updateField("trainer", String(trainer.id));
+    setShowTrainerModal(false);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // Wire this up to your API call.
-    console.log("New member payload:", form);
+    setAlert(null);
+
+    // Client-side checks
+    const clientErrors: FormErrors = {};
+    if (!form.cnicFront) clientErrors.cnicFront = "CNIC front image zaroori hai.";
+    if (!form.cnicBack) clientErrors.cnicBack = "CNIC back image zaroori hai.";
+    if (needsTrainer && !form.trainer) clientErrors.trainer = "Is member type ke liye trainer select karo.";
+
+    if (Object.keys(clientErrors).length > 0) {
+      setErrors(clientErrors);
+      showAlert("error", "Please fix the highlighted fields.");
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("full_name", form.fullName.trim());
+    fd.append("cnic", form.cnic);
+    fd.append("cnic_front", form.cnicFront as File);
+    fd.append("cnic_back", form.cnicBack as File);
+    fd.append("contact_number", form.contactNumber.trim());
+    if (form.email.trim()) fd.append("email", form.email.trim());
+    if (form.dob) fd.append("date_of_birth", form.dob);
+    if (form.gender) fd.append("gender", form.gender);
+    fd.append("member_type", memberTypeToApi[form.memberType]);
+    fd.append("package_id", form.package);
+    fd.append("start_date", form.startDate);
+    if (form.endDate) fd.append("end_date", form.endDate);
+    if (form.notes.trim()) fd.append("notes", form.notes.trim());
+    if (needsTrainer && form.trainer) fd.append("trainer_id", form.trainer);
+    fd.append("fee_amount", form.feeAmount || "0");
+    if (form.paymentStatus) fd.append("payment_status", form.paymentStatus);
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/members`, {
+        method: "POST",
+        headers: authHeaders(), // Content-Type mat lagana, browser khud boundary set karta hai
+        body: fd,
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 422 && json?.errors) {
+        const mapped: FormErrors = {};
+        Object.entries(json.errors).forEach(([key, msgs]) => {
+          const formKeyName = apiFieldToForm[key];
+          if (formKeyName) mapped[formKeyName] = (msgs as string[])[0];
+        });
+        setErrors(mapped);
+        showAlert("error", "Please fix the highlighted fields.");
+        return;
+      }
+
+      if (res.status === 401) {
+        showAlert("error", "Session expire ho gaya hai, dobara login karo.");
+        return;
+      }
+
+      if (!res.ok) {
+        showAlert("error", firstError(json));
+        return;
+      }
+
+      showAlert("success", json?.message ?? "Member added successfully");
+      setForm(initialState);
+      setErrors({});
+      setFormKey((k) => k + 1);
+    } catch {
+      showAlert("error", "Server se connect nahi ho saka. Backend chal raha hai?");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="am-page">
-      <header className="am-header">
-        <button type="button" className="am-back-btn" aria-label="Go back">
+    <div
+      className="am-page"
+      ref={pageRef}
+      style={pageHeight ? { height: pageHeight } : undefined}
+    >
+      <header className="am-header" ref={topRef}>
+        <button type="button" className="am-back-btn" aria-label="Go back" onClick={() => navigate(-1)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -86,6 +314,15 @@ function AddMember() {
         </div>
       </header>
 
+      {alert && (
+        <div className={`am-alert am-alert--${alert.type}`} role="alert">
+          <span>{alert.text}</span>
+          <button type="button" onClick={() => setAlert(null)} aria-label="Dismiss">
+            ×
+          </button>
+        </div>
+      )}
+
       <form className="am-grid" onSubmit={handleSubmit}>
         {/* LEFT COLUMN */}
         <div className="am-col">
@@ -95,7 +332,7 @@ function AddMember() {
             </h2>
 
             <div className="am-row">
-              <Field label="Full Name" required>
+              <Field label="Full Name" required error={errors.fullName}>
                 <input
                   type="text"
                   placeholder="Enter full name"
@@ -104,28 +341,30 @@ function AddMember() {
                   required
                 />
               </Field>
-              <Field label="CNIC" required>
+              <Field label="CNIC" required error={errors.cnic}>
                 <input
                   type="text"
+                  inputMode="numeric"
                   placeholder="XXXXX-XXXXXXX-X"
                   value={form.cnic}
-                  onChange={handleInput("cnic")}
+                  onChange={handleCnic}
+                  maxLength={15}
                   required
                 />
               </Field>
             </div>
 
             <div className="am-row">
-              <Field label="CNIC Front Image" required>
-                <UploadBox file={form.cnicFront} onChange={handleFile("cnicFront")} />
+              <Field label="CNIC Front Image" required error={errors.cnicFront}>
+                <UploadBox key={`front-${formKey}`} file={form.cnicFront} onChange={handleFile("cnicFront")} />
               </Field>
-              <Field label="CNIC Back Image" required>
-                <UploadBox file={form.cnicBack} onChange={handleFile("cnicBack")} />
+              <Field label="CNIC Back Image" required error={errors.cnicBack}>
+                <UploadBox key={`back-${formKey}`} file={form.cnicBack} onChange={handleFile("cnicBack")} />
               </Field>
             </div>
 
             <div className="am-row">
-              <Field label="Contact Number" required>
+              <Field label="Contact Number" required error={errors.contactNumber}>
                 <div className="am-input-icon">
                   <PhoneIcon />
                   <input
@@ -137,7 +376,7 @@ function AddMember() {
                   />
                 </div>
               </Field>
-              <Field label="Email" optional>
+              <Field label="Email" optional error={errors.email}>
                 <div className="am-input-icon">
                   <MailIcon />
                   <input
@@ -151,13 +390,13 @@ function AddMember() {
             </div>
 
             <div className="am-row">
-              <Field label="Date of Birth" optional>
+              <Field label="Date of Birth" optional error={errors.dob}>
                 <div className="am-input-icon">
                   <CalendarIcon />
                   <input type="date" value={form.dob} onChange={handleInput("dob")} placeholder="dd/mm/yyyy" />
                 </div>
               </Field>
-              <Field label="Gender" optional>
+              <Field label="Gender" optional error={errors.gender}>
                 <select value={form.gender} onChange={handleInput("gender")}>
                   <option value="">Select Gender</option>
                   <option value="male">Male</option>
@@ -174,15 +413,17 @@ function AddMember() {
             </h2>
 
             <div className="am-row">
-              <Field label="Select Package" required>
-                <select value={form.package} onChange={handleInput("package")} required>
+              <Field label="Select Package" required error={errors.package}>
+                <select value={form.package} onChange={handlePackageChange} required>
                   <option value="">Choose Package</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="yearly">Yearly</option>
+                  {packages.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
                 </select>
               </Field>
-              <Field label="Start Date" required>
+              <Field label="Start Date" required error={errors.startDate}>
                 <div className="am-input-icon">
                   <CalendarIcon />
                   <input type="date" value={form.startDate} onChange={handleInput("startDate")} required />
@@ -191,21 +432,15 @@ function AddMember() {
             </div>
 
             <div className="am-row">
-              <Field label="Start Date" required>
+              <Field label="End Date" optional error={errors.endDate}>
                 <div className="am-input-icon">
                   <CalendarIcon />
-                  <input type="date" value={form.startDate} onChange={handleInput("startDate")} required />
-                </div>
-              </Field>
-              <Field label="End Date" optional>
-                <div className="am-input-icon">
-                  <CalendarIcon />
-                  <input type="date" value={form.endDate} onChange={handleInput("endDate")} />
+                  <input type="date" value={form.endDate} min={form.startDate || undefined} onChange={handleInput("endDate")} />
                 </div>
               </Field>
             </div>
 
-            <Field label="Notes" optional>
+            <Field label="Notes" optional error={errors.notes}>
               <div className="am-input-icon am-textarea-icon">
                 <NoteIcon />
                 <textarea
@@ -223,14 +458,18 @@ function AddMember() {
         <div className="am-col">
           <section className="am-card">
             <h2>
-              <TrainerIcon /> Assign Trainer <span className="am-optional-tag">(Optional)</span>
+              <TrainerIcon /> Assign Trainer{" "}
+              <span className="am-optional-tag">{needsTrainer ? "(Required)" : "(Optional)"}</span>
             </h2>
 
-            <Field label="Select Trainer">
+            <Field label="Select Trainer" error={errors.trainer}>
               <select value={form.trainer} onChange={handleInput("trainer")}>
                 <option value="">Choose Trainer</option>
-                <option value="trainer-1">Ali Khan</option>
-                <option value="trainer-2">Bilal Ahmed</option>
+                {trainers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
               </select>
             </Field>
 
@@ -238,7 +477,7 @@ function AddMember() {
               <span>OR</span>
             </div>
 
-            <button type="button" className="am-add-trainer-btn">
+            <button type="button" className="am-add-trainer-btn" onClick={() => setShowTrainerModal(true)}>
               <PlusIcon /> Add New Trainer
             </button>
           </section>
@@ -280,7 +519,7 @@ function AddMember() {
             </h2>
 
             <div className="am-row">
-              <Field label="Fee Amount">
+              <Field label="Fee Amount" error={errors.feeAmount}>
                 <div className="am-input-icon am-prefix">
                   <span className="am-prefix-text">PKR</span>
                   <input
@@ -291,7 +530,7 @@ function AddMember() {
                   />
                 </div>
               </Field>
-              <Field label="Payment Status">
+              <Field label="Payment Status" error={errors.paymentStatus}>
                 <select value={form.paymentStatus} onChange={handleInput("paymentStatus")}>
                   <option value="">Select Status</option>
                   <option value="paid">Paid</option>
@@ -302,16 +541,115 @@ function AddMember() {
             </div>
 
             <div className="am-actions">
-              <button type="button" className="am-reset-btn" onClick={handleReset}>
+              <button type="button" className="am-reset-btn" onClick={handleReset} disabled={submitting}>
                 <ResetIcon /> Reset
               </button>
-              <button type="submit" className="am-submit-btn">
-                <PlusIcon /> Add Member
+              <button type="submit" className="am-submit-btn" disabled={submitting}>
+                <PlusIcon /> {submitting ? "Saving..." : "Add Member"}
               </button>
             </div>
           </section>
         </div>
       </form>
+
+      {showTrainerModal && (
+        <AddTrainerModal onClose={() => setShowTrainerModal(false)} onCreated={handleTrainerCreated} />
+      )}
+    </div>
+  );
+}
+
+/* ---------- Add Trainer modal ---------- */
+
+function AddTrainerModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (trainer: TrainerItem) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [specialization, setSpecialization] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (!name.trim()) {
+      setError("Trainer ka naam zaroori hai.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_URL}/trainers`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: phone.trim() || null,
+          specialization: specialization.trim() || null,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(firstError(json));
+        return;
+      }
+      onCreated(json.data);
+    } catch {
+      setError("Server se connect nahi ho saka.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="am-modal-overlay" onClick={onClose}>
+      <div className="am-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <h3>Add New Trainer</h3>
+
+        {error && <div className="am-error am-modal-error">{error}</div>}
+
+        <Field label="Trainer Name" required>
+          <input
+            type="text"
+            placeholder="Enter trainer name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+        </Field>
+
+        <Field label="Phone" optional>
+          <input
+            type="tel"
+            placeholder="03XX-XXXXXXX"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </Field>
+
+        <Field label="Specialization" optional>
+          <input
+            type="text"
+            placeholder="e.g. Weight training, Cardio"
+            value={specialization}
+            onChange={(e) => setSpecialization(e.target.value)}
+          />
+        </Field>
+
+        <div className="am-modal-actions">
+          <button type="button" className="am-reset-btn" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button type="button" className="am-submit-btn" onClick={save} disabled={saving}>
+            <PlusIcon /> {saving ? "Saving..." : "Save Trainer"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -322,21 +660,24 @@ function Field({
   label,
   required,
   optional,
+  error,
   children,
 }: {
   label: string;
   required?: boolean;
   optional?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="am-field">
+    <div className={`am-field ${error ? "am-field--error" : ""}`}>
       <label>
         {label}
         {required && <span className="am-required">*</span>}
         {optional && <span className="am-optional"> (Optional)</span>}
       </label>
       {children}
+      {error && <span className="am-error">{error}</span>}
     </div>
   );
 }

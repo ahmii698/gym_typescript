@@ -10,7 +10,6 @@ import {
   CalendarCheck,
   IdCard,
   CreditCard,
-  FileText,
   UserPlus,
 } from "lucide-react";
 import logoImg from "../../assets/logo.png";
@@ -31,7 +30,6 @@ const bottomItems = [
   { to: "/admin/checkins", label: "Check-ins", icon: CalendarCheck },
   { to: "/admin/memberships", label: "Memberships", icon: IdCard },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
-  { to: "/admin/expenses", label: "Expenses", icon: FileText },
   { to: "/admin/register", label: "Create Admin", icon: UserPlus },
 ];
 

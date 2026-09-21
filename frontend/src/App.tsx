@@ -21,6 +21,8 @@ import Payments from "./admin/pages/Payments";
 import Expenses from "./admin/pages/Expenses";
 import AdminReports from "./admin/pages/Reports";
 import AdminSettings from "./admin/pages/Settings";
+import Accessories from "./admin/pages/accessories";
+import DrinksBeverages from "./admin/pages/drinks&beverages";
 import "./App.css";
 
 function App() {
@@ -40,6 +42,7 @@ function App() {
         <Route path="attendance" element={<Attendance />} />
         <Route path="fee-collection" element={<FeeCollection />} />
         <Route path="packages" element={<Packages />} />
+        <Route path="drinks" element={<DrinksBeverages />} />
         <Route path="reports" element={<Reports />} />
         <Route path="trainers" element={<Trainers />} />
         <Route path="settings" element={<Settings />} />
@@ -53,6 +56,8 @@ function App() {
         <Route path="memberships" element={<Memberships />} />
         <Route path="payments" element={<Payments />} />
         <Route path="expenses" element={<Expenses />} />
+        <Route path="inventory/accessories" element={<Accessories />} />
+        <Route path="inventory/drinks" element={<DrinksBeverages />} />
         <Route path="reports" element={<AdminReports />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>

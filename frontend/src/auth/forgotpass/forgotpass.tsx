@@ -8,16 +8,17 @@ import type {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import bgImage from "../../assets/gym-banner1.png";
+import { API_URL } from "../../../config";
 import "./forgotpass.css";
 
 /* ------------------------------------------------------------------ */
 /*  Settings — yahan se sab kuch change kar sakte ho                   */
 /* ------------------------------------------------------------------ */
-const API_BASE = "http://localhost:5000/api/auth"; // apna backend URL
-const USE_MOCK = true; // true = backend ke bagair UI test karo, backend ready ho to false karo
+const API_BASE = API_URL; // .env se aata hai (VITE_API_URL)
+const USE_MOCK = false; // false = asli Laravel backend use hoga
 const LOGIN_ROUTE = "/login"; // password reset ke baad yahan redirect hoga
 const OTP_LENGTH = 6;
-const RESEND_SECONDS = 45;
+const RESEND_SECONDS = 600;
 const REDIRECT_DELAY_MS = 1200;
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -27,12 +28,20 @@ const MIN_PASSWORD_LENGTH = 8;
 async function post(path: string, body: Record<string, string>): Promise<void> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const data = await res.json().catch(() => null);
+
+    if (res.status === 429) {
+      throw new Error("Too many attempts. Please wait a minute and try again.");
+    }
+
     throw new Error(data?.message ?? "Something went wrong. Please try again.");
   }
 }

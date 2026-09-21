@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   Search,
@@ -226,6 +226,7 @@ const MEMBER_TYPES: MemberType[] = [
 ];
 
 const PAGE_SIZE = 10;
+const BOTTOM_GAP = 24;
 
 // ------------------------------------------------------------------
 // Small presentational helpers
@@ -251,6 +252,9 @@ const PaymentBadge: React.FC<{ status: PaymentStatus }> = ({ status }) => (
 // Main component
 // ------------------------------------------------------------------
 const AttendancePage: React.FC = () => {
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
+
   const [members, setMembers] = useState<Member[]>(MOCK_MEMBERS);
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<"All" | PaymentStatus>("All");
@@ -259,6 +263,19 @@ const AttendancePage: React.FC = () => {
   const [dateRange, setDateRange] = useState("Aug 23, 2025 - Aug 30, 2025");
   const [page, setPage] = useState(1);
   const [activeMember, setActiveMember] = useState<Member | null>(null);
+
+  /* make the page its own scroll container, same as Members / Payments / Add Member */
+  useLayoutEffect(() => {
+    const updateHeight = () => {
+      if (!pageRef.current) return;
+      const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
+      setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
+    };
+
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
 
   // Toggle Present <-> Absent for a given member (used on badge double-click)
   const toggleStatus = (id: number) => {
@@ -361,7 +378,11 @@ const AttendancePage: React.FC = () => {
   };
 
   return (
-    <div className="attendance-page">
+    <div
+      className="attendance-page"
+      ref={pageRef}
+      style={pageHeight ? { height: pageHeight } : undefined}
+    >
       {/* Header */}
       <div className="attendance-header">
         <div className="attendance-header-icon">

@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import { UserPlus, User, Mail, Phone, Lock, Eye, EyeOff } from "lucide-react";
 import bannerImg from "../../assets/gym-banner1.png";
 import logoImg from "../../assets/logo.png";
+import { API_URL } from "../../../config";
 import "./frontdeskregister.css";
 
 interface FormData {
@@ -14,6 +16,8 @@ interface FormData {
 }
 
 const FrontdeskRegister = () => {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState<FormData>({
     fullName: "",
     email: "",
@@ -26,6 +30,7 @@ const FrontdeskRegister = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -33,6 +38,7 @@ const FrontdeskRegister = () => {
     if (errors[name as keyof FormData]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
+    if (serverError) setServerError("");
   };
 
   const validate = (): boolean => {
@@ -67,12 +73,46 @@ const FrontdeskRegister = () => {
     if (!validate()) return;
 
     setLoading(true);
+    setServerError("");
     try {
-      // TODO: replace with actual API call
-      // await axios.post("/api/frontdesk/register", formData);
-      console.log("Registering frontdesk user:", formData);
-    } catch (err) {
+      await axios.post(
+        `${API_URL}/frontdesk/register`,
+        {
+          fullName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          password: formData.password,
+          password_confirmation: formData.confirmPassword,
+        },
+        {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      alert("Front desk account created successfully");
+      navigate("/admin/dashboard");
+    } catch (err: any) {
       console.error(err);
+
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setServerError("You are not allowed to do this. Please login as admin.");
+      } else if (err.response?.status === 422) {
+        // Laravel validation errors (e.g. email already taken)
+        const apiErrors = err.response.data.errors || {};
+        const mapped: Partial<FormData> = {};
+        if (apiErrors.fullName) mapped.fullName = apiErrors.fullName[0];
+        if (apiErrors.email) mapped.email = apiErrors.email[0];
+        if (apiErrors.phone) mapped.phone = apiErrors.phone[0];
+        if (apiErrors.password) mapped.password = apiErrors.password[0];
+        setErrors(mapped);
+      } else {
+        setServerError(
+          err.response?.data?.message || "Something went wrong. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -215,15 +255,13 @@ const FrontdeskRegister = () => {
               )}
             </div>
 
+            {serverError && <span className="error-text">{serverError}</span>}
+
             <button type="submit" className="frontdesk-register-btn" disabled={loading}>
               <UserPlus size={18} />
               {loading ? "Registering..." : "Register"}
             </button>
           </form>
-
-          <p className="frontdesk-register-footer">
-            Already have an account? <Link to="/login">Login</Link>
-          </p>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
   Users,
@@ -133,12 +133,16 @@ function generateMembers(count: number): Member[] {
 type TabKey = "all" | "paid" | "unpaid" | "expiring" | "inactive";
 
 const PAGE_SIZE = 10;
+const BOTTOM_GAP = 24;
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
 function FeeCollection() {
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
+
   // Members now live in state (not a fixed constant) so quick status
   // toggles actually stick instead of resetting on next render.
   const [members, setMembers] = useState<Member[]>(() => generateMembers(248));
@@ -156,6 +160,19 @@ function FeeCollection() {
 
   // Which member's details modal is currently open ("View" button)
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+
+  /* make the page its own scroll container, same as Members / Payments / Add Member / Attendance */
+  useLayoutEffect(() => {
+    const updateHeight = () => {
+      if (!pageRef.current) return;
+      const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
+      setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
+    };
+
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
 
   /* ---------------- derived stats (always computed from full data) ---------------- */
 
@@ -324,7 +341,11 @@ function FeeCollection() {
   }, [totalPages, currentPage]);
 
   return (
-    <div className="fc-page">
+    <div
+      className="fc-page"
+      ref={pageRef}
+      style={pageHeight ? { height: pageHeight } : undefined}
+    >
       {/* Header */}
       <div className="fc-header">
         <div className="fc-header__icon">

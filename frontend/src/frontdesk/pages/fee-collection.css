@@ -3,31 +3,60 @@
 /* ------------------------------------------------------------------ */
 
 .fc-page {
-  --fc-bg: #000000;
+  --fc-bg: #050505;
   --fc-panel: #0d0d0d;
   --fc-panel-border: #262626;
   --fc-text: #f2f2f2;
   --fc-muted: #8a8a8a;
-  --fc-accent: #3b82f6;
+  --fc-accent: #ef233c;
 
   --fc-green: #22c55e;
   --fc-green-bg: rgba(34, 197, 94, 0.14);
   --fc-teal: #14b8a6;
   --fc-teal-bg: rgba(20, 184, 166, 0.14);
-  --fc-red: #ef4444;
-  --fc-red-bg: rgba(239, 68, 68, 0.14);
+  --fc-red: #ef233c;
+  --fc-red-bg: rgba(239, 35, 60, 0.14);
   --fc-orange: #f59e0b;
   --fc-orange-bg: rgba(245, 158, 11, 0.14);
   --fc-purple: #a855f7;
   --fc-purple-bg: rgba(168, 85, 247, 0.14);
 
+  /* Height is set precisely from JS; this is only the pre-measure fallback */
+  height: calc(100vh - 130px);
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--fc-bg);
   color: var(--fc-text);
-  min-height: 100vh;
   padding: 24px;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     sans-serif;
   font-size: 14px;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.fc-page::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fc-page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.fc-page::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 999px;
+}
+
+.fc-page::-webkit-scrollbar-thumb:hover {
+  background: var(--fc-accent);
+}
+
+.fc-page *,
+.fc-page *::before,
+.fc-page *::after {
+  box-sizing: border-box;
 }
 
 /* -------------------- header -------------------- */
@@ -43,7 +72,7 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: #e5342a;
+  background: var(--fc-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -86,13 +115,18 @@
 }
 
 .fc-stat-card {
-  background: var(--fc-panel);
+  background: linear-gradient(135deg, rgba(239, 35, 60, 0.08), rgba(12, 12, 12, 0.9) 60%);
   border: 1px solid var(--fc-panel-border);
   border-radius: 12px;
   padding: 16px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  transition: transform 0.2s ease;
+}
+
+.fc-stat-card:hover {
+  transform: translateY(-2px);
 }
 
 .fc-stat-card__icon {
@@ -143,6 +177,7 @@
   font-size: 22px;
   font-weight: 700;
   line-height: 1;
+  color: #ffffff;
 }
 
 .fc-stat-card__delta {
@@ -224,6 +259,7 @@
   outline: none;
   appearance: none;
   cursor: pointer;
+  color-scheme: dark;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238894a8' stroke-width='1.5' fill='none' fill-rule='evenodd'/></svg>");
   background-repeat: no-repeat;
   background-position: right 12px center;
@@ -261,7 +297,7 @@
 
 .fc-tab--active {
   color: var(--fc-text);
-  border-bottom-color: var(--fc-red);
+  border-bottom-color: var(--fc-accent);
   font-weight: 600;
 }
 
@@ -277,6 +313,7 @@
   font-size: 13px;
   cursor: pointer;
   margin-bottom: 8px;
+  transition: border-color 0.15s ease;
 }
 
 .fc-reset-btn:hover {
@@ -350,7 +387,7 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: var(--fc-accent);
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -489,8 +526,8 @@
 }
 
 .fc-page-btn--active {
-  background: var(--fc-red);
-  border-color: var(--fc-red);
+  background: var(--fc-accent);
+  border-color: var(--fc-accent);
   color: #fff;
 }
 
@@ -513,12 +550,13 @@
 .fc-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  z-index: 100;
+  z-index: 1000;
 }
 
 .fc-modal {
@@ -531,6 +569,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 
 .fc-modal__header {
@@ -611,4 +650,10 @@
 
 .fc-modal__done-btn:hover {
   filter: brightness(1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-page * {
+    transition: none !important;
+  }
 }

@@ -1,4 +1,10 @@
-.ms-page {
+/* =========================================================
+   Drinks & Beverages page  (src/admin/pages/drinks&beverages.css)
+   Members page jesa hi look: black bg, red gradient cards,
+   black table, thin page scrollbar. Sab classes "drk-" prefix se.
+   ========================================================= */
+
+.drk-page {
   /* Height is set precisely from JS; this is only the pre-measure fallback */
   height: calc(100vh - 130px);
   overflow-x: hidden;
@@ -9,83 +15,118 @@
     radial-gradient(circle at 80% 0%, rgba(239, 35, 60, 0.08), transparent 45%),
     #050505;
   box-sizing: border-box;
+  font-family: inherit;
   scrollbar-width: thin;
   scrollbar-color: #2a2a2a transparent;
 }
 
-.ms-page::-webkit-scrollbar {
+.drk-page::-webkit-scrollbar {
   width: 8px;
 }
 
-.ms-page::-webkit-scrollbar-track {
+.drk-page::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.ms-page::-webkit-scrollbar-thumb {
+.drk-page::-webkit-scrollbar-thumb {
   background: #2a2a2a;
   border-radius: 999px;
 }
 
-.ms-page::-webkit-scrollbar-thumb:hover {
+.drk-page::-webkit-scrollbar-thumb:hover {
   background: #ef233c;
 }
 
-.ms-page *,
-.ms-page *::before,
-.ms-page *::after {
+.drk-page *,
+.drk-page *::before,
+.drk-page *::after {
   box-sizing: border-box;
+}
+
+.drk-page button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.drk-page svg {
+  flex-shrink: 0;
 }
 
 /* ------------------------------- Header ------------------------------- */
 
-.ms-header {
+.drk-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
 }
 
-.ms-title {
+.drk-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.drk-header-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  font-size: 24px;
+  color: #ff3b57;
+  background: rgba(239, 35, 60, 0.18);
+  border: 1px solid rgba(239, 35, 60, 0.3);
+}
+
+.drk-title {
   margin: 0 0 4px;
   font-size: 26px;
   font-weight: 700;
   color: #ffffff;
 }
 
-.ms-subtitle {
+.drk-subtitle {
   margin: 0;
   font-size: 14px;
   color: #a1a1aa;
 }
 
-.ms-datetime {
-  display: flex;
+.drk-btn-primary {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  color: #d4d4d8;
-}
-
-.ms-datetime-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.5;
-}
-
-.ms-date {
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #ef233c;
+  color: #ffffff;
   font-size: 13px;
-  color: #d4d4d8;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
-.ms-time {
-  font-size: 13px;
-  color: #a1a1aa;
+.drk-btn-primary svg {
+  font-size: 16px;
+}
+
+.drk-btn-primary:hover {
+  background: #d91e34;
+}
+
+.drk-btn-primary:active {
+  transform: translateY(1px);
 }
 
 /* ---------------------------- Stat cards ---------------------------- */
 
-.ms-stats {
+.drk-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
@@ -93,7 +134,7 @@
 }
 
 /* All 4 cards share the same red box; only the icon color differs */
-.ms-stat-card {
+.drk-stat-card {
   display: flex;
   align-items: flex-start;
   gap: 18px;
@@ -104,11 +145,11 @@
   transition: transform 0.2s ease;
 }
 
-.ms-stat-card:hover {
+.drk-stat-card:hover {
   transform: translateY(-2px);
 }
 
-.ms-stat-icon {
+.drk-stat-icon {
   width: 52px;
   height: 52px;
   flex-shrink: 0;
@@ -116,37 +157,38 @@
   align-items: center;
   justify-content: center;
   border-radius: 12px;
+  font-size: 26px;
 }
 
-.ms-stat-icon.red {
+.drk-stat-icon.red {
   background: rgba(239, 35, 60, 0.18);
   color: #ff3b57;
 }
-.ms-stat-icon.green {
+.drk-stat-icon.green {
   background: rgba(34, 197, 94, 0.15);
   color: #22c55e;
 }
-.ms-stat-icon.amber {
+.drk-stat-icon.amber {
   background: rgba(245, 158, 11, 0.15);
   color: #f59e0b;
 }
-.ms-stat-icon.orange {
+.drk-stat-icon.orange {
   background: rgba(239, 68, 68, 0.18);
   color: #ff5a4d;
 }
 
-.ms-stat-info {
+.drk-stat-info {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.ms-stat-title {
+.drk-stat-title {
   font-size: 14px;
   color: #d4d4d8;
 }
 
-.ms-stat-period {
+.drk-stat-period {
   margin: 2px 0 8px;
   font-size: 11px;
   letter-spacing: 0.4px;
@@ -154,7 +196,7 @@
   color: #71717a;
 }
 
-.ms-stat-value {
+.drk-stat-value {
   margin-bottom: 8px;
   font-size: 26px;
   font-weight: 700;
@@ -162,18 +204,30 @@
   white-space: nowrap;
 }
 
-.ms-stat-change {
+.drk-stat-change {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 14px;
 }
 
-.ms-stat-change.good {
+.drk-stat-change svg {
+  font-size: 16px;
+}
+
+.drk-stat-change.good {
   color: #22c55e;
 }
 
-.ms-stat-vs {
+.drk-stat-change.bad {
+  color: #ef233c;
+}
+
+.drk-stat-change.flat {
+  color: #a1a1aa;
+}
+
+.drk-stat-vs {
   margin-top: 2px;
   font-size: 12px;
   color: #8a8a93;
@@ -181,7 +235,7 @@
 
 /* ------------------------------- Panel ------------------------------- */
 
-.ms-panel {
+.drk-panel {
   padding: 20px;
   background: rgba(12, 12, 12, 0.95);
   border: 1px solid #1f1f1f;
@@ -190,169 +244,167 @@
 
 /* ------------------------------ Toolbar ------------------------------ */
 
-.ms-toolbar {
+.drk-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 18px;
 }
 
-.ms-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.ms-tab {
-  height: 38px;
-  padding: 0 18px;
-  background: #0f0f0f;
-  border: 1px solid #262626;
-  border-radius: 10px;
-  color: #d4d4d8;
-  font-size: 13px;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-}
-
-.ms-tab:hover {
-  border-color: #ef233c;
-  color: #ffffff;
-}
-
-.ms-tab.active {
-  background: #ef233c;
-  border-color: #ef233c;
-  color: #ffffff;
-  font-weight: 600;
-  box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
-}
-
-.ms-toolbar-right {
+.drk-search {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-/* Search */
-.ms-search {
-  display: flex;
-  align-items: center;
+  flex: 1;
   gap: 10px;
-  width: 300px;
+  min-width: 0;
   height: 38px;
   padding: 0 14px;
   background: #0f0f0f;
   border: 1px solid #262626;
   border-radius: 10px;
   color: #a1a1aa;
+  font-size: 16px;
   transition: border-color 0.2s ease;
 }
 
-.ms-search:focus-within {
+.drk-search:focus-within {
   border-color: #ef233c;
 }
 
-.ms-search input {
+.drk-search input {
   flex: 1;
   min-width: 0;
   background: transparent;
   border: none;
   outline: none;
   color: #ffffff;
+  font-family: inherit;
   font-size: 12px;
 }
 
-.ms-search input::placeholder {
+.drk-search input::placeholder {
   color: #71717a;
 }
 
-/* Select */
-.ms-select-wrap {
+.drk-select-wrap {
   position: relative;
 }
 
-.ms-select {
+.drk-select {
   appearance: none;
   -webkit-appearance: none;
   height: 38px;
+  min-width: 140px;
   padding: 0 34px 0 14px;
   background: #0f0f0f;
   border: 1px solid #262626;
   border-radius: 10px;
   color: #d4d4d8;
+  font-family: inherit;
   font-size: 12px;
   cursor: pointer;
   outline: none;
   color-scheme: dark;
 }
 
-.ms-select:focus {
+.drk-select:focus {
   border-color: #ef233c;
 }
 
-.ms-select-lead {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #a1a1aa;
-  pointer-events: none;
+.drk-select option {
+  background: #0f0f0f;
+  color: #d4d4d8;
 }
 
-.ms-select {
-  padding-left: 34px !important;
-}
-
-.ms-select-icon {
+.drk-select-icon {
   position: absolute;
   right: 12px;
   top: 50%;
+  display: flex;
   transform: translateY(-50%);
+  font-size: 14px;
   color: #a1a1aa;
   pointer-events: none;
+}
+
+.drk-filter {
+  position: relative;
+}
+
+.drk-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  background: #0f0f0f;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  color: #d4d4d8;
+  font-size: 16px;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.drk-icon-btn:hover,
+.drk-icon-btn.is-active {
+  border-color: #ef233c;
+  color: #ef233c;
+}
+
+.drk-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 150px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #0f0f0f;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+
+.drk-filter-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #d4d4d8;
+  font-size: 12px;
+  text-align: left;
+}
+
+.drk-filter-menu button:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.drk-filter-menu button.is-selected {
+  color: #ef233c;
+  background: rgba(239, 35, 60, 0.1);
 }
 
 /* ------------------------------- Table ------------------------------- */
 
-.ms-table-wrap {
+.drk-table-wrap {
   overflow-x: auto;
   border: 1px solid #1a1a1a;
   border-radius: 12px;
-  color-scheme: dark;
-  scrollbar-width: thin;
-  scrollbar-color: #2a2a2a transparent;
 }
 
-.ms-table-wrap::-webkit-scrollbar {
-  height: 8px;
-}
-.ms-table-wrap::-webkit-scrollbar-track {
-  background: transparent;
-}
-.ms-table-wrap::-webkit-scrollbar-thumb {
-  background: #2a2a2a;
-  border-radius: 999px;
-}
-.ms-table-wrap::-webkit-scrollbar-thumb:hover {
-  background: #ef233c;
-}
-
-.ms-table {
+.drk-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
-.ms-table thead tr {
+.drk-table thead tr {
   background: #0f0f0f;
 }
 
-.ms-table th {
-  padding: 14px 10px;
+.drk-table th {
+  padding: 14px 16px;
   text-align: left;
   font-size: 12px;
   font-weight: 500;
@@ -360,121 +412,118 @@
   white-space: nowrap;
 }
 
-.ms-table td {
-  padding: 13px 10px;
+.drk-table td {
+  padding: 12px 16px;
   color: #d4d4d8;
   border-bottom: 1px solid #1a1a1a;
   white-space: nowrap;
 }
 
-.ms-table tbody tr:last-child td {
+.drk-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.ms-table tbody tr:hover {
+.drk-table tbody tr:hover {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.ms-table .center {
+.drk-table .center {
   text-align: center;
 }
 
-.ms-table .muted {
+.drk-table td.muted {
   color: #8a8a93;
 }
 
-.ms-table .due {
-  font-weight: 700;
-  color: #ffffff;
+.drk-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.ms-table .member-name {
+.drk-thumb {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 38px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #151515;
+  border: 1px solid #262626;
+  border-radius: 8px;
+  color: #a1a1aa;
+  font-size: 16px;
+}
+
+.drk-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.drk-table .item-name {
   font-weight: 600;
   color: #ffffff;
 }
 
-.ms-empty {
+.drk-empty {
   padding: 40px 16px !important;
   text-align: center;
   color: #8a8a93 !important;
 }
 
-/* Badges (same pill style as Members status) */
+/* Status badges */
 
-.ms-badge {
+.drk-status {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 4px 14px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.ms-badge.normal {
-  background: rgba(239, 35, 60, 0.15);
-  border: 1px solid rgba(239, 35, 60, 0.35);
-  color: #ff5a70;
-}
-
-.ms-badge.package {
+.drk-status.in {
   background: rgba(34, 197, 94, 0.15);
   border: 1px solid rgba(34, 197, 94, 0.35);
   color: #22c55e;
 }
 
-.ms-badge.trainer {
+.drk-status.low {
   background: rgba(245, 158, 11, 0.15);
   border: 1px solid rgba(245, 158, 11, 0.35);
   color: #f59e0b;
 }
 
-/* View button */
+.drk-status.out {
+  background: rgba(239, 35, 60, 0.15);
+  border: 1px solid rgba(239, 35, 60, 0.35);
+  color: #ff5a70;
+}
 
-.ms-view-btn {
-  width: 30px;
-  height: 30px;
+/* Action button */
+
+.drk-view-btn {
   display: inline-grid;
   place-items: center;
-  color: #d4d4d8;
-  background: #0f0f0f;
-  border: 1px solid #262626;
+  width: 30px;
+  height: 30px;
+  border: 0;
   border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
+  background: transparent;
+  color: #a1a1aa;
+  font-size: 16px;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
-.ms-view-btn:hover {
-  color: #ffffff;
-  border-color: #ef233c;
-}
-
-/* Add member button */
-
-.ms-add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 20px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: #ffffff;
-  background: #ef233c;
-  border: 1px solid #ef233c;
-  border-radius: 10px;
-  cursor: pointer;
-  box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
-  transition: filter 0.2s ease;
-}
-
-.ms-add-btn:hover {
-  filter: brightness(1.12);
+.drk-view-btn:hover {
+  background: rgba(239, 35, 60, 0.12);
+  color: #ef233c;
 }
 
 /* ------------------------------ Footer ------------------------------ */
 
-.ms-footer {
+.drk-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -483,18 +532,18 @@
   margin-top: 18px;
 }
 
-.ms-showing {
+.drk-showing {
   font-size: 12px;
   color: #a1a1aa;
 }
 
-.ms-pagination {
+.drk-pagination {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.ms-page-btn {
+.drk-page-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -506,82 +555,81 @@
   border-radius: 8px;
   color: #d4d4d8;
   font-size: 12px;
-  cursor: pointer;
   transition: border-color 0.2s ease, color 0.2s ease;
 }
 
-.ms-page-btn:hover:not(:disabled):not(.dots):not(.active) {
+.drk-page-btn svg {
+  font-size: 14px;
+}
+
+.drk-page-btn:hover:not(:disabled):not(.dots):not(.active) {
   border-color: #ef233c;
   color: #ffffff;
 }
 
-.ms-page-btn.active {
+.drk-page-btn.active {
   background: #ef233c;
   border-color: #ef233c;
   color: #ffffff;
   font-weight: 600;
 }
 
-.ms-page-btn.dots {
+.drk-page-btn.dots {
   cursor: default;
 }
 
-.ms-page-btn:disabled {
+.drk-page-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ---------- Focus (keyboard) ---------- */
+.drk-page button:focus-visible,
+.drk-page select:focus-visible {
+  outline: 2px solid #ef233c;
+  outline-offset: 2px;
 }
 
 /* ---------------------------- Responsive ---------------------------- */
 
 @media (max-width: 1280px) {
-  .ms-stats {
+  .drk-stats {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 900px) {
-  .ms-toolbar-right {
-    width: 100%;
+  .drk-toolbar {
+    flex-wrap: wrap;
   }
 
-  .ms-search {
+  .drk-search {
+    flex-basis: 100%;
+  }
+
+  .drk-select-wrap {
     flex: 1;
-    width: auto;
+  }
+
+  .drk-select {
+    width: 100%;
   }
 }
 
 @media (max-width: 640px) {
-  .ms-page {
+  .drk-page {
     padding: 20px 14px;
   }
 
-  .ms-header {
-    flex-direction: column;
+  .drk-header {
+    flex-wrap: wrap;
   }
 
-  .ms-datetime-text {
-    align-items: flex-start;
-  }
-
-  .ms-stats {
+  .drk-stats {
     grid-template-columns: 1fr;
   }
 
-  .ms-title {
+  .drk-title {
     font-size: 22px;
-  }
-
-  .ms-toolbar-right {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .ms-select,
-  .ms-add-btn {
-    width: 100%;
-  }
-
-  .ms-add-btn {
-    justify-content: center;
   }
 }

@@ -9,9 +9,11 @@ import {
   EyeOff,
   ArrowLeft,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import bannerImg from "../../assets/gym-banner1.png";
 import logoImg from "../../assets/logo.png";
+import { API_URL } from "../../../config";
 import "./adminregister.css";
 
 interface FormData {
@@ -37,6 +39,7 @@ const AdminRegister = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -44,6 +47,7 @@ const AdminRegister = () => {
     if (errors[name as keyof FormData]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
+    if (serverError) setServerError("");
   };
 
   const validate = (): boolean => {
@@ -78,12 +82,46 @@ const AdminRegister = () => {
     if (!validate()) return;
 
     setLoading(true);
+    setServerError("");
     try {
-      // TODO: replace with actual API call
-      // await axios.post("/api/admin/register", formData);
-      console.log("Registering admin user:", formData);
-    } catch (err) {
+      await axios.post(
+        `${API_URL}/admin/register`,
+        {
+          fullName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          password: formData.password,
+          password_confirmation: formData.confirmPassword,
+        },
+        {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      alert("Admin account created successfully");
+      navigate("/admin/dashboard");
+    } catch (err: any) {
       console.error(err);
+
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setServerError("You are not allowed to do this. Please login as admin.");
+      } else if (err.response?.status === 422) {
+        // Laravel validation errors (e.g. email already taken)
+        const apiErrors = err.response.data.errors || {};
+        const mapped: Partial<FormData> = {};
+        if (apiErrors.fullName) mapped.fullName = apiErrors.fullName[0];
+        if (apiErrors.email) mapped.email = apiErrors.email[0];
+        if (apiErrors.phone) mapped.phone = apiErrors.phone[0];
+        if (apiErrors.password) mapped.password = apiErrors.password[0];
+        setErrors(mapped);
+      } else {
+        setServerError(
+          err.response?.data?.message || "Something went wrong. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -120,7 +158,7 @@ const AdminRegister = () => {
             Admin <span>Registration</span>
           </h1>
           <p className="admin-register-subtitle">
-            Fill in the details below to create your admin account.
+            Fill in the details below to create a new admin account.
           </p>
 
           <form onSubmit={handleSubmit} noValidate>
@@ -134,7 +172,7 @@ const AdminRegister = () => {
                   type="text"
                   id="fullName"
                   name="fullName"
-                  placeholder="Enter your full name"
+                  placeholder="Enter full name"
                   value={formData.fullName}
                   onChange={handleChange}
                   autoComplete="name"
@@ -153,7 +191,7 @@ const AdminRegister = () => {
                   type="email"
                   id="email"
                   name="email"
-                  placeholder="Enter your email address"
+                  placeholder="Enter email address"
                   value={formData.email}
                   onChange={handleChange}
                   autoComplete="email"
@@ -172,7 +210,7 @@ const AdminRegister = () => {
                   type="text"
                   id="phone"
                   name="phone"
-                  placeholder="Enter your phone number"
+                  placeholder="03XX-XXXXXXX"
                   value={formData.phone}
                   onChange={handleChange}
                   autoComplete="tel"
@@ -191,7 +229,7 @@ const AdminRegister = () => {
                   type={showPassword ? "text" : "password"}
                   id="password"
                   name="password"
-                  placeholder="Enter your password"
+                  placeholder="Enter password"
                   value={formData.password}
                   onChange={handleChange}
                   autoComplete="new-password"
@@ -218,7 +256,7 @@ const AdminRegister = () => {
                   type={showConfirmPassword ? "text" : "password"}
                   id="confirmPassword"
                   name="confirmPassword"
-                  placeholder="Confirm your password"
+                  placeholder="Confirm password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   autoComplete="new-password"
@@ -237,15 +275,13 @@ const AdminRegister = () => {
               )}
             </div>
 
+            {serverError && <span className="error-text">{serverError}</span>}
+
             <button type="submit" className="admin-register-btn" disabled={loading}>
               <UserCog size={18} />
               {loading ? "Registering..." : "Register"}
             </button>
           </form>
-
-          <p className="admin-login-hint">
-            Already have an account? <Link to="/login">Login</Link>
-          </p>
         </div>
       </div>
     </div>

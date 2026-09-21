@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import axios from "axios";
 import { Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import logo from "../../assets/logo.png";
 import gymBanner from "../../assets/gym-banner1.png";
+import { API_URL } from "../../../config";
 import "./login.css";
 
 interface FormData {
@@ -55,16 +57,14 @@ const Login = () => {
     setLoading(true);
     setServerError("");
     try {
-      // TODO: replace with actual API call
-      // const res = await axios.post("/api/login", formData);
-      // const { role, token } = res.data;
-
-      // Dummy example — replace with real response handling
-      const role = "admin"; // "admin" | "frontdesk"
-      const token = "dummy-token";
+      const res = await axios.post(`${API_URL}/login`, formData, {
+        headers: { Accept: "application/json" },
+      });
+      const { role, token, name } = res.data;
 
       localStorage.setItem("token", token);
       localStorage.setItem("role", role);
+      localStorage.setItem("name", name);
 
       if (role === "admin") {
         navigate("/admin/dashboard");
@@ -73,9 +73,16 @@ const Login = () => {
       } else {
         navigate("/");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setServerError("Invalid email or password. Please try again.");
+
+      if (err.response?.status === 429) {
+        setServerError("Too many login attempts. Please wait a minute and try again.");
+      } else {
+        setServerError(
+          err.response?.data?.message || "Invalid email or password. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -147,13 +154,6 @@ const Login = () => {
               {loading ? "Logging in..." : "Login"}
             </button>
           </form>
-
-          <p className="login-register-hint">
-            Don't have an account?{" "}
-            <Link to="/frontdesk/register" className="login-register-link">
-              Create account
-            </Link>
-          </p>
         </div>
       </div>
     </div>

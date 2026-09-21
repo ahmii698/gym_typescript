@@ -69,14 +69,20 @@
   color: #8a8f9c;
 }
 
+/* ✅ Admin wrapper (relative position for dropdown) */
+.fd-admin-wrapper {
+  position: relative;
+}
+
 /* Admin section */
 .fd-admin {
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  padding-left: 16px;
+  padding: 6px 0 6px 16px;
   border-left: 1px solid #1e2129;
+  user-select: none;
 }
 
 .fd-admin-avatar {
@@ -109,4 +115,70 @@
 
 .fd-chevron {
   color: #8a8f9c;
+  transition: transform 0.2s ease;
+}
+
+/* ✅ Chevron rotate when dropdown open */
+.fd-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* ✅ Dropdown menu */
+.fd-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 180px;
+  background-color: #14171f;
+  border: 1px solid #1e2129;
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  animation: fd-dropdown-fade 0.15s ease;
+}
+
+@keyframes fd-dropdown-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fd-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #c9cdd6;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.fd-dropdown-item:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.fd-dropdown-divider {
+  height: 1px;
+  background-color: #1e2129;
+  margin: 4px 0;
+}
+
+/* ✅ Logout special color */
+.fd-dropdown-logout:hover {
+  background-color: rgba(229, 57, 53, 0.15);
+  color: #e53935;
 }
