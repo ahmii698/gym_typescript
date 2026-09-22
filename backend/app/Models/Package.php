@@ -1,21 +1,28 @@
 <?php
+// app/Models/Package.php
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Package extends Model
 {
-    protected $fillable = ['name', 'duration_days', 'price', 'is_active'];
+    use HasFactory;
 
-    protected $casts = [
-        'is_active' => 'boolean',
-        'price' => 'decimal:2',
+    protected $fillable = [
+        'name',
+        'type',
+        'price',
+        'duration_days',
+        'features',
+        'is_active',
+        'icon',
     ];
 
-    public function members(): HasMany
-    {
-        return $this->hasMany(Member::class);
-    }
+    protected $casts = [
+        'features'  => 'array',
+        'is_active' => 'boolean',
+        'price'     => 'decimal:2',
+    ];
 }

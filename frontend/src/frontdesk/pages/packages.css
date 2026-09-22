@@ -1,29 +1,51 @@
 /* ==================================================================
-   Packages page — recolored to match Fee Collection theme
+   Packages page — recolored to match the site-wide black + red theme
    ================================================================== */
 
 .packages-page {
-  --pkg-bg: #000000;
+  --pkg-bg: #050505;
   --pkg-surface: #0d0d0d;
   --pkg-surface-2: #141414;
   --pkg-border: #262626;
   --pkg-border-soft: #1f1f1f;
   --pkg-text: #f2f2f2;
   --pkg-muted: #8a8a8a;
-  --pkg-red: #3b82f6;
-  --pkg-red-dark: #2563eb;
+  --pkg-red: #ef233c;
+  --pkg-red-dark: #d81f36;
   --pkg-green: #22c55e;
-  --pkg-blue: #3b82f6;
+  --pkg-blue: #38bdf8;
   --pkg-purple: #a855f7;
   --pkg-radius: 14px;
 
-  min-height: 100%;
+  /* Height is set precisely from JS; this is only the pre-measure fallback */
+  height: calc(100vh - 130px);
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 22px;
   background: var(--pkg-bg);
   color: var(--pkg-text);
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   font-size: 14px;
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.packages-page::-webkit-scrollbar {
+  width: 8px;
+}
+
+.packages-page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.packages-page::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 999px;
+}
+
+.packages-page::-webkit-scrollbar-thumb:hover {
+  background: var(--pkg-red);
 }
 
 .packages-page *,
@@ -59,7 +81,7 @@
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
 .packages-page .btn svg {
@@ -72,6 +94,7 @@
 }
 .btn--primary:hover {
   background: var(--pkg-red-dark);
+  box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
 }
 
 .btn--lg {
@@ -87,7 +110,7 @@
 }
 .btn--ghost:hover {
   color: var(--pkg-text);
-  border-color: #3b82f6;
+  border-color: var(--pkg-red);
 }
 
 .btn--outline {
@@ -96,23 +119,37 @@
   color: var(--pkg-text);
 }
 .btn--outline:hover {
-  border-color: #3b82f6;
-  background: #141414;
+  border-color: var(--pkg-red);
+  background: var(--pkg-surface-2);
 }
 
 .btn--danger {
   background: transparent;
-  border-color: rgba(239, 68, 68, 0.55);
-  color: #ef4444;
+  border-color: rgba(239, 35, 60, 0.55);
+  color: #ff5a70;
 }
 .btn--danger:hover {
-  background: rgba(239, 68, 68, 0.14);
+  background: rgba(239, 35, 60, 0.14);
 }
 
 .btn--sm {
   padding: 7px 11px;
   font-size: 12.5px;
   border-radius: 8px;
+}
+
+/* ------------------------------------------------------------------
+   Inline error banner (API failures)
+   ------------------------------------------------------------------ */
+
+.pkg-error-banner {
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  background: rgba(239, 35, 60, 0.12);
+  border: 1px solid rgba(239, 35, 60, 0.45);
+  border-radius: 10px;
+  color: #ff8a97;
+  font-size: 13.5px;
 }
 
 /* ------------------------------------------------------------------
@@ -204,6 +241,11 @@
   font: inherit;
 }
 
+.pkg-search input:focus {
+  border-color: var(--pkg-red);
+  outline: none;
+}
+
 .pkg-search input::placeholder {
   color: #6b6b6b;
 }
@@ -222,11 +264,17 @@
   font: inherit;
   cursor: pointer;
   appearance: none;
+  color-scheme: dark;
   background-image: linear-gradient(45deg, transparent 50%, #8a8a8a 50%),
     linear-gradient(135deg, #8a8a8a 50%, transparent 50%);
   background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
+}
+
+.pkg-select:focus {
+  border-color: var(--pkg-red);
+  outline: none;
 }
 
 .pkg-select option {
@@ -291,11 +339,12 @@
   background: var(--pkg-surface);
   border: 1px solid var(--pkg-border-soft);
   border-radius: var(--pkg-radius);
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, transform 0.15s;
 }
 
 .pkg-card:hover {
-  border-color: #3b82f6;
+  border-color: var(--pkg-red);
+  transform: translateY(-2px);
 }
 
 .pkg-card__top {
@@ -350,6 +399,7 @@
   font-size: 23px;
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: #ffffff;
 }
 
 .pkg-card__price span {
@@ -553,7 +603,7 @@
 
 .pkg-modal__close:hover {
   color: var(--pkg-text);
-  border-color: #3b82f6;
+  border-color: var(--pkg-red);
 }
 
 .pkg-form {
@@ -605,6 +655,7 @@
 
 .pkg-field select {
   cursor: pointer;
+  color-scheme: dark;
 }
 
 .pkg-field select option {
@@ -625,7 +676,7 @@
 
 .pkg-error {
   font-size: 12px;
-  color: #ef4444;
+  color: #ff5a70;
 }
 
 .pkg-modal__foot {
@@ -658,5 +709,11 @@
   .pkg-select {
     flex: 1 1 140px;
     min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .packages-page * {
+    transition: none !important;
   }
 }

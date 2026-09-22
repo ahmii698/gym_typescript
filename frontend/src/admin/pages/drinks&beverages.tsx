@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { API_URL } from "../../../config";
 import "./drinks&beverages.css";
 
 /* ---------- Types ---------- */
@@ -12,28 +13,48 @@ interface DrinkItem {
   unit: string;
   quantity: number;
   status: Status;
-  pack: Pack; // thumbnail ka shape (can ya bottle)
-  color: string; // thumbnail ka rang
-  image?: string; // optional: image URL. Agar diya to icon ki jagah image dikhegi
+  price: number;
+  pack: Pack;
+  color: string;
+  image?: string | null;
 }
 
-/* ---------- Data ---------- */
-const BASE_ITEMS: Omit<DrinkItem, "id">[] = [
-  { name: "Monster Energy", category: "Energy Drink", unit: "Can (500ml)", quantity: 18, status: "in", pack: "can", color: "#3ddc4a" },
-  { name: "Red Bull", category: "Energy Drink", unit: "Can (250ml)", quantity: 24, status: "in", pack: "can", color: "#4f7bff" },
-  { name: "Gatorade (Orange)", category: "Sports Drink", unit: "Bottle (500ml)", quantity: 12, status: "in", pack: "bottle", color: "#ff9a1f" },
-  { name: "Gatorade (Blue)", category: "Sports Drink", unit: "Bottle (500ml)", quantity: 8, status: "in", pack: "bottle", color: "#2d8cff" },
-  { name: "Coca Cola", category: "Soft Drink", unit: "Can (330ml)", quantity: 20, status: "in", pack: "can", color: "#ff2a3d" },
-  { name: "Sprite", category: "Soft Drink", unit: "Can (330ml)", quantity: 15, status: "in", pack: "can", color: "#2fd45a" },
-  { name: "Pepsi", category: "Soft Drink", unit: "Can (330ml)", quantity: 12, status: "in", pack: "can", color: "#2f6bff" },
-  { name: "7UP", category: "Soft Drink", unit: "Can (330ml)", quantity: 10, status: "in", pack: "can", color: "#1fbf5a" },
-  { name: "Water", category: "Water", unit: "Bottle (500ml)", quantity: 30, status: "in", pack: "bottle", color: "#5cc8ff" },
-  { name: "Vitamin Water", category: "Health Drink", unit: "Bottle (500ml)", quantity: 6, status: "low", pack: "bottle", color: "#ff7a2f" },
-  { name: "Fuze Tea", category: "Tea", unit: "Bottle (500ml)", quantity: 4, status: "low", pack: "bottle", color: "#ff5a1f" },
-  { name: "Protein Shake", category: "Protein Drink", unit: "Bottle (330ml)", quantity: 0, status: "out", pack: "bottle", color: "#c98a6a" },
-];
+interface ApiDrink {
+  id: number;
+  name: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  status: Status;
+  price: string | number;
+  image: string | null;
+}
 
-const ITEMS: DrinkItem[] = BASE_ITEMS.map((item, i) => ({ id: i + 1, ...item }));
+const CATEGORY_STYLE: Record<string, { pack: Pack; color: string }> = {
+  "Energy Drink": { pack: "can", color: "#3ddc4a" },
+  "Sports Drink": { pack: "bottle", color: "#ff9a1f" },
+  "Soft Drink": { pack: "can", color: "#ff2a3d" },
+  Water: { pack: "bottle", color: "#5cc8ff" },
+  "Health Drink": { pack: "bottle", color: "#ff7a2f" },
+  Tea: { pack: "bottle", color: "#ff5a1f" },
+  "Protein Drink": { pack: "bottle", color: "#c98a6a" },
+};
+const DEFAULT_STYLE: { pack: Pack; color: string } = { pack: "can", color: "#8a8a93" };
+
+const mapApiDrink = (d: ApiDrink): DrinkItem => {
+  const style = CATEGORY_STYLE[d.category] ?? DEFAULT_STYLE;
+  return {
+    id: d.id,
+    name: d.name,
+    category: d.category,
+    unit: d.unit,
+    quantity: d.quantity,
+    status: d.status,
+    price: typeof d.price === "string" ? parseFloat(d.price) : d.price,
+    image: d.image,
+    ...style,
+  };
+};
 
 const CATEGORIES = [
   "All Categories",
@@ -46,6 +67,8 @@ const CATEGORIES = [
   "Protein Drink",
 ];
 
+const FORM_CATEGORIES = CATEGORIES.filter((c) => c !== "All Categories");
+
 const STATUS_LABEL: Record<Status, string> = {
   in: "In Stock",
   low: "Low Stock",
@@ -55,9 +78,6 @@ const STATUS_LABEL: Record<Status, string> = {
 const PAGE_SIZE = 15;
 const BOTTOM_GAP = 24;
 
-/* ---------- Helpers ---------- */
-
-// Builds the page number list, e.g. [1, 2, 3, "...", 13]
 const getPages = (total: number, current: number): (number | "...")[] => {
   if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
   if (current <= 3) return [1, 2, 3, "...", total];
@@ -153,6 +173,11 @@ const PlusIcon = () => (
     <path d="M12 5v14M5 12h14" />
   </Icon>
 );
+const XIcon = () => (
+  <Icon>
+    <path d="M18 6L6 18M6 6l12 12" />
+  </Icon>
+);
 const ArrowUpIcon = () => (
   <Icon strokeWidth={2.5}>
     <path d="M12 19V5M5 12l7-7 7 7" />
@@ -169,7 +194,6 @@ const MinusIcon = () => (
   </Icon>
 );
 
-/* Can / bottle thumbnail (rang item ke hisaab se) */
 const DrinkThumb = ({ pack, color }: { pack: Pack; color: string }) =>
   pack === "can" ? (
     <svg viewBox="0 0 24 32" width="18" height="24" aria-hidden="true">
@@ -185,60 +209,33 @@ const DrinkThumb = ({ pack, color }: { pack: Pack; color: string }) =>
     </svg>
   );
 
-/* ---------- Stat cards (same structure as Members page) ---------- */
-const countBy = (s: Status) => ITEMS.filter((i) => i.status === s).length;
+/* ---------- Add Drink form state ---------- */
+interface DrinkFormState {
+  name: string;
+  category: string;
+  unit: string;
+  quantity: string;
+  low_stock_threshold: string;
+  price: string;
+}
 
-const STATS = [
-  {
-    id: "total",
-    title: "Total Items",
-    period: "All time",
-    value: ITEMS.length,
-    change: "+9%",
-    dir: "up",
-    tone: "good",
-    variant: "red",
-    Icon: BoxIcon,
-  },
-  {
-    id: "in",
-    title: "In Stock",
-    period: "Right now",
-    value: countBy("in"),
-    change: "+11%",
-    dir: "up",
-    tone: "good",
-    variant: "green",
-    Icon: CheckBoxIcon,
-  },
-  {
-    id: "low",
-    title: "Low Stock",
-    period: "Right now",
-    value: countBy("low"),
-    change: "-33%",
-    dir: "down",
-    tone: "good",
-    variant: "amber",
-    Icon: AlertIcon,
-  },
-  {
-    id: "out",
-    title: "Out of Stock",
-    period: "Right now",
-    value: countBy("out"),
-    change: "0%",
-    dir: "flat",
-    tone: "flat",
-    variant: "orange",
-    Icon: BanIcon,
-  },
-] as const;
+const EMPTY_FORM: DrinkFormState = {
+  name: "",
+  category: FORM_CATEGORIES[0],
+  unit: "",
+  quantity: "",
+  low_stock_threshold: "5",
+  price: "",
+};
 
 /* ---------- Page ---------- */
 export default function DrinksBeverages() {
   const pageRef = useRef<HTMLDivElement>(null);
   const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
+
+  const [items, setItems] = useState<DrinkItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All Categories");
@@ -246,7 +243,18 @@ export default function DrinksBeverages() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
 
-  // Make the page its own scroll container (same as Members page)
+  // Add modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [form, setForm] = useState<DrinkFormState>(EMPTY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const role = localStorage.getItem("role");
+  const token = localStorage.getItem("token");
+
+  // Add Item + Sell dono ab admin aur frontdesk dono kar sakte hain
+  const canManageDrinks = role === "admin" || role === "frontdesk";
+
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
@@ -259,20 +267,45 @@ export default function DrinksBeverages() {
     return () => window.removeEventListener("resize", updateHeight);
   }, []);
 
-  // Back to page 1 whenever a filter changes
+  const fetchDrinks = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/drinks`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      if (!res.ok) throw new Error("Failed to load drinks");
+      const data: ApiDrink[] = await res.json();
+      setItems(data.map(mapApiDrink));
+    } catch (err) {
+      console.error(err);
+      setError("Drinks load nahi ho sakay. Dobara try karein.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDrinks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     setPage(1);
   }, [search, category, statusFilter]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return ITEMS.filter((item) => {
+    return items.filter((item) => {
       const matchName = !q || item.name.toLowerCase().includes(q);
       const matchCat = category === "All Categories" || item.category === category;
       const matchStatus = statusFilter === "all" || item.status === statusFilter;
       return matchName && matchCat && matchStatus;
     });
-  }, [search, category, statusFilter]);
+  }, [items, search, category, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -282,14 +315,102 @@ export default function DrinksBeverages() {
   const showingFrom = filtered.length === 0 ? 0 : startIndex + 1;
   const showingTo = startIndex + pageItems.length;
 
+  const countBy = (s: Status) => items.filter((i) => i.status === s).length;
+
+  const STATS = [
+    { id: "total", title: "Total Items", period: "All time", value: items.length, variant: "red", Icon: BoxIcon },
+    { id: "in", title: "In Stock", period: "Right now", value: countBy("in"), variant: "green", Icon: CheckBoxIcon },
+    { id: "low", title: "Low Stock", period: "Right now", value: countBy("low"), variant: "amber", Icon: AlertIcon },
+    { id: "out", title: "Out of Stock", period: "Right now", value: countBy("out"), variant: "orange", Icon: BanIcon },
+  ] as const;
+
   const handleView = (item: DrinkItem) => {
-    // TODO: yahan apna view / details logic laga dein
     console.log("View item:", item);
   };
 
-  const handleAdd = () => {
-    // TODO: yahan Add Item modal / route open karein
-    console.log("Add item clicked");
+  const openAddModal = () => {
+    setForm(EMPTY_FORM);
+    setFormError(null);
+    setShowAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    if (submitting) return;
+    setShowAddModal(false);
+  };
+
+  const handleFormChange = (field: keyof DrinkFormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddDrink = async () => {
+    setFormError(null);
+
+    if (!form.name.trim() || !form.unit.trim() || form.quantity === "" || form.price === "") {
+      setFormError("Name, Unit, Quantity aur Price zaroori hain.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/drinks`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          category: form.category,
+          unit: form.unit.trim(),
+          quantity: Number(form.quantity),
+          low_stock_threshold: Number(form.low_stock_threshold || 5),
+          price: Number(form.price),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setFormError(data?.message ?? "Item add nahi ho saka.");
+        return;
+      }
+
+      setShowAddModal(false);
+      fetchDrinks(); // list refresh
+    } catch (err) {
+      console.error(err);
+      setFormError("Kuch masla ho gaya, dobara try karein.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSell = async (item: DrinkItem) => {
+    if (item.quantity <= 0) return;
+    try {
+      const res = await fetch(`${API_URL}/drinks/${item.id}/sell`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ quantity: 1 }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        alert(data?.message ?? "Sell nahi ho saka");
+        return;
+      }
+      const { drink } = await res.json();
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, quantity: drink.quantity, status: drink.status } : i))
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Kuch masla ho gaya, dobara try karein.");
+    }
   };
 
   return (
@@ -309,10 +430,12 @@ export default function DrinksBeverages() {
             <p className="drk-subtitle">Track and manage drinks and beverages in your fridge.</p>
           </div>
         </div>
-        <button type="button" className="drk-btn-primary" onClick={handleAdd}>
-          <PlusIcon />
-          <span>Add Item</span>
-        </button>
+        {canManageDrinks && (
+          <button type="button" className="drk-btn-primary" onClick={openAddModal}>
+            <PlusIcon />
+            <span>Add Item</span>
+          </button>
+        )}
       </header>
 
       {/* Stat cards */}
@@ -326,13 +449,6 @@ export default function DrinksBeverages() {
               <span className="drk-stat-title">{s.title}</span>
               <span className="drk-stat-period">{s.period}</span>
               <span className="drk-stat-value">{s.value}</span>
-              <span className={`drk-stat-change ${s.tone}`}>
-                {s.dir === "up" && <ArrowUpIcon />}
-                {s.dir === "down" && <ArrowDownIcon />}
-                {s.dir === "flat" && <MinusIcon />}
-                <strong>{s.change.replace("-", "")}</strong>
-              </span>
-              <span className="drk-stat-vs">vs. last month</span>
             </div>
           </div>
         ))}
@@ -418,7 +534,19 @@ export default function DrinksBeverages() {
               </tr>
             </thead>
             <tbody>
-              {pageItems.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="drk-empty">
+                    Loading...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="drk-empty">
+                    {error}
+                  </td>
+                </tr>
+              ) : pageItems.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="drk-empty">
                     No drinks found. Try a different search or filter.
@@ -449,14 +577,27 @@ export default function DrinksBeverages() {
                       </span>
                     </td>
                     <td className="center">
-                      <button
-                        type="button"
-                        className="drk-view-btn"
-                        onClick={() => handleView(item)}
-                        aria-label={`View ${item.name}`}
-                      >
-                        <EyeIcon />
-                      </button>
+                      <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                        <button
+                          type="button"
+                          className="drk-view-btn"
+                          onClick={() => handleView(item)}
+                          aria-label={`View ${item.name}`}
+                        >
+                          <EyeIcon />
+                        </button>
+                        {canManageDrinks && (
+                          <button
+                            type="button"
+                            className="drk-view-btn"
+                            onClick={() => handleSell(item)}
+                            disabled={item.quantity <= 0}
+                            aria-label={`Sell ${item.name}`}
+                          >
+                            Sell
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -512,6 +653,103 @@ export default function DrinksBeverages() {
           </div>
         </div>
       </section>
+
+      {/* Add Drink Modal */}
+      {showAddModal && (
+        <div className="drk-modal-overlay" onClick={closeAddModal}>
+          <div className="drk-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="drk-modal-header">
+              <h2>Add New Drink</h2>
+              <button className="drk-modal-close" onClick={closeAddModal} aria-label="Close">
+                <XIcon />
+              </button>
+            </div>
+
+            <div className="drk-modal-body">
+              <div className="drk-form-group">
+                <label>Item Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Red Bull"
+                  value={form.name}
+                  onChange={(e) => handleFormChange("name", e.target.value)}
+                />
+              </div>
+
+              <div className="drk-form-row">
+                <div className="drk-form-group">
+                  <label>Category</label>
+                  <select
+                    value={form.category}
+                    onChange={(e) => handleFormChange("category", e.target.value)}
+                  >
+                    {FORM_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="drk-form-group">
+                  <label>Unit</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Can (250ml)"
+                    value={form.unit}
+                    onChange={(e) => handleFormChange("unit", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="drk-form-row">
+                <div className="drk-form-group">
+                  <label>Quantity</label>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="0"
+                    value={form.quantity}
+                    onChange={(e) => handleFormChange("quantity", e.target.value)}
+                  />
+                </div>
+                <div className="drk-form-group">
+                  <label>Low Stock Alert At</label>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="5"
+                    value={form.low_stock_threshold}
+                    onChange={(e) => handleFormChange("low_stock_threshold", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="drk-form-group">
+                <label>Price (per unit)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="0.00"
+                  value={form.price}
+                  onChange={(e) => handleFormChange("price", e.target.value)}
+                />
+              </div>
+
+              {formError && <p className="drk-form-error">{formError}</p>}
+            </div>
+
+            <div className="drk-modal-footer">
+              <button className="drk-btn-secondary" onClick={closeAddModal} disabled={submitting}>
+                Cancel
+              </button>
+              <button className="drk-btn-primary" onClick={handleAddDrink} disabled={submitting}>
+                {submitting ? "Adding..." : "Add Drink"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

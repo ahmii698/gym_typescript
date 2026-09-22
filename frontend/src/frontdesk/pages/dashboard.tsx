@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   Users,
   Footprints,
@@ -188,8 +188,25 @@ const buildPoints = (
 const CHART_WIDTH = 700;
 const CHART_HEIGHT = 260;
 const CHART_MAX = 300;
+const BOTTOM_GAP = 24;
 
 const Dashboard: React.FC = () => {
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
+
+  /* make the page its own scroll container, same as the rest of the app */
+  useLayoutEffect(() => {
+    const updateHeight = () => {
+      if (!pageRef.current) return;
+      const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
+      setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
+    };
+
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
+
   const totalPoints = buildPoints(
     totalMembersData,
     CHART_WIDTH,
@@ -205,7 +222,11 @@ const Dashboard: React.FC = () => {
   const areaPoints = `0,${CHART_HEIGHT} ${totalPoints} ${CHART_WIDTH},${CHART_HEIGHT}`;
 
   return (
-    <div className="db-dashboard">
+    <div
+      className="db-dashboard"
+      ref={pageRef}
+      style={pageHeight ? { height: pageHeight } : undefined}
+    >
       {/* Stat Cards */}
       <div className="db-stats-row">
         {statCards.map((card) => (
@@ -260,8 +281,8 @@ const Dashboard: React.FC = () => {
             >
               <defs>
                 <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(229,57,53,0.35)" />
-                  <stop offset="100%" stopColor="rgba(229,57,53,0)" />
+                  <stop offset="0%" stopColor="rgba(239,35,60,0.35)" />
+                  <stop offset="100%" stopColor="rgba(239,35,60,0)" />
                 </linearGradient>
               </defs>
               <polygon points={areaPoints} fill="url(#areaFill)" />
@@ -274,7 +295,7 @@ const Dashboard: React.FC = () => {
               <polyline
                 points={totalPoints}
                 fill="none"
-                stroke="#e53935"
+                stroke="#ef233c"
                 strokeWidth="2.5"
               />
             </svg>

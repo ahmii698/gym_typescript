@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   Search,
@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { API_URL } from "../../../config";
 import "./attendance.css";
 
 // ------------------------------------------------------------------
@@ -40,182 +41,30 @@ interface Member {
   email: string;
 }
 
-// ------------------------------------------------------------------
-// Mock data (replace with API data)
-// ------------------------------------------------------------------
-const MOCK_MEMBERS: Member[] = [
-  {
-    id: 1,
-    name: "Ahmed Khan",
-    avatar: "https://i.pravatar.cc/80?img=12",
-    phone: "0300-1234567",
-    cnic: "42101-1234567-1",
-    package: "Premium",
-    type: "Normal",
-    trainer: null,
-    status: "Present",
-    checkIn: "08:45 AM",
-    paymentStatus: "Paid",
-    feesPaidOn: "Aug 01, 2025",
-    feesExpiryOn: "Sep 01, 2025",
-    joinedOn: "Jan 12, 2024",
-    email: "ahmed.khan@example.com",
-  },
-  {
-    id: 2,
-    name: "Ayesha Fatima",
-    avatar: "https://i.pravatar.cc/80?img=45",
-    phone: "0321-7654321",
-    cnic: "42101-9876543-2",
-    package: "Standard",
-    type: "Normal + Trainer",
-    trainer: "Ali Raza",
-    status: "Present",
-    checkIn: "09:12 AM",
-    paymentStatus: "Paid",
-    feesPaidOn: "Aug 05, 2025",
-    feesExpiryOn: "Sep 05, 2025",
-    joinedOn: "Mar 03, 2024",
-    email: "ayesha.fatima@example.com",
-  },
-  {
-    id: 3,
-    name: "Bilal Hussain",
-    avatar: "https://i.pravatar.cc/80?img=33",
-    phone: "0305-1112233",
-    cnic: "42101-5566778-3",
-    package: "Basic",
-    type: "Package Only",
-    trainer: null,
-    status: "Absent",
-    checkIn: null,
-    paymentStatus: "Unpaid",
-    feesPaidOn: "Jul 10, 2025",
-    feesExpiryOn: "Aug 10, 2025",
-    joinedOn: "Jul 10, 2024",
-    email: "bilal.hussain@example.com",
-  },
-  {
-    id: 4,
-    name: "Sara Khan",
-    avatar: "https://i.pravatar.cc/80?img=47",
-    phone: "0312-3344556",
-    cnic: "42101-1122334-4",
-    package: "Premium",
-    type: "Normal + Trainer",
-    trainer: "Usman Ali",
-    status: "Present",
-    checkIn: "08:58 AM",
-    paymentStatus: "Paid",
-    feesPaidOn: "Aug 02, 2025",
-    feesExpiryOn: "Sep 02, 2025",
-    joinedOn: "Feb 20, 2024",
-    email: "sara.khan@example.com",
-  },
-  {
-    id: 5,
-    name: "Usman Ali",
-    avatar: "https://i.pravatar.cc/80?img=51",
-    phone: "0307-7788990",
-    cnic: "42101-6677889-5",
-    package: "Standard",
-    type: "Normal",
-    trainer: null,
-    status: "Present",
-    checkIn: "09:20 AM",
-    paymentStatus: "Unpaid",
-    feesPaidOn: "Jul 28, 2025",
-    feesExpiryOn: "Aug 28, 2025",
-    joinedOn: "May 15, 2024",
-    email: "usman.ali@example.com",
-  },
-  {
-    id: 6,
-    name: "Zainab Malik",
-    avatar: "https://i.pravatar.cc/80?img=29",
-    phone: "0333-4455667",
-    cnic: "42101-2233445-6",
-    package: "Premium",
-    type: "Package + Trainer",
-    trainer: "Bilal Khan",
-    status: "Present",
-    checkIn: "08:40 AM",
-    paymentStatus: "Paid",
-    feesPaidOn: "Aug 08, 2025",
-    feesExpiryOn: "Sep 08, 2025",
-    joinedOn: "Sep 09, 2023",
-    email: "zainab.malik@example.com",
-  },
-  {
-    id: 7,
-    name: "Hassan Raza",
-    avatar: "https://i.pravatar.cc/80?img=15",
-    phone: "0345-6677889",
-    cnic: "42101-7788990-7",
-    package: "Basic",
-    type: "Normal",
-    trainer: null,
-    status: "Absent",
-    checkIn: null,
-    paymentStatus: "Unpaid",
-    feesPaidOn: "Jul 01, 2025",
-    feesExpiryOn: "Aug 01, 2025",
-    joinedOn: "Nov 11, 2023",
-    email: "hassan.raza@example.com",
-  },
-  {
-    id: 8,
-    name: "Aliza Sheikh",
-    avatar: "https://i.pravatar.cc/80?img=24",
-    phone: "0309-9988776",
-    cnic: "42101-3344556-8",
-    package: "Standard",
-    type: "Normal + Trainer",
-    trainer: "Usman Ali",
-    status: "Present",
-    checkIn: "09:05 AM",
-    paymentStatus: "Paid",
-    feesPaidOn: "Aug 03, 2025",
-    feesExpiryOn: "Sep 03, 2025",
-    joinedOn: "Apr 04, 2024",
-    email: "aliza.sheikh@example.com",
-  },
-  {
-    id: 9,
-    name: "Tariq Javed",
-    avatar: "https://i.pravatar.cc/80?img=8",
-    phone: "0318-5566778",
-    cnic: "42101-8899001-9",
-    package: "Premium",
-    type: "Package Only",
-    trainer: null,
-    status: "Present",
-    checkIn: "08:52 AM",
-    paymentStatus: "Paid",
-    feesPaidOn: "Aug 06, 2025",
-    feesExpiryOn: "Sep 06, 2025",
-    joinedOn: "Dec 25, 2023",
-    email: "tariq.javed@example.com",
-  },
-  {
-    id: 10,
-    name: "Nimra Iqbal",
-    avatar: "https://i.pravatar.cc/80?img=38",
-    phone: "0322-6677880",
-    cnic: "42101-4455667-0",
-    package: "Standard",
-    type: "Normal",
-    trainer: null,
-    // was "Late" — collapsed into Absent since only Present/Absent exist now
-    status: "Absent",
-    checkIn: "09:32 AM",
-    paymentStatus: "Unpaid",
-    feesPaidOn: "Jul 15, 2025",
-    feesExpiryOn: "Aug 15, 2025",
-    joinedOn: "Jun 06, 2024",
-    email: "nimra.iqbal@example.com",
-  },
-];
+// Backend se jaisa data aata hai (AttendanceController@index se)
+interface ApiAttendanceRow {
+  id: number;
+  name: string;
+  phone: string;
+  cnic: string;
+  package: string;
+  type: MemberType;
+  trainer: string | null;
+  status: AttendanceStatus;
+  check_in: string | null;
+  payment_status: PaymentStatus;
+  fees_paid_on: string | null;
+  fees_expiry_on: string | null;
+  joined_on: string | null;
+  email: string;
+  avatar: string | null;
+}
+
+// AttendanceController@toggle ka response shape
+interface ApiToggleResponse {
+  status: AttendanceStatus;
+  check_in: string | null;
+}
 
 const TRAINERS = ["Ali Raza", "Usman Ali", "Bilal Khan"];
 const MEMBER_TYPES: MemberType[] = [
@@ -228,9 +77,63 @@ const MEMBER_TYPES: MemberType[] = [
 const PAGE_SIZE = 10;
 const BOTTOM_GAP = 24;
 
-// ------------------------------------------------------------------
-// Small presentational helpers
-// ------------------------------------------------------------------
+/* ------------------------------------------------------------------ */
+/* API helpers (isi file ke andar)                                     */
+/* ------------------------------------------------------------------ */
+
+function getToken(): string | null {
+  return localStorage.getItem("token");
+}
+
+function mapApiToMember(m: ApiAttendanceRow): Member {
+  return {
+    id: m.id,
+    name: m.name,
+    avatar: m.avatar || `https://i.pravatar.cc/80?u=${m.id}`,
+    phone: m.phone,
+    cnic: m.cnic,
+    package: m.package,
+    type: m.type,
+    trainer: m.trainer,
+    status: m.status,
+    checkIn: m.check_in,
+    paymentStatus: m.payment_status,
+    feesPaidOn: m.fees_paid_on ?? "-",
+    feesExpiryOn: m.fees_expiry_on ?? "-",
+    joinedOn: m.joined_on ?? "-",
+    email: m.email,
+  };
+}
+
+async function apiFetchAttendance(date: string): Promise<Member[]> {
+  const res = await fetch(`${API_URL}/attendance?date=${date}`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+  });
+  if (!res.ok) throw new Error("Attendance load nahi ho saki.");
+  const data: ApiAttendanceRow[] = await res.json();
+  return data.map(mapApiToMember);
+}
+
+async function apiToggleAttendance(memberId: number, date: string): Promise<ApiToggleResponse> {
+  const res = await fetch(`${API_URL}/attendance/${memberId}/toggle`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ date }),
+  });
+  if (!res.ok) throw new Error("Status update nahi ho saka.");
+  return res.json();
+}
+
+/* ------------------------------------------------------------------ */
+/* Small presentational helpers                                        */
+/* ------------------------------------------------------------------ */
 const StatusBadge: React.FC<{
   status: AttendanceStatus;
   onDoubleClick?: () => void;
@@ -248,14 +151,19 @@ const PaymentBadge: React.FC<{ status: PaymentStatus }> = ({ status }) => (
   <span className={`badge badge-${status.toLowerCase()}`}>{status}</span>
 );
 
-// ------------------------------------------------------------------
-// Main component
-// ------------------------------------------------------------------
+/* ------------------------------------------------------------------ */
+/* Main component                                                       */
+/* ------------------------------------------------------------------ */
 const AttendancePage: React.FC = () => {
   const pageRef = useRef<HTMLDivElement>(null);
   const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
 
-  const [members, setMembers] = useState<Member[]>(MOCK_MEMBERS);
+  const todayDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<"All" | PaymentStatus>("All");
   const [typeFilter, setTypeFilter] = useState<"All" | MemberType>("All");
@@ -277,21 +185,38 @@ const AttendancePage: React.FC = () => {
     return () => window.removeEventListener("resize", updateHeight);
   }, []);
 
+  const loadAttendance = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiFetchAttendance(todayDate);
+      setMembers(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Attendance load nahi ho saki.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAttendance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Toggle Present <-> Absent for a given member (used on badge double-click)
-  const toggleStatus = (id: number) => {
+  const toggleStatus = async (id: number) => {
+    // optimistic UI update — turant dikhta hai, table refresh nahi hota
     setMembers((prev) =>
       prev.map((m) =>
         m.id === id
           ? {
               ...m,
               status: m.status === "Present" ? "Absent" : "Present",
-              // keep check-in time in sync: clear it when marked Absent
               checkIn: m.status === "Present" ? null : m.checkIn ?? "—",
             }
           : m
       )
     );
-    // keep the modal in sync if the toggled member is currently open
     setActiveMember((prev) =>
       prev && prev.id === id
         ? {
@@ -301,6 +226,26 @@ const AttendancePage: React.FC = () => {
           }
         : prev
     );
+
+    try {
+      const result = await apiToggleAttendance(id, todayDate);
+      // sirf isi member ki row backend ke authoritative data se sync karein
+      // — poora table dobara load nahi karte, is liye "loading" flicker nahi aata
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === id ? { ...m, status: result.status, checkIn: result.check_in } : m
+        )
+      );
+      setActiveMember((prev) =>
+        prev && prev.id === id
+          ? { ...prev, status: result.status, checkIn: result.check_in }
+          : prev
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Status update nahi ho saka.");
+      // sirf error ki soorat mein poora reload karein taake sahi state wapas aa jaye
+      loadAttendance();
+    }
   };
 
   const filteredMembers = useMemo(() => {
@@ -393,6 +338,12 @@ const AttendancePage: React.FC = () => {
           <p>Track and manage member attendance</p>
         </div>
       </div>
+
+      {error && (
+        <div className="pkg-error-banner" role="alert" style={{ marginBottom: 14 }}>
+          {error}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="attendance-filters">
@@ -492,7 +443,6 @@ const AttendancePage: React.FC = () => {
           <div>
             <p className="stat-label">Total Check-ins</p>
             <p className="stat-value">{stats.totalCheckIns}</p>
-            <p className="stat-delta stat-delta-up">↑ 12% from last week</p>
           </div>
         </div>
 
@@ -503,7 +453,6 @@ const AttendancePage: React.FC = () => {
           <div>
             <p className="stat-label">Present Today</p>
             <p className="stat-value">{stats.present}</p>
-            <p className="stat-delta stat-delta-up">↑ 8% from last week</p>
           </div>
         </div>
 
@@ -514,7 +463,6 @@ const AttendancePage: React.FC = () => {
           <div>
             <p className="stat-label">Absent Today</p>
             <p className="stat-value">{stats.absent}</p>
-            <p className="stat-delta stat-delta-down">↓ 5% from last week</p>
           </div>
         </div>
 
@@ -525,7 +473,6 @@ const AttendancePage: React.FC = () => {
           <div>
             <p className="stat-label">No Check-in (7+ Days)</p>
             <p className="stat-value">{stats.noCheckIn}</p>
-            <p className="stat-delta stat-delta-down">↓ 3% from last week</p>
           </div>
         </div>
       </div>
@@ -548,45 +495,53 @@ const AttendancePage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {pageMembers.length === 0 && (
+            {loading && (
+              <tr>
+                <td colSpan={10} className="no-results">
+                  Loading...
+                </td>
+              </tr>
+            )}
+            {!loading && pageMembers.length === 0 && (
               <tr>
                 <td colSpan={10} className="no-results">
                   No members found for the selected filters.
                 </td>
               </tr>
             )}
-            {pageMembers.map((m, idx) => (
-              <tr key={m.id}>
-                <td>{pageStart + idx + 1}.</td>
-                <td>
-                  <div className="member-cell">
-                    <img src={m.avatar} alt={m.name} />
-                    <span>{m.name}</span>
-                  </div>
-                </td>
-                <td>{m.phone}</td>
-                <td>{m.cnic}</td>
-                <td>{m.package}</td>
-                <td>{m.type}</td>
-                <td>{m.trainer ?? "-"}</td>
-                <td>
-                  <StatusBadge
-                    status={m.status}
-                    onDoubleClick={() => toggleStatus(m.id)}
-                  />
-                </td>
-                <td>{m.checkIn ?? "-"}</td>
-                <td>
-                  <button
-                    className="btn btn-view"
-                    onClick={() => setActiveMember(m)}
-                  >
-                    <Eye size={14} />
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {!loading &&
+              pageMembers.map((m, idx) => (
+                <tr key={m.id}>
+                  <td>{pageStart + idx + 1}.</td>
+                  <td>
+                    <div className="member-cell">
+                      <img src={m.avatar} alt={m.name} />
+                      <span>{m.name}</span>
+                    </div>
+                  </td>
+                  <td>{m.phone}</td>
+                  <td>{m.cnic}</td>
+                  <td>{m.package}</td>
+                  <td>{m.type}</td>
+                  <td>{m.trainer ?? "-"}</td>
+                  <td>
+                    <StatusBadge
+                      status={m.status}
+                      onDoubleClick={() => toggleStatus(m.id)}
+                    />
+                  </td>
+                  <td>{m.checkIn ?? "-"}</td>
+                  <td>
+                    <button
+                      className="btn btn-view"
+                      onClick={() => setActiveMember(m)}
+                    >
+                      <Eye size={14} />
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>

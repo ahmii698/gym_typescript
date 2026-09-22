@@ -3,11 +3,39 @@
   flex-direction: column;
   gap: 20px;
   padding: 20px 24px;
-  background-color: #0a0c10;
-  min-height: 100vh;
+  background-color: #050505;
+  /* Height is set precisely from JS; this is only the pre-measure fallback */
+  height: calc(100vh - 130px);
+  overflow-x: hidden;
+  overflow-y: auto;
   box-sizing: border-box;
   color: #e4e6eb;
   font-family: "Inter", "Segoe UI", sans-serif;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.db-dashboard::-webkit-scrollbar {
+  width: 8px;
+}
+
+.db-dashboard::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.db-dashboard::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 999px;
+}
+
+.db-dashboard::-webkit-scrollbar-thumb:hover {
+  background: #ef233c;
+}
+
+.db-dashboard *,
+.db-dashboard *::before,
+.db-dashboard *::after {
+  box-sizing: border-box;
 }
 
 /* ===== Stat Cards ===== */
@@ -23,8 +51,13 @@
   gap: 14px;
   padding: 18px;
   border-radius: 12px;
-  background-color: #12141a;
-  border: 1px solid #1e2129;
+  background-color: #0d0d0d;
+  border: 1px solid #1f1f1f;
+  transition: transform 0.2s ease;
+}
+
+.db-stat-card:hover {
+  transform: translateY(-2px);
 }
 
 .db-stat-icon-wrap {
@@ -37,17 +70,17 @@
   flex-shrink: 0;
 }
 
-.db-stat-red { border-color: rgba(229, 57, 53, 0.4); }
-.db-stat-red .db-stat-icon-wrap { background-color: #e53935; color: #fff; }
+.db-stat-red { border-color: rgba(239, 35, 60, 0.35); }
+.db-stat-red .db-stat-icon-wrap { background-color: #ef233c; color: #fff; }
 
-.db-stat-green { border-color: rgba(31, 191, 117, 0.4); }
-.db-stat-green .db-stat-icon-wrap { background-color: #1fbf75; color: #fff; }
+.db-stat-green { border-color: rgba(34, 197, 94, 0.35); }
+.db-stat-green .db-stat-icon-wrap { background-color: #22c55e; color: #fff; }
 
-.db-stat-orange { border-color: rgba(245, 166, 35, 0.4); }
-.db-stat-orange .db-stat-icon-wrap { background-color: #f5a623; color: #fff; }
+.db-stat-orange { border-color: rgba(245, 158, 11, 0.35); }
+.db-stat-orange .db-stat-icon-wrap { background-color: #f59e0b; color: #fff; }
 
-.db-stat-redSolid { border-color: rgba(229, 57, 53, 0.4); }
-.db-stat-redSolid .db-stat-icon-wrap { background-color: #e53935; color: #fff; }
+.db-stat-redSolid { border-color: rgba(239, 35, 60, 0.35); }
+.db-stat-redSolid .db-stat-icon-wrap { background-color: #ef233c; color: #fff; }
 
 .db-stat-content {
   display: flex;
@@ -57,7 +90,7 @@
 
 .db-stat-title {
   font-size: 13px;
-  color: #9aa0ab;
+  color: #a1a1aa;
 }
 
 .db-stat-value {
@@ -71,13 +104,13 @@
   font-weight: 500;
 }
 
-.db-trend-up { color: #1fbf75; }
-.db-trend-down { color: #e53935; }
+.db-trend-up { color: #22c55e; }
+.db-trend-down { color: #ef233c; }
 
 /* ===== Shared Panel ===== */
 .db-panel {
-  background-color: #12141a;
-  border: 1px solid #1e2129;
+  background-color: #0d0d0d;
+  border: 1px solid #1f1f1f;
   border-radius: 12px;
   padding: 18px;
   box-sizing: border-box;
@@ -112,7 +145,7 @@
   border-radius: 8px;
 }
 
-.db-icon-red { background-color: #e53935; color: #fff; }
+.db-icon-red { background-color: #ef233c; color: #fff; }
 
 .db-panel-subtitle {
   margin: 2px 0 0;
@@ -124,22 +157,32 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background-color: #1a1d24;
-  border: 1px solid #262a33;
-  color: #c9cdd6;
+  background-color: #0f0f0f;
+  border: 1px solid #262626;
+  color: #d4d4d8;
   font-size: 12px;
   padding: 6px 10px;
   border-radius: 8px;
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.db-dropdown-btn:hover {
+  border-color: #ef233c;
+  color: #ffffff;
 }
 
 .db-view-all-btn {
   background: none;
   border: none;
-  color: #e53935;
+  color: #ef233c;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.db-view-all-btn:hover {
+  color: #ff3b57;
 }
 
 /* ===== Middle row ===== */
@@ -170,10 +213,10 @@
   display: inline-block;
 }
 
-.db-dot-red { background-color: #e53935; }
+.db-dot-red { background-color: #ef233c; }
 .db-dot-gray { background-color: #9aa0ab; }
-.db-dot-green { background-color: #1fbf75; }
-.db-dot-orange { background-color: #f5a623; }
+.db-dot-green { background-color: #22c55e; }
+.db-dot-orange { background-color: #f59e0b; }
 
 .db-chart-wrap {
   display: flex;
@@ -219,9 +262,9 @@
   height: 160px;
   border-radius: 50%;
   background: conic-gradient(
-    #1fbf75 0% 75%,
-    #f5a623 75% 92%,
-    #e53935 92% 100%
+    #22c55e 0% 75%,
+    #f59e0b 75% 92%,
+    #ef233c 92% 100%
   );
   display: flex;
   align-items: center;
@@ -234,7 +277,7 @@
   width: 108px;
   height: 108px;
   border-radius: 50%;
-  background-color: #12141a;
+  background-color: #0d0d0d;
 }
 
 .db-donut-center {
@@ -286,7 +329,7 @@
   color: #8a8f9c;
 }
 
-.db-legend-sub-red { color: #e53935; }
+.db-legend-sub-red { color: #ef233c; }
 
 /* ===== Bottom row ===== */
 .db-bottom-row {
@@ -306,14 +349,18 @@
   color: #6b7280;
   font-weight: 500;
   padding: 8px 6px;
-  border-bottom: 1px solid #1e2129;
+  border-bottom: 1px solid #1f1f1f;
 }
 
 .db-table tbody td {
   font-size: 13px;
   color: #d1d4dc;
   padding: 10px 6px;
-  border-bottom: 1px solid #1a1d24;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.db-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .db-member-cell {
@@ -338,13 +385,13 @@
 }
 
 .db-badge-green {
-  background-color: rgba(31, 191, 117, 0.15);
-  color: #1fbf75;
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
 }
 
 .db-badge-red {
-  background-color: rgba(229, 57, 53, 0.15);
-  color: #e53935;
+  background-color: rgba(239, 35, 60, 0.15);
+  color: #ff5a70;
 }
 
 /* ===== Summary panel ===== */
@@ -356,7 +403,7 @@
 .db-summary-trend {
   font-size: 12.5px;
   font-weight: 600;
-  color: #1fbf75;
+  color: #22c55e;
 }
 
 .db-summary-trend-sub {
@@ -408,12 +455,18 @@
   width: 100%;
   height: 6px;
   border-radius: 4px;
-  background-color: #1a1d24;
+  background-color: #1a1a1a;
   overflow: hidden;
 }
 
 .db-summary-progress-fill {
   height: 100%;
-  background-color: #e53935;
+  background-color: #ef233c;
   border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .db-dashboard * {
+    transition: none !important;
+  }
 }

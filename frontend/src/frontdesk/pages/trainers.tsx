@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { API_URL, STORAGE_URL } from "../../../config";
 import "./trainers.css";
 
 /* ------------------------------------------------------------------ */
@@ -17,84 +18,25 @@ export interface Trainer {
   email: string;
   cnic: string;
   specialization: string;
-  experienceYears: number;
+  experienceYears: number | null;
   photo?: string;
 }
 
+interface ApiTrainer {
+  id: number;
+  name: string;
+  cnic: string | null;
+  phone: string | null;
+  email: string | null;
+  specialization: string | null;
+  role: string | null;
+  status: string | null;
+  experience_years: number | null;
+  photo_url: string | null;
+  is_active: number | boolean;
+}
+
 const PAGE_SIZE = 6;
-
-/* ------------------------------------------------------------------ */
-/* Seed data                                                           */
-/* ------------------------------------------------------------------ */
-
-const SEED_TRAINERS: Trainer[] = [
-  {
-    id: "trn-1",
-    name: "Usman Ali",
-    role: "Fitness Trainer",
-    status: "Active",
-    phone: "0300-1234567",
-    email: "usman@fitzone.com",
-    cnic: "42101-1234567-1",
-    specialization: "Strength Training",
-    experienceYears: 5,
-  },
-  {
-    id: "trn-2",
-    name: "Ayesha Fatima",
-    role: "Personal Trainer",
-    status: "Active",
-    phone: "0321-7654321",
-    email: "ayesha@fitzone.com",
-    cnic: "42101-2234567-8",
-    specialization: "Weight Loss",
-    experienceYears: 3,
-  },
-  {
-    id: "trn-3",
-    name: "Bilal Hussain",
-    role: "Fitness Trainer",
-    status: "Active",
-    phone: "0305-1112233",
-    email: "bilal@fitzone.com",
-    cnic: "42101-3334567-5",
-    specialization: "Muscle Building",
-    experienceYears: 6,
-  },
-  {
-    id: "trn-4",
-    name: "Sara Khan",
-    role: "Yoga Trainer",
-    status: "Active",
-    phone: "0312-3344556",
-    email: "sara@fitzone.com",
-    cnic: "42101-4434567-2",
-    specialization: "Yoga & Flexibility",
-    experienceYears: 4,
-  },
-  {
-    id: "trn-5",
-    name: "Zain Ali",
-    role: "Fitness Trainer",
-    status: "On Leave",
-    phone: "0333-4455667",
-    email: "zain@fitzone.com",
-    cnic: "42101-5534567-9",
-    specialization: "Cardio",
-    experienceYears: 5,
-  },
-  {
-    id: "trn-6",
-    name: "Hassan Raza",
-    role: "Personal Trainer",
-    status: "Active",
-    phone: "0345-6677889",
-    email: "hassan@fitzone.com",
-    cnic: "42101-6634567-3",
-    specialization: "CrossFit",
-    experienceYears: 7,
-  },
-];
 
 const SPECIALIZATIONS = [
   "Strength Training",
@@ -106,6 +48,61 @@ const SPECIALIZATIONS = [
   "Rehabilitation",
   "Nutrition Coaching",
 ];
+
+const DISPLAY_FALLBACK = "—";
+
+/* ------------------------------------------------------------------ */
+/* API helpers                                                         */
+/* ------------------------------------------------------------------ */
+
+const authHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem("token");
+  return {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
+const resolvePhoto = (url: string | null): string | undefined => {
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${STORAGE_URL}/${url.replace(/^\/+/, "")}`;
+};
+
+const mapTrainer = (t: ApiTrainer): Trainer => ({
+  id: String(t.id),
+  name: t.name ?? "",
+  role: (t.role as TrainerRole) || "Fitness Trainer",
+  status: (t.status as TrainerStatus) || "Active",
+  phone: t.phone ?? "",
+  email: t.email ?? "",
+  cnic: t.cnic ?? "",
+  specialization: t.specialization ?? "",
+  experienceYears: t.experience_years ?? null,
+  photo: resolvePhoto(t.photo_url),
+});
+
+// Laravel field -> form field, for mapping 422 validation errors back
+const apiFieldToForm: Record<string, keyof FormState> = {
+  name: "name",
+  phone: "phone",
+  cnic: "cnic",
+  email: "email",
+  specialization: "specialization",
+  experience_years: "experienceYears",
+  photo_url: "photo",
+};
+
+class ApiValidationError extends Error {
+  fieldErrors: Partial<Record<keyof FormState, string>>;
+  constructor(message: string, fieldErrors: Partial<Record<keyof FormState, string>> = {}) {
+    super(message);
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+const firstApiError = (json: any): string =>
+  json?.message ?? "Kuch ghalat ho gaya. Dobara koshish karein.";
 
 /* ------------------------------------------------------------------ */
 /* Inline icons                                                        */
@@ -202,7 +199,7 @@ const Icon = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Helpers                                                             */
+/* Helpers                                                              */
 /* ------------------------------------------------------------------ */
 
 const initialsOf = (name: string) =>
@@ -211,10 +208,13 @@ const initialsOf = (name: string) =>
     .split(/\s+/)
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
+    .join("") || "?";
 
 const statusClass = (s: TrainerStatus) =>
   s === "Active" ? "active" : s === "On Leave" ? "leave" : "inactive";
+
+const show = (v: string | null | undefined) => (v && v.trim() ? v : DISPLAY_FALLBACK);
+const showYears = (v: number | null) => (v != null ? `${v} Years` : DISPLAY_FALLBACK);
 
 /* ------------------------------------------------------------------ */
 /* Add / Edit modal                                                    */
@@ -248,21 +248,19 @@ interface TrainerModalProps {
   open: boolean;
   editing: Trainer | null;
   onClose: () => void;
-  onSave: (data: Omit<Trainer, "id">, id?: string) => void;
+  onSave: (data: Omit<Trainer, "id">, id?: string) => Promise<void>;
 }
 
-const TrainerModal: React.FC<TrainerModalProps> = ({
-  open,
-  editing,
-  onClose,
-  onSave,
-}) => {
+const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onSave }) => {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setErrors({});
+    setFormError(null);
     if (editing) {
       setForm({
         name: editing.name,
@@ -271,8 +269,8 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
         phone: editing.phone,
         email: editing.email,
         cnic: editing.cnic,
-        specialization: editing.specialization,
-        experienceYears: String(editing.experienceYears),
+        specialization: editing.specialization || SPECIALIZATIONS[0],
+        experienceYears: editing.experienceYears != null ? String(editing.experienceYears) : "",
         photo: editing.photo ?? "",
       });
     } else {
@@ -298,43 +296,59 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
     const next: Partial<Record<keyof FormState, string>> = {};
     if (!form.name.trim()) next.name = "Trainer ka naam likhein.";
 
-    const phoneDigits = form.phone.replace(/\D/g, "");
-    if (phoneDigits.length < 11) next.phone = "11 digit ka phone number likhein.";
+    if (form.phone.trim()) {
+      const phoneDigits = form.phone.replace(/\D/g, "");
+      if (phoneDigits.length < 11) next.phone = "11 digit ka phone number likhein.";
+    }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
       next.email = "Sahi email address likhein.";
 
-    const cnicDigits = form.cnic.replace(/\D/g, "");
-    if (cnicDigits.length !== 13) next.cnic = "CNIC 13 digits ka hota hai.";
+    if (form.cnic.trim()) {
+      const cnicDigits = form.cnic.replace(/\D/g, "");
+      if (cnicDigits.length !== 13) next.cnic = "CNIC 13 digits ka hota hai.";
+    }
 
-    if (!form.specialization.trim())
-      next.specialization = "Specialization select karein.";
-
-    const exp = Number(form.experienceYears);
-    if (form.experienceYears.trim() === "" || Number.isNaN(exp) || exp < 0)
-      next.experienceYears = "Experience saalon mein likhein.";
+    if (form.experienceYears.trim() !== "") {
+      const exp = Number(form.experienceYears);
+      if (Number.isNaN(exp) || exp < 0) next.experienceYears = "Experience saalon mein likhein.";
+    }
 
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    onSave(
-      {
-        name: form.name.trim(),
-        role: form.role,
-        status: form.status,
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        cnic: form.cnic.trim(),
-        specialization: form.specialization.trim(),
-        experienceYears: Number(form.experienceYears),
-        photo: form.photo.trim() || undefined,
-      },
-      editing?.id
-    );
+
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await onSave(
+        {
+          name: form.name.trim(),
+          role: form.role,
+          status: form.status,
+          phone: form.phone.trim(),
+          email: form.email.trim(),
+          cnic: form.cnic.trim(),
+          specialization: form.specialization.trim(),
+          experienceYears: form.experienceYears.trim() === "" ? null : Number(form.experienceYears),
+          photo: form.photo.trim() || undefined,
+        },
+        editing?.id
+      );
+    } catch (err) {
+      if (err instanceof ApiValidationError) {
+        setErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+        setFormError(err.message);
+      } else {
+        setFormError(err instanceof Error ? err.message : "Kuch ghalat ho gaya.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -348,22 +362,17 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
       >
         <header className="trn-modal__head">
           <div>
-            <h2 id="trn-modal-title">
-              {editing ? "Edit trainer" : "Add new trainer"}
-            </h2>
+            <h2 id="trn-modal-title">{editing ? "Edit trainer" : "Add new trainer"}</h2>
             <p>Trainer ki details bharein aur save karein.</p>
           </div>
-          <button
-            type="button"
-            className="trn-modal__close"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className="trn-modal__close" onClick={onClose} aria-label="Close">
             <Icon.Close />
           </button>
         </header>
 
         <form className="trn-form" onSubmit={handleSubmit} noValidate>
+          {formError && <div className="trn-form__error">{formError}</div>}
+
           <div className="trn-field">
             <label htmlFor="trn-name">Full name</label>
             <input
@@ -418,11 +427,7 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
           <div className="trn-field-row">
             <div className="trn-field">
               <label htmlFor="trn-role">Role</label>
-              <select
-                id="trn-role"
-                value={form.role}
-                onChange={(e) => update("role", e.target.value as TrainerRole)}
-              >
+              <select id="trn-role" value={form.role} onChange={(e) => update("role", e.target.value as TrainerRole)}>
                 <option value="Fitness Trainer">Fitness Trainer</option>
                 <option value="Personal Trainer">Personal Trainer</option>
                 <option value="Yoga Trainer">Yoga Trainer</option>
@@ -434,9 +439,7 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
               <select
                 id="trn-status"
                 value={form.status}
-                onChange={(e) =>
-                  update("status", e.target.value as TrainerStatus)
-                }
+                onChange={(e) => update("status", e.target.value as TrainerStatus)}
               >
                 <option value="Active">Active</option>
                 <option value="On Leave">On Leave</option>
@@ -448,20 +451,14 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
           <div className="trn-field-row">
             <div className="trn-field">
               <label htmlFor="trn-spec">Specialization</label>
-              <select
-                id="trn-spec"
-                value={form.specialization}
-                onChange={(e) => update("specialization", e.target.value)}
-              >
+              <select id="trn-spec" value={form.specialization} onChange={(e) => update("specialization", e.target.value)}>
                 {SPECIALIZATIONS.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
                 ))}
               </select>
-              {errors.specialization && (
-                <span className="trn-error">{errors.specialization}</span>
-              )}
+              {errors.specialization && <span className="trn-error">{errors.specialization}</span>}
             </div>
 
             <div className="trn-field">
@@ -474,9 +471,7 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
                 value={form.experienceYears}
                 onChange={(e) => update("experienceYears", e.target.value)}
               />
-              {errors.experienceYears && (
-                <span className="trn-error">{errors.experienceYears}</span>
-              )}
+              {errors.experienceYears && <span className="trn-error">{errors.experienceYears}</span>}
             </div>
           </div>
 
@@ -489,17 +484,15 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
               value={form.photo}
               onChange={(e) => update("photo", e.target.value)}
             />
-            <span className="trn-hint">
-              Khali chhorne par naam ke initials dikhenge.
-            </span>
+            <span className="trn-hint">Khali chhorne par naam ke initials dikhenge.</span>
           </div>
 
           <footer className="trn-modal__foot">
-            <button type="button" className="btn btn--ghost" onClick={onClose}>
+            <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn--primary">
-              {editing ? "Save changes" : "Add trainer"}
+            <button type="submit" className="btn btn--primary" disabled={submitting}>
+              {submitting ? "Saving..." : editing ? "Save changes" : "Add trainer"}
             </button>
           </footer>
         </form>
@@ -512,10 +505,7 @@ const TrainerModal: React.FC<TrainerModalProps> = ({
 /* View modal                                                          */
 /* ------------------------------------------------------------------ */
 
-const ViewModal: React.FC<{ trainer: Trainer | null; onClose: () => void }> = ({
-  trainer,
-  onClose,
-}) => {
+const ViewModal: React.FC<{ trainer: Trainer | null; onClose: () => void }> = ({ trainer, onClose }) => {
   useEffect(() => {
     if (!trainer) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -526,43 +516,29 @@ const ViewModal: React.FC<{ trainer: Trainer | null; onClose: () => void }> = ({
   if (!trainer) return null;
 
   const rows: Array<[string, string]> = [
-    ["Role", trainer.role],
-    ["Status", trainer.status],
-    ["Phone", trainer.phone],
-    ["Email", trainer.email],
-    ["CNIC", trainer.cnic],
-    ["Specialization", trainer.specialization],
-    ["Experience", `${trainer.experienceYears} Years`],
+    ["Role", show(trainer.role)],
+    ["Status", show(trainer.status)],
+    ["Phone", show(trainer.phone)],
+    ["Email", show(trainer.email)],
+    ["CNIC", show(trainer.cnic)],
+    ["Specialization", show(trainer.specialization)],
+    ["Experience", showYears(trainer.experienceYears)],
   ];
 
   return (
     <div className="trn-modal-backdrop" onMouseDown={onClose}>
-      <div
-        className="trn-modal trn-modal--view"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="trn-modal trn-modal--view" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <header className="trn-modal__head">
           <div className="trn-view__id">
             <span className="trn-avatar trn-avatar--lg">
-              {trainer.photo ? (
-                <img src={trainer.photo} alt="" />
-              ) : (
-                initialsOf(trainer.name)
-              )}
+              {trainer.photo ? <img src={trainer.photo} alt="" /> : initialsOf(trainer.name)}
             </span>
             <div>
-              <h2>{trainer.name}</h2>
-              <p>{trainer.role}</p>
+              <h2>{trainer.name || DISPLAY_FALLBACK}</h2>
+              <p>{show(trainer.role)}</p>
             </div>
           </div>
-          <button
-            type="button"
-            className="trn-modal__close"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className="trn-modal__close" onClick={onClose} aria-label="Close">
             <Icon.Close />
           </button>
         </header>
@@ -587,11 +563,19 @@ const ViewModal: React.FC<{ trainer: Trainer | null; onClose: () => void }> = ({
 };
 
 /* ------------------------------------------------------------------ */
-/* Page                                                                */
+/* Page                                                                 */
 /* ------------------------------------------------------------------ */
 
+const BOTTOM_GAP = 24;
+
 const Trainers: React.FC = () => {
-  const [trainers, setTrainers] = useState<Trainer[]>(SEED_TRAINERS);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
+
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [specFilter, setSpecFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | TrainerStatus>("all");
@@ -601,6 +585,42 @@ const Trainers: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Trainer | null>(null);
   const [viewing, setViewing] = useState<Trainer | null>(null);
+
+  /* make the page its own scroll container, same as the rest of the app */
+  useLayoutEffect(() => {
+    const updateHeight = () => {
+      if (!pageRef.current) return;
+      const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
+      setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
+    };
+
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
+
+  const loadTrainers = async () => {
+    setLoading(true);
+    setPageError(null);
+    try {
+      const res = await fetch(`${API_URL}/trainers`, { headers: authHeaders() });
+      if (res.status === 401) {
+        setPageError("Session expire ho gaya hai, dobara login karo.");
+        return;
+      }
+      if (!res.ok) throw new Error();
+      const json: ApiTrainer[] = await res.json();
+      setTrainers(json.map(mapTrainer));
+    } catch {
+      setPageError("Trainers load nahi ho sake. Backend chal raha hai?");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTrainers();
+  }, []);
 
   // Close the kebab menu on any outside click.
   useEffect(() => {
@@ -612,7 +632,7 @@ const Trainers: React.FC = () => {
 
   const specOptions = useMemo(() => {
     const set = new Set<string>(SPECIALIZATIONS);
-    trainers.forEach((t) => set.add(t.specialization));
+    trainers.forEach((t) => t.specialization && set.add(t.specialization));
     return Array.from(set).sort();
   }, [trainers]);
 
@@ -636,7 +656,6 @@ const Trainers: React.FC = () => {
   const start = (currentPage - 1) * PAGE_SIZE;
   const visible = filtered.slice(start, start + PAGE_SIZE);
 
-  // Whenever the filters change, go back to page 1.
   useEffect(() => {
     setPage(1);
   }, [search, specFilter, statusFilter]);
@@ -657,35 +676,94 @@ const Trainers: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleSave = (data: Omit<Trainer, "id">, id?: string) => {
-    if (id) {
-      setTrainers((list) => list.map((t) => (t.id === id ? { ...data, id } : t)));
-    } else {
-      setTrainers((list) => [...list, { ...data, id: `trn-${Date.now()}` }]);
+  const buildPayload = (data: Omit<Trainer, "id">) => ({
+    name: data.name,
+    phone: data.phone || null,
+    cnic: data.cnic || null,
+    email: data.email || null,
+    role: data.role,
+    status: data.status,
+    specialization: data.specialization || null,
+    experience_years: data.experienceYears,
+    photo_url: data.photo || null,
+  });
+
+  const handleSave = async (data: Omit<Trainer, "id">, id?: string) => {
+    const url = id ? `${API_URL}/trainers/${id}` : `${API_URL}/trainers`;
+    const method = id ? "PUT" : "POST";
+
+    const res = await fetch(url, {
+      method,
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload(data)),
+    });
+    const json = await res.json().catch(() => ({}));
+
+    if (res.status === 422 && json?.errors) {
+      const fieldErrors: Partial<Record<keyof FormState, string>> = {};
+      Object.entries(json.errors).forEach(([key, msgs]) => {
+        const mapped = apiFieldToForm[key];
+        if (mapped) fieldErrors[mapped] = (msgs as string[])[0];
+      });
+      throw new ApiValidationError(firstApiError(json), fieldErrors);
     }
+
+    if (res.status === 401) {
+      throw new Error("Session expire ho gaya hai, dobara login karo.");
+    }
+
+    if (!res.ok) {
+      throw new Error(firstApiError(json));
+    }
+
+    const saved = mapTrainer(json.data ?? json);
+    setTrainers((list) => (id ? list.map((t) => (t.id === saved.id ? saved : t)) : [...list, saved]));
     setModalOpen(false);
     setEditing(null);
   };
 
-  const handleDelete = (t: Trainer) => {
-    if (window.confirm(`"${t.name}" ko delete kar dein?`)) {
+  const handleDelete = async (t: Trainer) => {
+    if (!window.confirm(`"${t.name}" ko delete kar dein?`)) return;
+    try {
+      const res = await fetch(`${API_URL}/trainers/${t.id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error();
       setTrainers((list) => list.filter((x) => x.id !== t.id));
+    } catch {
+      alert("Trainer delete nahi ho saka. Backend chal raha hai?");
     }
   };
 
-  const cycleStatus = (t: Trainer) => {
+  const cycleStatus = async (t: Trainer) => {
     const order: TrainerStatus[] = ["Active", "On Leave", "Inactive"];
     const next = order[(order.indexOf(t.status) + 1) % order.length];
-    setTrainers((list) =>
-      list.map((x) => (x.id === t.id ? { ...x, status: next } : x))
-    );
+    const previous = trainers;
+
+    setTrainers((list) => list.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
+
+    try {
+      const res = await fetch(`${API_URL}/trainers/${t.id}`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload({ ...t, status: next })),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setTrainers(previous);
+    }
   };
 
   const showingFrom = filtered.length === 0 ? 0 : start + 1;
   const showingTo = start + visible.length;
 
   return (
-    <div className="trainers-page">
+    <div
+      className="trainers-page"
+      ref={pageRef}
+      style={pageHeight ? { height: pageHeight } : undefined}
+    >
       {/* Header */}
       <header className="trn-header">
         <div className="trn-header__left">
@@ -703,6 +781,15 @@ const Trainers: React.FC = () => {
         </button>
       </header>
 
+      {pageError && (
+        <div className="trn-alert" role="alert">
+          <span>{pageError}</span>
+          <button type="button" onClick={loadTrainers}>
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <section className="trn-toolbar">
         <div className="trn-search">
@@ -716,12 +803,7 @@ const Trainers: React.FC = () => {
           />
         </div>
 
-        <select
-          className="trn-select"
-          value={specFilter}
-          onChange={(e) => setSpecFilter(e.target.value)}
-          aria-label="Filter by specialization"
-        >
+        <select className="trn-select" value={specFilter} onChange={(e) => setSpecFilter(e.target.value)} aria-label="Filter by specialization">
           <option value="all">All Specializations</option>
           {specOptions.map((s) => (
             <option key={s} value={s}>
@@ -733,9 +815,7 @@ const Trainers: React.FC = () => {
         <select
           className="trn-select"
           value={statusFilter}
-          onChange={(e) =>
-            setStatusFilter(e.target.value as "all" | TrainerStatus)
-          }
+          onChange={(e) => setStatusFilter(e.target.value as "all" | TrainerStatus)}
           aria-label="Filter by status"
         >
           <option value="all">All Status</option>
@@ -750,8 +830,13 @@ const Trainers: React.FC = () => {
         </button>
       </section>
 
-      {/* Cards */}
-      {visible.length === 0 ? (
+      {/* Loading */}
+      {loading ? (
+        <div className="trn-empty">
+          <h3>Loading trainers...</h3>
+          <p>Zara sabar karein, data load ho raha hai.</p>
+        </div>
+      ) : visible.length === 0 ? (
         <div className="trn-empty">
           <h3>Koi trainer nahi mila</h3>
           <p>Filters reset karein ya naya trainer add karein.</p>
@@ -770,8 +855,8 @@ const Trainers: React.FC = () => {
                 </span>
 
                 <div className="trn-card__id">
-                  <h3>{t.name}</h3>
-                  <p>{t.role}</p>
+                  <h3>{t.name || DISPLAY_FALLBACK}</h3>
+                  <p>{show(t.role)}</p>
                 </div>
 
                 <button
@@ -797,10 +882,7 @@ const Trainers: React.FC = () => {
                     <Icon.Dots />
                   </button>
                   {menuOpenId === t.id && (
-                    <div
-                      className="trn-menu__list"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="trn-menu__list" onClick={(e) => e.stopPropagation()}>
                       <button type="button" onClick={() => { setViewing(t); setMenuOpenId(null); }}>
                         <Icon.Eye /> View details
                       </button>
@@ -822,44 +904,32 @@ const Trainers: React.FC = () => {
               <ul className="trn-card__meta">
                 <li>
                   <Icon.Phone />
-                  <span>{t.phone}</span>
+                  <span>{show(t.phone)}</span>
                 </li>
                 <li>
                   <Icon.Mail />
-                  <span className="is-truncate">{t.email}</span>
+                  <span className="is-truncate">{show(t.email)}</span>
                 </li>
                 <li>
                   <Icon.Target />
-                  <span>Specialization: {t.specialization}</span>
+                  <span>Specialization: {show(t.specialization)}</span>
                 </li>
                 <li>
                   <Icon.Award />
-                  <span>Experience: {t.experienceYears} Years</span>
+                  <span>Experience: {showYears(t.experienceYears)}</span>
                 </li>
               </ul>
 
               <footer className="trn-card__actions">
-                <button
-                  type="button"
-                  className="btn btn--sm btn--outline"
-                  onClick={() => setViewing(t)}
-                >
+                <button type="button" className="btn btn--sm btn--outline" onClick={() => setViewing(t)}>
                   <Icon.Eye />
                   View
                 </button>
-                <button
-                  type="button"
-                  className="btn btn--sm btn--outline"
-                  onClick={() => openEdit(t)}
-                >
+                <button type="button" className="btn btn--sm btn--outline" onClick={() => openEdit(t)}>
                   <Icon.Edit />
                   Edit
                 </button>
-                <button
-                  type="button"
-                  className="btn btn--sm btn--danger-solid"
-                  onClick={() => handleDelete(t)}
-                >
+                <button type="button" className="btn btn--sm btn--danger-solid" onClick={() => handleDelete(t)}>
                   <Icon.Trash />
                   Delete
                 </button>
@@ -870,43 +940,40 @@ const Trainers: React.FC = () => {
       )}
 
       {/* Pagination */}
-      <footer className="trn-footer">
-        <span className="trn-footer__count">
-          Showing {showingFrom} to {showingTo} of {filtered.length} trainers
-        </span>
+      {!loading && filtered.length > 0 && (
+        <footer className="trn-footer">
+          <span className="trn-footer__count">
+            Showing {showingFrom} to {showingTo} of {filtered.length} trainers
+          </span>
 
-        <div className="trn-pagination">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            aria-label="Previous page"
-          >
-            <Icon.ChevLeft />
-          </button>
-
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-            <button
-              key={n}
-              type="button"
-              className={n === currentPage ? "is-active" : ""}
-              onClick={() => setPage(n)}
-              aria-current={n === currentPage ? "page" : undefined}
-            >
-              {n}
+          <div className="trn-pagination">
+            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Previous page">
+              <Icon.ChevLeft />
             </button>
-          ))}
 
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            aria-label="Next page"
-          >
-            <Icon.ChevRight />
-          </button>
-        </div>
-      </footer>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={n === currentPage ? "is-active" : ""}
+                onClick={() => setPage(n)}
+                aria-current={n === currentPage ? "page" : undefined}
+              >
+                {n}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              aria-label="Next page"
+            >
+              <Icon.ChevRight />
+            </button>
+          </div>
+        </footer>
+      )}
 
       <TrainerModal
         open={modalOpen}

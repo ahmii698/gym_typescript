@@ -1,15 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { API_URL } from "../../../config";
 import "./packages.css";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
-export type PackageType = "Normal" | "Premium" | "With Trainer";
-export type PackageStatus = "Active" | "Inactive";
-export type PackageIcon = "dumbbell" | "users" | "user" | "layers";
+type PackageType = "Normal" | "Premium" | "With Trainer";
+type PackageStatus = "Active" | "Inactive";
+type PackageIcon = "dumbbell" | "users" | "user" | "layers";
 
-export interface GymPackage {
+interface GymPackage {
   id: string;
   name: string;
   type: PackageType;
@@ -20,125 +21,114 @@ export interface GymPackage {
   icon: PackageIcon;
 }
 
+// Backend se jaisa data aata hai
+interface ApiPackage {
+  id: number;
+  name: string;
+  type: PackageType;
+  price: string | number;
+  duration_days: number;
+  features: string[] | null;
+  is_active: boolean | 0 | 1;
+  icon: PackageIcon;
+}
+
 type ViewMode = "grid" | "list";
 
 /* ------------------------------------------------------------------ */
-/* Seed data                                                           */
+/* API helpers (isi file ke andar)                                     */
 /* ------------------------------------------------------------------ */
 
-const SEED_PACKAGES: GymPackage[] = [
-  {
-    id: "pkg-1",
-    name: "Monthly Basic",
-    type: "Normal",
-    price: 5000,
-    durationDays: 30,
-    features: ["Gym Access", "Weight Training", "Cardio Access"],
-    status: "Active",
-    icon: "dumbbell",
-  },
-  {
-    id: "pkg-2",
-    name: "Quarterly Standard",
-    type: "Normal",
-    price: 12000,
-    durationDays: 90,
-    features: [
-      "Gym Access",
-      "Weight Training",
-      "Cardio Access",
-      "Personal Guidance (1 Month)",
-    ],
-    status: "Active",
-    icon: "dumbbell",
-  },
-  {
-    id: "pkg-3",
-    name: "6 Months Premium",
-    type: "Premium",
-    price: 20000,
-    durationDays: 180,
-    features: [
-      "Gym Access",
-      "Weight Training",
-      "Cardio Access",
-      "Personal Guidance",
-      "Nutrition Plan",
-    ],
-    status: "Active",
-    icon: "dumbbell",
-  },
-  {
-    id: "pkg-4",
-    name: "1 Year Elite",
-    type: "Premium",
-    price: 35000,
-    durationDays: 365,
-    features: [
-      "Gym Access",
-      "Weight Training",
-      "Cardio Access",
-      "Personal Guidance",
-      "Nutrition Plan",
-      "Free Locker",
-    ],
-    status: "Active",
-    icon: "dumbbell",
-  },
-  {
-    id: "pkg-5",
-    name: "Student Package",
-    type: "Normal",
-    price: 8000,
-    durationDays: 90,
-    features: ["Gym Access", "Weight Training", "Cardio Access"],
-    status: "Active",
-    icon: "users",
-  },
-  {
-    id: "pkg-6",
-    name: "Couple Package",
-    type: "Normal",
-    price: 15000,
-    durationDays: 180,
-    features: [
-      "Gym Access",
-      "Weight Training",
-      "Cardio Access",
-      "(2 Members)",
-    ],
-    status: "Active",
-    icon: "user",
-  },
-  {
-    id: "pkg-7",
-    name: "Trainer Package",
-    type: "With Trainer",
-    price: 25000,
-    durationDays: 90,
-    features: [
-      "Gym Access",
-      "Personal Trainer",
-      "Custom Workout Plan",
-      "Nutrition Plan",
-    ],
-    status: "Active",
-    icon: "user",
-  },
-  {
-    id: "pkg-8",
-    name: "Special Offer",
-    type: "Normal",
-    price: 10000,
-    durationDays: 60,
-    features: ["Gym Access", "Weight Training", "Cardio Access"],
-    status: "Inactive",
-    icon: "layers",
-  },
-];
+function getToken(): string | null {
+  return localStorage.getItem("token"); // apke login flow ke mutabiq key adjust kar lein
+}
+
+function mapApiToPackage(p: ApiPackage): GymPackage {
+  return {
+    id: String(p.id),
+    name: p.name,
+    type: p.type,
+    price: Number(p.price),
+    durationDays: p.duration_days,
+    features: p.features ?? [],
+    status: p.is_active ? "Active" : "Inactive",
+    icon: p.icon ?? "dumbbell",
+  };
+}
+
+function mapPackageToApi(data: Omit<GymPackage, "id">) {
+  return {
+    name: data.name,
+    type: data.type,
+    price: data.price,
+    duration_days: data.durationDays,
+    features: data.features,
+    is_active: data.status === "Active",
+    icon: data.icon,
+  };
+}
+
+async function apiFetchPackages(): Promise<GymPackage[]> {
+  const res = await fetch(`${API_URL}/packages`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+  });
+  if (!res.ok) throw new Error("Packages load nahi ho sakin.");
+  const data: ApiPackage[] = await res.json();
+  return data.map(mapApiToPackage);
+}
+
+async function apiCreatePackage(data: Omit<GymPackage, "id">): Promise<GymPackage> {
+  const res = await fetch(`${API_URL}/packages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify(mapPackageToApi(data)),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message || "Package add nahi ho saka.");
+  }
+  const created: ApiPackage = await res.json();
+  return mapApiToPackage(created);
+}
+
+async function apiUpdatePackage(id: string, data: Omit<GymPackage, "id">): Promise<GymPackage> {
+  const res = await fetch(`${API_URL}/packages/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify(mapPackageToApi(data)),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message || "Package update nahi ho saka.");
+  }
+  const updated: ApiPackage = await res.json();
+  return mapApiToPackage(updated);
+}
+
+async function apiDeletePackage(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/packages/${id}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+  });
+  if (!res.ok) throw new Error("Package delete nahi ho saka.");
+}
 
 /* ------------------------------------------------------------------ */
-/* Inline icons (no external icon lib needed)                          */
+/* Inline icons                                                        */
 /* ------------------------------------------------------------------ */
 
 const Icon = {
@@ -258,6 +248,7 @@ const EMPTY_FORM: FormState = {
 interface PackageModalProps {
   open: boolean;
   editing: GymPackage | null;
+  saving: boolean;
   onClose: () => void;
   onSave: (data: Omit<GymPackage, "id">, id?: string) => void;
 }
@@ -265,13 +256,13 @@ interface PackageModalProps {
 const PackageModal: React.FC<PackageModalProps> = ({
   open,
   editing,
+  saving,
   onClose,
   onSave,
 }) => {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
 
-  // Reset the form whenever the modal opens (fresh add vs. edit).
   React.useEffect(() => {
     if (!open) return;
     setErrors({});
@@ -290,7 +281,6 @@ const PackageModal: React.FC<PackageModalProps> = ({
     }
   }, [open, editing]);
 
-  // Close on Escape.
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -314,10 +304,7 @@ const PackageModal: React.FC<PackageModalProps> = ({
     const days = Number(form.durationDays);
     if (!form.durationDays.trim() || !Number.isInteger(days) || days <= 0)
       next.durationDays = "Duration poore dinon mein likhein.";
-    const feats = form.features
-      .split("\n")
-      .map((f) => f.trim())
-      .filter(Boolean);
+    const feats = form.features.split("\n").map((f) => f.trim()).filter(Boolean);
     if (feats.length === 0) next.features = "Kam az kam aik feature add karein.";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -332,10 +319,7 @@ const PackageModal: React.FC<PackageModalProps> = ({
         type: form.type,
         price: Number(form.price),
         durationDays: Number(form.durationDays),
-        features: form.features
-          .split("\n")
-          .map((f) => f.trim())
-          .filter(Boolean),
+        features: form.features.split("\n").map((f) => f.trim()).filter(Boolean),
         status: form.status,
         icon: form.icon,
       },
@@ -354,17 +338,10 @@ const PackageModal: React.FC<PackageModalProps> = ({
       >
         <header className="pkg-modal__head">
           <div>
-            <h2 id="pkg-modal-title">
-              {editing ? "Edit package" : "Add new package"}
-            </h2>
+            <h2 id="pkg-modal-title">{editing ? "Edit package" : "Add new package"}</h2>
             <p>Membership ki details bharein aur save karein.</p>
           </div>
-          <button
-            type="button"
-            className="pkg-modal__close"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className="pkg-modal__close" onClick={onClose} aria-label="Close">
             <Icon.Close />
           </button>
         </header>
@@ -407,20 +384,14 @@ const PackageModal: React.FC<PackageModalProps> = ({
                 value={form.durationDays}
                 onChange={(e) => update("durationDays", e.target.value)}
               />
-              {errors.durationDays && (
-                <span className="pkg-error">{errors.durationDays}</span>
-              )}
+              {errors.durationDays && <span className="pkg-error">{errors.durationDays}</span>}
             </div>
           </div>
 
           <div className="pkg-field-row">
             <div className="pkg-field">
               <label htmlFor="pkg-type">Type</label>
-              <select
-                id="pkg-type"
-                value={form.type}
-                onChange={(e) => update("type", e.target.value as PackageType)}
-              >
+              <select id="pkg-type" value={form.type} onChange={(e) => update("type", e.target.value as PackageType)}>
                 <option value="Normal">Normal</option>
                 <option value="Premium">Premium</option>
                 <option value="With Trainer">With Trainer</option>
@@ -429,13 +400,7 @@ const PackageModal: React.FC<PackageModalProps> = ({
 
             <div className="pkg-field">
               <label htmlFor="pkg-status">Status</label>
-              <select
-                id="pkg-status"
-                value={form.status}
-                onChange={(e) =>
-                  update("status", e.target.value as PackageStatus)
-                }
-              >
+              <select id="pkg-status" value={form.status} onChange={(e) => update("status", e.target.value as PackageStatus)}>
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
@@ -444,11 +409,7 @@ const PackageModal: React.FC<PackageModalProps> = ({
 
           <div className="pkg-field">
             <label htmlFor="pkg-icon">Card icon</label>
-            <select
-              id="pkg-icon"
-              value={form.icon}
-              onChange={(e) => update("icon", e.target.value as PackageIcon)}
-            >
+            <select id="pkg-icon" value={form.icon} onChange={(e) => update("icon", e.target.value as PackageIcon)}>
               <option value="dumbbell">Dumbbell</option>
               <option value="users">Group / Student</option>
               <option value="user">Single member / Trainer</option>
@@ -466,17 +427,15 @@ const PackageModal: React.FC<PackageModalProps> = ({
               onChange={(e) => update("features", e.target.value)}
             />
             <span className="pkg-hint">Har feature nayi line par likhein.</span>
-            {errors.features && (
-              <span className="pkg-error">{errors.features}</span>
-            )}
+            {errors.features && <span className="pkg-error">{errors.features}</span>}
           </div>
 
           <footer className="pkg-modal__foot">
-            <button type="button" className="btn btn--ghost" onClick={onClose}>
+            <button type="button" className="btn btn--ghost" onClick={onClose} disabled={saving}>
               Cancel
             </button>
-            <button type="submit" className="btn btn--primary">
-              {editing ? "Save changes" : "Add package"}
+            <button type="submit" className="btn btn--primary" disabled={saving}>
+              {saving ? "Saving..." : editing ? "Save changes" : "Add package"}
             </button>
           </footer>
         </form>
@@ -489,8 +448,17 @@ const PackageModal: React.FC<PackageModalProps> = ({
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
+const BOTTOM_GAP = 24;
+
 const Packages: React.FC = () => {
-  const [packages, setPackages] = useState<GymPackage[]>(SEED_PACKAGES);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
+
+  const [packages, setPackages] = useState<GymPackage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | PackageType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | PackageStatus>("all");
@@ -498,13 +466,41 @@ const Packages: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<GymPackage | null>(null);
 
+  /* make the page its own scroll container, same as the rest of the app */
+  useLayoutEffect(() => {
+    const updateHeight = () => {
+      if (!pageRef.current) return;
+      const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
+      setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
+    };
+
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
+
+  const loadPackages = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiFetchPackages();
+      setPackages(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Packages load nahi ho sakin.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPackages();
+  }, []);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return packages.filter((p) => {
       const matchesSearch =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.features.some((f) => f.toLowerCase().includes(q));
+        !q || p.name.toLowerCase().includes(q) || p.features.some((f) => f.toLowerCase().includes(q));
       const matchesType = typeFilter === "all" || p.type === typeFilter;
       const matchesStatus = statusFilter === "all" || p.status === statusFilter;
       return matchesSearch && matchesType && matchesStatus;
@@ -527,39 +523,61 @@ const Packages: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleSave = (data: Omit<GymPackage, "id">, id?: string) => {
-    if (id) {
-      setPackages((list) =>
-        list.map((p) => (p.id === id ? { ...data, id } : p))
-      );
-    } else {
-      setPackages((list) => [
-        ...list,
-        { ...data, id: `pkg-${Date.now()}` },
-      ]);
+  const handleSave = async (data: Omit<GymPackage, "id">, id?: string) => {
+    setSaving(true);
+    setError(null);
+    try {
+      if (id) {
+        const updated = await apiUpdatePackage(id, data);
+        setPackages((list) => list.map((p) => (p.id === id ? updated : p)));
+      } else {
+        const created = await apiCreatePackage(data);
+        setPackages((list) => [created, ...list]);
+      }
+      setModalOpen(false);
+      setEditing(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Package save nahi ho saka.");
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    setEditing(null);
   };
 
-  const handleDelete = (pkg: GymPackage) => {
+  const handleDelete = async (pkg: GymPackage) => {
     const ok = window.confirm(`"${pkg.name}" delete kar dein?`);
-    if (ok) setPackages((list) => list.filter((p) => p.id !== pkg.id));
+    if (!ok) return;
+    try {
+      await apiDeletePackage(pkg.id);
+      setPackages((list) => list.filter((p) => p.id !== pkg.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Package delete nahi ho saka.");
+    }
   };
 
-  const toggleStatus = (pkg: GymPackage) => {
-    setPackages((list) =>
-      list.map((p) =>
-        p.id === pkg.id
-          ? { ...p, status: p.status === "Active" ? "Inactive" : "Active" }
-          : p
-      )
-    );
+  const toggleStatus = async (pkg: GymPackage) => {
+    const nextStatus: PackageStatus = pkg.status === "Active" ? "Inactive" : "Active";
+    try {
+      const updated = await apiUpdatePackage(pkg.id, {
+        name: pkg.name,
+        type: pkg.type,
+        price: pkg.price,
+        durationDays: pkg.durationDays,
+        features: pkg.features,
+        status: nextStatus,
+        icon: pkg.icon,
+      });
+      setPackages((list) => list.map((p) => (p.id === pkg.id ? updated : p)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Status update nahi ho saka.");
+    }
   };
 
   return (
-    <div className="packages-page">
-      {/* Header */}
+    <div
+      className="packages-page"
+      ref={pageRef}
+      style={pageHeight ? { height: pageHeight } : undefined}
+    >
       <header className="pkg-header">
         <div className="pkg-header__left">
           <span className="pkg-header__icon">
@@ -576,7 +594,12 @@ const Packages: React.FC = () => {
         </button>
       </header>
 
-      {/* Toolbar */}
+      {error && (
+        <div className="pkg-error-banner" role="alert">
+          {error}
+        </div>
+      )}
+
       <section className="pkg-toolbar">
         <div className="pkg-search">
           <Icon.Search />
@@ -604,9 +627,7 @@ const Packages: React.FC = () => {
         <select
           className="pkg-select"
           value={statusFilter}
-          onChange={(e) =>
-            setStatusFilter(e.target.value as "all" | PackageStatus)
-          }
+          onChange={(e) => setStatusFilter(e.target.value as "all" | PackageStatus)}
           aria-label="Filter by status"
         >
           <option value="all">All Status</option>
@@ -641,8 +662,11 @@ const Packages: React.FC = () => {
         </div>
       </section>
 
-      {/* Cards */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="pkg-empty">
+          <h3>Loading...</h3>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="pkg-empty">
           <h3>Koi package nahi mila</h3>
           <p>Filters reset karein ya naya package add karein.</p>
@@ -663,11 +687,7 @@ const Packages: React.FC = () => {
                   </span>
                   <div className="pkg-card__title">
                     <h3>{pkg.name}</h3>
-                    <span
-                      className={`badge badge--${pkg.type
-                        .toLowerCase()
-                        .replace(/\s+/g, "-")}`}
-                    >
+                    <span className={`badge badge--${pkg.type.toLowerCase().replace(/\s+/g, "-")}`}>
                       {pkg.type}
                     </span>
                   </div>
@@ -697,19 +717,11 @@ const Packages: React.FC = () => {
                     {pkg.status}
                   </button>
                   <div className="pkg-card__actions">
-                    <button
-                      type="button"
-                      className="btn btn--sm btn--outline"
-                      onClick={() => openEdit(pkg)}
-                    >
+                    <button type="button" className="btn btn--sm btn--outline" onClick={() => openEdit(pkg)}>
                       <Icon.Edit />
                       Edit
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn--sm btn--danger"
-                      onClick={() => handleDelete(pkg)}
-                    >
+                    <button type="button" className="btn btn--sm btn--danger" onClick={() => handleDelete(pkg)}>
                       <Icon.Trash />
                       Delete
                     </button>
@@ -724,6 +736,7 @@ const Packages: React.FC = () => {
       <PackageModal
         open={modalOpen}
         editing={editing}
+        saving={saving}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);

@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState, ChangeEvent, FormEvent } from "react";
+import React, { useEffect, useRef, useState, ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../../../config";
 import "./add-member.css";
@@ -34,6 +34,14 @@ interface PackageItem {
 interface TrainerItem {
   id: number;
   name: string;
+  phone?: string | null;
+  cnic?: string | null;
+  email?: string | null;
+  specialization?: string | null;
+  role?: string | null;
+  status?: string | null;
+  experience_years?: number | null;
+  photo_url?: string | null;
 }
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
@@ -118,13 +126,9 @@ const firstError = (json: any): string => {
   return json?.message ?? "Something went wrong. Please try again.";
 };
 
-const BOTTOM_GAP = 24;
-
 function AddMember() {
   const navigate = useNavigate();
-  const pageRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLElement>(null);
-  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
 
   const [form, setForm] = useState<FormState>(initialState);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -137,19 +141,6 @@ function AddMember() {
   const [showTrainerModal, setShowTrainerModal] = useState(false);
 
   const needsTrainer = form.memberType === "normal-trainer" || form.memberType === "package-trainer";
-
-  /* make the page its own scroll container, same as Members / Payments */
-  useLayoutEffect(() => {
-    const updateHeight = () => {
-      if (!pageRef.current) return;
-      const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
-      setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
-    };
-
-    updateHeight();
-    window.addEventListener("resize", updateHeight);
-    return () => window.removeEventListener("resize", updateHeight);
-  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -297,11 +288,7 @@ function AddMember() {
   };
 
   return (
-    <div
-      className="am-page"
-      ref={pageRef}
-      style={pageHeight ? { height: pageHeight } : undefined}
-    >
+    <div className="am-page">
       <header className="am-header" ref={topRef}>
         <button type="button" className="am-back-btn" aria-label="Go back" onClick={() => navigate(-1)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -561,6 +548,30 @@ function AddMember() {
 
 /* ---------- Add Trainer modal ---------- */
 
+interface TrainerFormState {
+  name: string;
+  phone: string;
+  cnic: string;
+  email: string;
+  role: string;
+  status: string;
+  specialization: string;
+  experienceYears: string;
+  photoUrl: string;
+}
+
+const trainerInitialState: TrainerFormState = {
+  name: "",
+  phone: "",
+  cnic: "",
+  email: "",
+  role: "Fitness Trainer",
+  status: "Active",
+  specialization: "",
+  experienceYears: "",
+  photoUrl: "",
+};
+
 function AddTrainerModal({
   onClose,
   onCreated,
@@ -568,14 +579,26 @@ function AddTrainerModal({
   onClose: () => void;
   onCreated: (trainer: TrainerItem) => void;
 }) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [specialization, setSpecialization] = useState("");
+  const [form, setForm] = useState<TrainerFormState>(trainerInitialState);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const updateField = <K extends keyof TrainerFormState>(field: K, value: TrainerFormState[K]) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleInput =
+    (field: keyof TrainerFormState) =>
+    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      updateField(field, e.target.value);
+    };
+
+  const handleCnic = (e: ChangeEvent<HTMLInputElement>) => {
+    updateField("cnic", formatCnic(e.target.value));
+  };
+
   const save = async () => {
-    if (!name.trim()) {
+    if (!form.name.trim()) {
       setError("Trainer ka naam zaroori hai.");
       return;
     }
@@ -587,9 +610,15 @@ function AddTrainerModal({
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim(),
-          phone: phone.trim() || null,
-          specialization: specialization.trim() || null,
+          name: form.name.trim(),
+          phone: form.phone.trim() || null,
+          cnic: form.cnic.trim() || null,
+          email: form.email.trim() || null,
+          role: form.role.trim() || null,
+          status: form.status || null,
+          specialization: form.specialization.trim() || null,
+          experience_years: form.experienceYears ? Number(form.experienceYears) : null,
+          photo_url: form.photoUrl.trim() || null,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -613,31 +642,89 @@ function AddTrainerModal({
 
         {error && <div className="am-error am-modal-error">{error}</div>}
 
-        <Field label="Trainer Name" required>
+        <Field label="Full Name" required>
           <input
             type="text"
-            placeholder="Enter trainer name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Usman Ali"
+            value={form.name}
+            onChange={handleInput("name")}
             autoFocus
           />
         </Field>
 
-        <Field label="Phone" optional>
+        <div className="am-row">
+          <Field label="Phone" optional>
+            <input
+              type="tel"
+              placeholder="03XX-XXXXXXX"
+              value={form.phone}
+              onChange={handleInput("phone")}
+            />
+          </Field>
+          <Field label="CNIC" optional>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="XXXXX-XXXXXXX-X"
+              value={form.cnic}
+              onChange={handleCnic}
+              maxLength={15}
+            />
+          </Field>
+        </div>
+
+        <Field label="Email" optional>
           <input
-            type="tel"
-            placeholder="03XX-XXXXXXX"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            type="email"
+            placeholder="name@fitzone.com"
+            value={form.email}
+            onChange={handleInput("email")}
           />
         </Field>
 
-        <Field label="Specialization" optional>
+        <div className="am-row">
+          <Field label="Role" optional>
+            <select value={form.role} onChange={handleInput("role")}>
+              <option value="Fitness Trainer">Fitness Trainer</option>
+              <option value="Personal Trainer">Personal Trainer</option>
+              <option value="Yoga Trainer">Yoga Trainer</option>
+            </select>
+          </Field>
+          <Field label="Status" optional>
+            <select value={form.status} onChange={handleInput("status")}>
+              <option value="Active">Active</option>
+              <option value="On Leave">On Leave</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </Field>
+        </div>
+
+        <div className="am-row">
+          <Field label="Specialization" optional>
+            <input
+              type="text"
+              placeholder="e.g. Weight training, Cardio"
+              value={form.specialization}
+              onChange={handleInput("specialization")}
+            />
+          </Field>
+          <Field label="Experience (years)" optional>
+            <input
+              type="number"
+              min={0}
+              placeholder="5"
+              value={form.experienceYears}
+              onChange={handleInput("experienceYears")}
+            />
+          </Field>
+        </div>
+
+        <Field label="Photo URL" optional>
           <input
             type="text"
-            placeholder="e.g. Weight training, Cardio"
-            value={specialization}
-            onChange={(e) => setSpecialization(e.target.value)}
+            placeholder="https://..."
+            value={form.photoUrl}
+            onChange={handleInput("photoUrl")}
           />
         </Field>
 

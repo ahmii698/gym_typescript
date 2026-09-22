@@ -59,6 +59,46 @@
   box-sizing: border-box;
 }
 
+/* -------------------- alert banner -------------------- */
+
+.fc-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  border: 1px solid transparent;
+}
+
+.fc-alert button {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.fc-alert button:hover {
+  opacity: 1;
+}
+
+.fc-alert--error {
+  background: var(--fc-red-bg);
+  border-color: rgba(239, 35, 60, 0.45);
+  color: #ff8a97;
+}
+
+.fc-alert--success {
+  background: var(--fc-green-bg);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #6ee7a0;
+}
+
 /* -------------------- header -------------------- */
 
 .fc-header {
@@ -426,24 +466,26 @@
 .fc-badge--paid {
   background: var(--fc-green-bg);
   color: var(--fc-green);
-  cursor: pointer;
 }
 
 .fc-badge--unpaid {
   background: var(--fc-red-bg);
   color: var(--fc-red);
-  cursor: pointer;
+}
+
+.fc-badge--pending {
+  background: var(--fc-orange-bg);
+  color: var(--fc-orange);
+}
+
+.fc-badge--partial {
+  background: var(--fc-orange-bg);
+  color: var(--fc-orange);
 }
 
 .fc-badge--expiring {
   background: var(--fc-orange-bg);
   color: var(--fc-orange);
-  /* Not double-click toggleable, so keep the default cursor */
-}
-
-.fc-badge--paid:hover,
-.fc-badge--unpaid:hover {
-  filter: brightness(1.15);
 }
 
 /* actions */
@@ -471,18 +513,19 @@
 
 .fc-menu-btn {
   background: none;
-  border: none;
+  border: 1px solid var(--fc-panel-border);
   color: var(--fc-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
-  padding: 4px;
+  padding: 6px;
   border-radius: 6px;
 }
 
 .fc-menu-btn:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--fc-text);
+  border-color: var(--fc-accent);
 }
 
 /* -------------------- footer / pagination -------------------- */
@@ -646,11 +689,119 @@
   font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 .fc-modal__done-btn:hover {
   filter: brightness(1.1);
 }
+
+.fc-modal__done-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* -------------------- payment history -------------------- */
+
+.fc-history {
+  border-top: 1px solid var(--fc-panel-border);
+  padding-top: 12px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fc-history__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fc-text);
+}
+
+.fc-history-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--fc-panel-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fc-history-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fc-history-item__amount {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.fc-history-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--fc-muted);
+}
+
+.fc-history-item__note {
+  font-size: 12px;
+  color: var(--fc-muted);
+  font-style: italic;
+}
+
+/* -------------------- Collect Fee form -------------------- */
+
+.fc-form-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--fc-red-bg);
+  border: 1px solid rgba(239, 35, 60, 0.45);
+  color: #ff8a97;
+  font-size: 12.5px;
+}
+
+.fc-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.fc-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fc-form-field label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fc-muted);
+}
+
+.fc-form-field input,
+.fc-form-field select {
+  width: 100%;
+  background: #0a0a0a;
+  border: 1px solid var(--fc-panel-border);
+  border-radius: 8px;
+  color: var(--fc-text);
+  font-size: 13.5px;
+  padding: 10px 12px;
+  outline: none;
+  color-scheme: dark;
+}
+
+.fc-form-field input:focus,
+.fc-form-field select:focus {
+  border-color: var(--fc-accent);
+}
+
+/* -------------------- Responsive -------------------- */
 
 @media (prefers-reduced-motion: reduce) {
   .fc-page * {

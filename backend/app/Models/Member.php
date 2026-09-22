@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Member extends Model
 {
@@ -29,6 +30,7 @@ class Member extends Model
         'end_date',
         'notes',
         'status',
+        'is_active',
     ];
 
     protected $hidden = ['cnic_front_path', 'cnic_back_path'];
@@ -39,6 +41,7 @@ class Member extends Model
         'date_of_birth' => 'date:Y-m-d',
         'start_date' => 'date:Y-m-d',
         'end_date' => 'date:Y-m-d',
+        'is_active' => 'boolean',
     ];
 
     protected function cnicFrontUrl(): Attribute
@@ -68,5 +71,10 @@ class Member extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function latestPayment(): HasOne
+    {
+        return $this->hasOne(Payment::class)->latestOfMany();
     }
 }

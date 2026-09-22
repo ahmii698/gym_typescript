@@ -30,6 +30,47 @@ class MemberController extends Controller
         return response()->json($members);
     }
 
+    // Fee Collection page ke liye — poori list, filters/pagination frontend khud karta hai
+    public function feeOverview()
+    {
+        $today = Carbon::today();
+
+        $members = Member::with(['package:id,name,price', 'latestPayment'])
+            ->latest()
+            ->get()
+            ->map(function (Member $m) use ($today) {
+                $end = $m->end_date ? Carbon::parse($m->end_date)->startOfDay() : null;
+                $daysToExpire = null;
+
+                if ($end) {
+                    $daysToExpire = (int) $today->diffInDays($end);
+                    if ($end->lt($today)) {
+                        $daysToExpire = -$daysToExpire;
+                    }
+                }
+
+                $latest = $m->latestPayment;
+
+                return [
+                    'id'             => $m->id,
+                    'full_name'      => $m->full_name,
+                    'contact_number' => $m->contact_number,
+                    'package_name'   => $m->package->name ?? null,
+                    'package_price'  => $m->package->price ?? null,
+                    'member_type'    => $m->member_type,
+                    'is_active'      => (bool) $m->is_active,
+                    'payment_status' => ($latest && $latest->status === 'paid') ? 'Paid' : 'Unpaid',
+                    'last_payment'   => ($latest && $latest->status === 'paid' && $latest->paid_on)
+                        ? Carbon::parse($latest->paid_on)->format('M j, Y')
+                        : null,
+                    'fee_expire'     => $end ? $end->format('M j, Y') : null,
+                    'days_to_expire' => $daysToExpire,
+                ];
+            });
+
+        return response()->json($members);
+    }
+
     public function store(StoreMemberRequest $request)
     {
         $data = $request->validated();
@@ -42,7 +83,6 @@ class MemberController extends Controller
             $member = Member::create([
                 'full_name'       => $data['full_name'],
                 'cnic'            => $data['cnic'],
-                // storage/app/public/cnicfront/...  aur  storage/app/public/cnicback/...
                 'cnic_front_path' => $request->file('cnic_front')->store('cnicfront', 'public'),
                 'cnic_back_path'  => $request->file('cnic_back')->store('cnicback', 'public'),
                 'contact_number'  => $data['contact_number'],
@@ -68,9 +108,11 @@ class MemberController extends Controller
                 $status = $data['payment_status'] ?? 'pending';
 
                 $member->payments()->create([
-                    'amount'  => $fee,
-                    'status'  => $status,
-                    'paid_on' => $status === 'paid' ? now()->toDateString() : null,
+                    'amount'       => $fee,
+                    'status'       => $status,
+                    'paid_on'      => $status === 'paid' ? now()->toDateString() : null,
+                    'method'       => 'cash',
+                    'collected_by' => optional($request->user())->name ?? 'Front Desk',
                 ]);
             }
 
