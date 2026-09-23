@@ -632,3 +632,45 @@
     transition: none !important;
   }
 }
+
+/* CNIC Images in modal */
+.modal-cnic-images {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #1a1a1a;
+}
+
+.modal-cnic-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-cnic-link {
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #262626;
+  transition: border-color 0.15s ease;
+}
+
+.modal-cnic-link:hover {
+  border-color: #ef233c;
+}
+
+.modal-cnic-img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  display: block;
+  cursor: zoom-in;
+}
+
+@media (max-width: 640px) {
+  .modal-cnic-images {
+    grid-template-columns: 1fr;
+  }
+}

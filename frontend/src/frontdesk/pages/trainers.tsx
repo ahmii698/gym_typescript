@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { API_URL, STORAGE_URL } from "../../../config";
+import { API_URL } from "../../../config";
 import "./trainers.css";
 
 /* ------------------------------------------------------------------ */
@@ -19,7 +19,6 @@ export interface Trainer {
   cnic: string;
   specialization: string;
   experienceYears: number | null;
-  photo?: string;
 }
 
 interface ApiTrainer {
@@ -32,7 +31,6 @@ interface ApiTrainer {
   role: string | null;
   status: string | null;
   experience_years: number | null;
-  photo_url: string | null;
   is_active: number | boolean;
 }
 
@@ -63,12 +61,6 @@ const authHeaders = (): Record<string, string> => {
   };
 };
 
-const resolvePhoto = (url: string | null): string | undefined => {
-  if (!url) return undefined;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${STORAGE_URL}/${url.replace(/^\/+/, "")}`;
-};
-
 const mapTrainer = (t: ApiTrainer): Trainer => ({
   id: String(t.id),
   name: t.name ?? "",
@@ -79,7 +71,6 @@ const mapTrainer = (t: ApiTrainer): Trainer => ({
   cnic: t.cnic ?? "",
   specialization: t.specialization ?? "",
   experienceYears: t.experience_years ?? null,
-  photo: resolvePhoto(t.photo_url),
 });
 
 // Laravel field -> form field, for mapping 422 validation errors back
@@ -90,7 +81,6 @@ const apiFieldToForm: Record<string, keyof FormState> = {
   email: "email",
   specialization: "specialization",
   experience_years: "experienceYears",
-  photo_url: "photo",
 };
 
 class ApiValidationError extends Error {
@@ -202,14 +192,6 @@ const Icon = {
 /* Helpers                                                              */
 /* ------------------------------------------------------------------ */
 
-const initialsOf = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("") || "?";
-
 const statusClass = (s: TrainerStatus) =>
   s === "Active" ? "active" : s === "On Leave" ? "leave" : "inactive";
 
@@ -229,7 +211,6 @@ interface FormState {
   cnic: string;
   specialization: string;
   experienceYears: string;
-  photo: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -241,7 +222,6 @@ const EMPTY_FORM: FormState = {
   cnic: "",
   specialization: SPECIALIZATIONS[0],
   experienceYears: "",
-  photo: "",
 };
 
 interface TrainerModalProps {
@@ -271,7 +251,6 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
         cnic: editing.cnic,
         specialization: editing.specialization || SPECIALIZATIONS[0],
         experienceYears: editing.experienceYears != null ? String(editing.experienceYears) : "",
-        photo: editing.photo ?? "",
       });
     } else {
       setForm(EMPTY_FORM);
@@ -335,7 +314,6 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
           cnic: form.cnic.trim(),
           specialization: form.specialization.trim(),
           experienceYears: form.experienceYears.trim() === "" ? null : Number(form.experienceYears),
-          photo: form.photo.trim() || undefined,
         },
         editing?.id
       );
@@ -475,18 +453,6 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
             </div>
           </div>
 
-          <div className="trn-field">
-            <label htmlFor="trn-photo">Photo URL (optional)</label>
-            <input
-              id="trn-photo"
-              type="url"
-              placeholder="https://..."
-              value={form.photo}
-              onChange={(e) => update("photo", e.target.value)}
-            />
-            <span className="trn-hint">Khali chhorne par naam ke initials dikhenge.</span>
-          </div>
-
           <footer className="trn-modal__foot">
             <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
               Cancel
@@ -530,9 +496,7 @@ const ViewModal: React.FC<{ trainer: Trainer | null; onClose: () => void }> = ({
       <div className="trn-modal trn-modal--view" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <header className="trn-modal__head">
           <div className="trn-view__id">
-            <span className="trn-avatar trn-avatar--lg">
-              {trainer.photo ? <img src={trainer.photo} alt="" /> : initialsOf(trainer.name)}
-            </span>
+            {/* Circle/Initials hata diye gaye hain */}
             <div>
               <h2>{trainer.name || DISPLAY_FALLBACK}</h2>
               <p>{show(trainer.role)}</p>
@@ -586,7 +550,6 @@ const Trainers: React.FC = () => {
   const [editing, setEditing] = useState<Trainer | null>(null);
   const [viewing, setViewing] = useState<Trainer | null>(null);
 
-  /* make the page its own scroll container, same as the rest of the app */
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
@@ -622,7 +585,6 @@ const Trainers: React.FC = () => {
     loadTrainers();
   }, []);
 
-  // Close the kebab menu on any outside click.
   useEffect(() => {
     if (!menuOpenId) return;
     const onDocClick = () => setMenuOpenId(null);
@@ -685,7 +647,6 @@ const Trainers: React.FC = () => {
     status: data.status,
     specialization: data.specialization || null,
     experience_years: data.experienceYears,
-    photo_url: data.photo || null,
   });
 
   const handleSave = async (data: Omit<Trainer, "id">, id?: string) => {
@@ -764,7 +725,6 @@ const Trainers: React.FC = () => {
       ref={pageRef}
       style={pageHeight ? { height: pageHeight } : undefined}
     >
-      {/* Header */}
       <header className="trn-header">
         <div className="trn-header__left">
           <span className="trn-header__icon">
@@ -790,7 +750,6 @@ const Trainers: React.FC = () => {
         </div>
       )}
 
-      {/* Toolbar */}
       <section className="trn-toolbar">
         <div className="trn-search">
           <Icon.Search />
@@ -830,7 +789,6 @@ const Trainers: React.FC = () => {
         </button>
       </section>
 
-      {/* Loading */}
       {loading ? (
         <div className="trn-empty">
           <h3>Loading trainers...</h3>
@@ -850,10 +808,7 @@ const Trainers: React.FC = () => {
           {visible.map((t) => (
             <article key={t.id} className="trn-card">
               <div className="trn-card__top">
-                <span className="trn-avatar">
-                  {t.photo ? <img src={t.photo} alt="" /> : initialsOf(t.name)}
-                </span>
-
+                {/* Circle/Initials yahan se hata diya gaya hai */}
                 <div className="trn-card__id">
                   <h3>{t.name || DISPLAY_FALLBACK}</h3>
                   <p>{show(t.role)}</p>
@@ -939,7 +894,6 @@ const Trainers: React.FC = () => {
         </div>
       )}
 
-      {/* Pagination */}
       {!loading && filtered.length > 0 && (
         <footer className="trn-footer">
           <span className="trn-footer__count">

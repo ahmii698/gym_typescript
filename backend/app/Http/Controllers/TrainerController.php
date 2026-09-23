@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Trainer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TrainerController extends Controller
@@ -13,6 +14,18 @@ class TrainerController extends Controller
         return response()->json(
             Trainer::where('is_active', true)->orderBy('name')->get()
         );
+    }
+
+    // Front desk staff (users table, role = frontdesk) — sirf zaroori fields, password wagera nahi
+    public function frontdesk()
+    {
+        $users = DB::table('users')
+            ->where('role', 'frontdesk')
+            ->select('id', 'name', 'phone', 'email')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json(['data' => $users]);
     }
 
     public function store(Request $request)

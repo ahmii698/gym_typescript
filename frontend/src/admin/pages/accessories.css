@@ -633,3 +633,136 @@
     font-size: 22px;
   }
 }
+
+/* Alert banner */
+.acc-alert {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(239, 35, 60, 0.12);
+  border: 1px solid rgba(239, 35, 60, 0.4);
+  color: #ff8a97;
+  font-size: 13px;
+}
+
+/* Modal */
+.acc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.acc-modal {
+  background: #0c0c0c;
+  border: 1px solid rgba(239, 35, 60, 0.35);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.acc-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.acc-modal-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.acc-modal-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.acc-modal-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+}
+
+.acc-modal-row .muted {
+  color: #8a8a93;
+}
+
+.acc-modal-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(239, 35, 60, 0.12);
+  border: 1px solid rgba(239, 35, 60, 0.4);
+  color: #ff8a97;
+  font-size: 12.5px;
+}
+
+.acc-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.acc-form-field label {
+  font-size: 12.5px;
+  color: #a1a1aa;
+}
+
+.acc-form-field input,
+.acc-form-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0f0f0f;
+  border: 1px solid #262626;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  color-scheme: dark;
+}
+
+.acc-form-field input:focus,
+.acc-form-field select:focus {
+  border-color: #ef233c;
+}
+
+.acc-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.acc-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.acc-btn-ghost {
+  background: transparent;
+  border: 1px solid #262626;
+  color: #f2f2f2;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.acc-btn-ghost:hover {
+  border-color: #ef233c;
+}

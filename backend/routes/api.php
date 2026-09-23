@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccessoryController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DrinkController;
@@ -38,6 +39,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/trainers/{trainer}', [TrainerController::class, 'update']);
     Route::delete('/trainers/{trainer}', [TrainerController::class, 'destroy']);
 
+    // Front desk staff list (admin aur frontdesk dono dekh sakte hain)
+    Route::get('/staff/frontdesk', [TrainerController::class, 'frontdesk']);
+
     // Packages (view + add + edit + delete — sab logged-in users)
     Route::get('/packages', [PackageController::class, 'index']);
     Route::get('/packages/{package}', [PackageController::class, 'show']);
@@ -54,6 +58,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/drinks', [DrinkController::class, 'index']);
     Route::post('/drinks', [DrinkController::class, 'store']);
     Route::post('/drinks/{drink}/sell', [DrinkController::class, 'sell']);
+
+    // Accessories / Inventory (view + add + edit + delete — admin aur frontdesk dono)
+    Route::get('/accessories', [AccessoryController::class, 'index']);
+    Route::post('/accessories', [AccessoryController::class, 'store']);
+    Route::put('/accessories/{accessory}', [AccessoryController::class, 'update']);
+    Route::delete('/accessories/{accessory}', [AccessoryController::class, 'destroy']);
 
     // Sirf admin
     Route::middleware('role:admin')->group(function () {

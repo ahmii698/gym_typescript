@@ -1,60 +1,48 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Users,
   UserCheck,
-  UserPlus,
   UserX,
+  Dumbbell,
   Calendar,
   Search,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ArrowUp,
-  ArrowDown,
 } from "lucide-react";
+// TODO: path apne project ke hisaab se theek karo (jahan baaki pages config import karte hain)
+import { API_URL } from "../../../config";
 import "./Members.css";
 
-/* ---------------------------- Types & data ---------------------------- */
+/* ---------------------------- Types & config ---------------------------- */
 
-type Status = "Active" | "Inactive";
-type Tab = "All" | "Active" | "Inactive";
-type PlanFilter = "All Plans" | "Monthly" | "Quarterly" | "Yearly";
+type Status = "Active" | "On Leave" | "Inactive";
+type Kind = "Trainer" | "Front Desk";
+type Tab = "All" | "Trainers" | "Front Desk";
+type StatusFilter = "All Status" | Status;
 
-interface Member {
-  id: number;
+interface Staff {
+  key: string;
   name: string;
   phone: string;
-  pkg: string;
-  plan: "Monthly" | "Quarterly" | "Yearly";
-  joined: string; // ISO date: YYYY-MM-DD
-  expiry: string; // ISO date: YYYY-MM-DD
+  email: string;
+  kind: Kind;
+  role: string;
+  specialization: string;
+  experience: string;
   status: Status;
 }
 
-const MEMBERS: Member[] = [
-  { id: 1, name: "Ali Raza", phone: "0300 1234567", pkg: "Monthly Basic", plan: "Monthly", joined: "2026-08-30", expiry: "2026-09-30", status: "Active" },
-  { id: 2, name: "Sara Khan", phone: "0301 2345678", pkg: "Monthly Premium", plan: "Monthly", joined: "2026-09-02", expiry: "2026-10-02", status: "Active" },
-  { id: 3, name: "Usman Tariq", phone: "0302 3456789", pkg: "Quarterly", plan: "Quarterly", joined: "2026-07-04", expiry: "2026-10-04", status: "Active" },
-  { id: 4, name: "Ayesha Malik", phone: "0303 4567890", pkg: "Monthly Basic", plan: "Monthly", joined: "2026-09-05", expiry: "2026-10-05", status: "Active" },
-  { id: 5, name: "Hamza Ali", phone: "0304 5678901", pkg: "Monthly Premium", plan: "Monthly", joined: "2026-09-06", expiry: "2026-10-06", status: "Active" },
-  { id: 6, name: "Bilal Ahmed", phone: "0305 6789012", pkg: "Monthly Student", plan: "Monthly", joined: "2026-09-26", expiry: "2026-10-26", status: "Active" },
-  { id: 7, name: "Fatima Noor", phone: "0306 7890123", pkg: "Quarterly", plan: "Quarterly", joined: "2026-09-25", expiry: "2026-12-25", status: "Active" },
-  { id: 8, name: "Zain Abbas", phone: "0307 8901234", pkg: "Monthly Basic", plan: "Monthly", joined: "2026-09-24", expiry: "2026-10-24", status: "Active" },
-  { id: 9, name: "Hina Shah", phone: "0308 9012345", pkg: "Yearly Premium", plan: "Yearly", joined: "2026-09-23", expiry: "2027-09-23", status: "Active" },
-  { id: 10, name: "Omar Farooq", phone: "0309 0123456", pkg: "Monthly Premium", plan: "Monthly", joined: "2026-09-22", expiry: "2026-10-22", status: "Active" },
-  { id: 11, name: "Danish Iqbal", phone: "0310 1234567", pkg: "Monthly Student", plan: "Monthly", joined: "2026-08-10", expiry: "2026-09-10", status: "Inactive" },
-  { id: 12, name: "Maryam Siddiqui", phone: "0311 2345678", pkg: "Quarterly", plan: "Quarterly", joined: "2026-06-01", expiry: "2026-09-01", status: "Inactive" },
-  { id: 13, name: "Kashif Hussain", phone: "0312 3456789", pkg: "Monthly Basic", plan: "Monthly", joined: "2026-08-15", expiry: "2026-09-15", status: "Inactive" },
-  { id: 14, name: "Noor Fatima", phone: "0313 4567890", pkg: "Yearly Premium", plan: "Yearly", joined: "2026-01-12", expiry: "2027-01-12", status: "Active" },
-];
+// TODO: agar tumhari app mein token ki localStorage key alag hai to yahan change karo
+const TOKEN_KEY = "token";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "All", label: "All" },
-  { key: "Active", label: "Active" },
-  { key: "Inactive", label: "Inactive" },
+  { key: "Trainers", label: "Trainers" },
+  { key: "Front Desk", label: "Front Desk" },
 ];
 
-const PLAN_OPTIONS: PlanFilter[] = ["All Plans", "Monthly", "Quarterly", "Yearly"];
+const STATUS_OPTIONS: StatusFilter[] = ["All Status", "Active", "On Leave", "Inactive"];
 const PAGE_SIZE = 10;
 
 /* ------------------------------ Helpers ------------------------------ */
@@ -77,12 +65,6 @@ const formatTime = (d: Date) => {
   return `${h12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
 };
 
-// "2026-09-02" -> "02 Sep 2026"
-const formatISO = (iso: string) => {
-  const [y, m, d] = iso.split("-");
-  return `${d} ${MONTHS[Number(m) - 1]} ${y}`;
-};
-
 // Builds the page number list, e.g. [1, 2, 3, "...", 13]
 const getPages = (total: number, current: number): (number | "...")[] => {
   if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
@@ -90,6 +72,51 @@ const getPages = (total: number, current: number): (number | "...")[] => {
   if (current >= total - 2) return [1, "...", total - 2, total - 1, total];
   return [1, "...", current, "...", total];
 };
+
+// Laravel: [..] ya { data: [..] } ya { data: { data: [..] } } teeno chalenge
+const extractList = (json: any): any[] => {
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json?.data)) return json.data;
+  if (Array.isArray(json?.data?.data)) return json.data.data;
+  if (Array.isArray(json?.trainers)) return json.trainers;
+  return [];
+};
+
+const normalizeTrainer = (t: any): Staff => {
+  const raw = String(t.status ?? "Active").trim().toLowerCase();
+  const flagOff =
+    typeof t.is_active !== "undefined" && !(Number(t.is_active) === 1 || t.is_active === true);
+
+  let status: Status = "Active";
+  if (flagOff || raw === "inactive") status = "Inactive";
+  else if (raw === "on leave") status = "On Leave";
+
+  const years = t.experience_years;
+
+  return {
+    key: `trainer-${t.id}`,
+    name: t.name ?? "",
+    phone: t.phone ?? "",
+    email: t.email ?? "",
+    kind: "Trainer",
+    role: t.role || "Fitness Trainer",
+    specialization: t.specialization || "—",
+    experience: years === null || typeof years === "undefined" || years === "" ? "—" : `${years} yrs`,
+    status,
+  };
+};
+
+const normalizeFrontdesk = (u: any): Staff => ({
+  key: `frontdesk-${u.id}`,
+  name: u.name ?? "",
+  phone: u.phone ?? "",
+  email: u.email ?? "",
+  kind: "Front Desk",
+  role: "Front Desk",
+  specialization: "—",
+  experience: "—",
+  status: "Active",
+});
 
 /* ------------------------------ Component ------------------------------ */
 
@@ -99,10 +126,15 @@ const Members = () => {
   const pageRef = useRef<HTMLDivElement>(null);
   const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
 
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
   const [now, setNow] = useState(new Date());
   const [tab, setTab] = useState<Tab>("All");
   const [query, setQuery] = useState("");
-  const [plan, setPlan] = useState<PlanFilter>("All Plans");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All Status");
   const [page, setPage] = useState(1);
 
   // Make the page its own scroll container regardless of the layout
@@ -123,84 +155,115 @@ const Members = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Trainers (/trainers) + Front desk (/staff/frontdesk) load karo
+  const loadStaff = useCallback(async (signal: AbortSignal) => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const options = {
+        signal,
+        headers: {
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      };
+
+      const [trainersRes, frontdeskRes] = await Promise.all([
+        fetch(`${API_URL}/trainers`, options),
+        fetch(`${API_URL}/staff/frontdesk`, options),
+      ]);
+
+      if (trainersRes.status === 401 || frontdeskRes.status === 401) {
+        throw new Error("Session expire ho gaya, dobara login karo.");
+      }
+      if (!trainersRes.ok) throw new Error(`Trainers load nahi huay (${trainersRes.status}).`);
+      if (!frontdeskRes.ok) throw new Error(`Front desk load nahi hua (${frontdeskRes.status}).`);
+
+      const trainers = extractList(await trainersRes.json()).map(normalizeTrainer);
+      const frontdesk = extractList(await frontdeskRes.json()).map(normalizeFrontdesk);
+
+      const all = [...trainers, ...frontdesk].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      );
+      setStaff(all);
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+      setError(e?.message || "Kuch ghalat ho gaya.");
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadStaff(controller.signal);
+    return () => controller.abort();
+  }, [loadStaff, reloadKey]);
+
   // Back to page 1 whenever a filter changes
   useEffect(() => {
     setPage(1);
-  }, [tab, query, plan]);
+  }, [tab, query, statusFilter]);
 
   /* ---- Stats (derived from data) ---- */
-  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
   const stats = useMemo(() => {
-    const count = (s: Status) => MEMBERS.filter((m) => m.status === s).length;
-    const newThisMonth = MEMBERS.filter((m) => m.joined.startsWith(currentMonthKey)).length;
+    const trainers = staff.filter((s) => s.kind === "Trainer").length;
+    const frontdesk = staff.filter((s) => s.kind === "Front Desk").length;
+    const notActive = staff.filter((s) => s.status !== "Active").length;
 
     return [
       {
         id: "total",
-        title: "Total Members",
-        period: "All time",
-        value: String(MEMBERS.length),
-        change: "+8%",
-        up: true,
-        good: true,
-        vs: "vs. last month",
+        title: "Total Staff",
+        period: "Trainers + Front Desk",
+        value: String(staff.length),
         variant: "red",
         icon: <Users size={26} />,
       },
       {
-        id: "active",
-        title: "Active Members",
-        period: "Right now",
-        value: String(count("Active")),
-        change: "+6%",
-        up: true,
-        good: true,
-        vs: "vs. last month",
+        id: "trainers",
+        title: "Trainers",
+        period: "Fitness team",
+        value: String(trainers),
         variant: "green",
+        icon: <Dumbbell size={26} />,
+      },
+      {
+        id: "frontdesk",
+        title: "Front Desk",
+        period: "Reception team",
+        value: String(frontdesk),
+        variant: "amber",
         icon: <UserCheck size={26} />,
       },
       {
-        id: "new",
-        title: "New Members",
-        period: "This Month",
-        value: String(newThisMonth),
-        change: "+18%",
-        up: true,
-        good: true,
-        vs: "vs. last month",
-        variant: "amber",
-        icon: <UserPlus size={26} />,
-      },
-      {
-        id: "inactive",
-        title: "Inactive Members",
+        id: "notactive",
+        title: "On Leave / Inactive",
         period: "Right now",
-        value: String(count("Inactive")),
-        change: "-12%",
-        up: false,
-        good: true,
-        vs: "vs. last month",
+        value: String(notActive),
         variant: "orange",
         icon: <UserX size={26} />,
       },
     ];
-  }, [currentMonthKey]);
+  }, [staff]);
 
   /* ---- Filtering + pagination ---- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return MEMBERS.filter((m) => {
-      if (tab !== "All" && m.status !== tab) return false;
-      if (plan !== "All Plans" && m.plan !== plan) return false;
+    return staff.filter((s) => {
+      if (tab === "Trainers" && s.kind !== "Trainer") return false;
+      if (tab === "Front Desk" && s.kind !== "Front Desk") return false;
+      if (statusFilter !== "All Status" && s.status !== statusFilter) return false;
       if (!q) return true;
       return (
-        m.name.toLowerCase().includes(q) ||
-        m.phone.toLowerCase().includes(q) ||
-        m.pkg.toLowerCase().includes(q)
+        s.name.toLowerCase().includes(q) ||
+        s.phone.toLowerCase().includes(q) ||
+        s.email.toLowerCase().includes(q) ||
+        s.specialization.toLowerCase().includes(q)
       );
     });
-  }, [tab, query, plan]);
+  }, [staff, tab, query, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -218,8 +281,8 @@ const Members = () => {
       {/* Header */}
       <div className="mem-header">
         <div>
-          <h1 className="mem-title">Members</h1>
-          <p className="mem-subtitle">View and manage all gym members.</p>
+          <h1 className="mem-title">Staff</h1>
+          <p className="mem-subtitle">View all trainers and front desk staff.</p>
         </div>
 
         <div className="mem-datetime">
@@ -239,16 +302,7 @@ const Members = () => {
             <div className="mem-stat-info">
               <span className="mem-stat-title">{s.title}</span>
               <span className="mem-stat-period">{s.period}</span>
-              <span className="mem-stat-value">{s.value}</span>
-              <span className={`mem-stat-change ${s.good ? "good" : "bad"}`}>
-                {s.up ? (
-                  <ArrowUp size={16} strokeWidth={2.5} />
-                ) : (
-                  <ArrowDown size={16} strokeWidth={2.5} />
-                )}
-                <strong>{s.change}</strong>
-              </span>
-              <span className="mem-stat-vs">{s.vs}</span>
+              <span className="mem-stat-value">{loading ? "—" : s.value}</span>
             </div>
           </div>
         ))}
@@ -276,7 +330,7 @@ const Members = () => {
               <Search size={16} />
               <input
                 type="text"
-                placeholder="Search by name, phone or package..."
+                placeholder="Search by name, phone, email or specialization..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -285,10 +339,10 @@ const Members = () => {
             <div className="mem-select-wrap">
               <select
                 className="mem-select"
-                value={plan}
-                onChange={(e) => setPlan(e.target.value as PlanFilter)}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               >
-                {PLAN_OPTIONS.map((p) => (
+                {STATUS_OPTIONS.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>
@@ -305,33 +359,54 @@ const Members = () => {
             <thead>
               <tr>
                 <th>#</th>
-                <th>Member Name</th>
+                <th>Name</th>
                 <th>Phone</th>
-                <th>Package</th>
-                <th>Join Date</th>
-                <th>Expiry Date</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Specialization</th>
+                <th>Experience</th>
                 <th className="center">Status</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={7} className="mem-empty">
-                    No members found.
+                  <td colSpan={8} className="mem-empty">
+                    Loading staff...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={8} className="mem-empty mem-error">
+                    <div>{error}</div>
+                    <button
+                      type="button"
+                      className="mem-retry"
+                      onClick={() => setReloadKey((k) => k + 1)}
+                    >
+                      Retry
+                    </button>
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="mem-empty">
+                    No staff found.
                   </td>
                 </tr>
               ) : (
-                rows.map((m, i) => (
-                  <tr key={m.id}>
+                rows.map((s, i) => (
+                  <tr key={s.key}>
                     <td className="muted">{startIdx + i + 1}</td>
-                    <td className="member-name">{m.name}</td>
-                    <td>{m.phone}</td>
-                    <td>{m.pkg}</td>
-                    <td>{formatISO(m.joined)}</td>
-                    <td>{formatISO(m.expiry)}</td>
+                    <td className="member-name">{s.name}</td>
+                    <td>{s.phone || "—"}</td>
+                    <td>{s.email || "—"}</td>
+                    <td>{s.role}</td>
+                    <td>{s.specialization}</td>
+                    <td>{s.experience}</td>
                     <td className="center">
-                      <span className={`mem-status ${m.status.toLowerCase()}`}>
-                        {m.status}
+                      <span className={`mem-status ${s.status.toLowerCase().replace(" ", "-")}`}>
+                        {s.status}
                       </span>
                     </td>
                   </tr>

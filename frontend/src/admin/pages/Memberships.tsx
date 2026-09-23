@@ -1,47 +1,67 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users,
   UserCheck,
   UserX,
-  Pause,
+  Wallet,
   Calendar,
   Search,
   LayoutGrid,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ArrowUp,
-  ArrowDown,
   Plus,
   Eye,
+  X,
 } from "lucide-react";
+import { API_URL } from "../../../config";
 import "./Memberships.css";
 
 /* ----------------------------- Routes (apne routes ke hisaab se change kar lena) ----------------------------- */
 
 const ADD_MEMBER_ROUTE = "/admin/add-member";
-const viewMemberRoute = (id: number) => `/admin/memberships/${id}`;
 
 /* ----------------------------- Types ----------------------------- */
 
-type MembershipType = "Normal" | "Package" | "Package + Trainer";
-type Plan = "Monthly" | "Quarterly" | "Yearly";
-type PlanFilter = "All Plans" | Plan;
+type MembershipType = "Normal" | "Normal + Trainer" | "Package Only" | "Package + Trainer";
+type PaymentStatus = "Paid" | "Unpaid";
 type TabKey = "All" | MembershipType;
+
+// AttendanceController@index ka row (frontdesk attendance page wala hi)
+interface ApiRow {
+  id: number;
+  name: string;
+  phone: string;
+  cnic: string;
+  package: string;
+  type: MembershipType;
+  trainer: string | null;
+  payment_status: PaymentStatus;
+  fees_paid_on: string | null;
+  fees_expiry_on: string | null;
+  joined_on: string | null;
+  email: string;
+  cnic_front_url: string | null;
+  cnic_back_url: string | null;
+}
 
 interface MembershipRecord {
   id: number;
   name: string;
   phone: string;
   cnic: string;
+  email: string;
   pkg: string;
-  plan: Plan;
-  totalFees: number;
-  paidAmount: number;
-  lastPayment: Date;
-  expiryDate: Date;
+  plan: string;
+  trainer: string;
   membershipType: MembershipType;
+  paymentStatus: PaymentStatus;
+  joinedOn: string; // ISO YYYY-MM-DD ya ""
+  feesPaidOn: string; // ISO YYYY-MM-DD ya ""
+  expiryDate: string; // ISO YYYY-MM-DD ya ""
+  cnicFrontUrl: string | null;
+  cnicBackUrl: string | null;
 }
 
 /* ----------------------------- Helpers ----------------------------- */
@@ -50,17 +70,43 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const fmtDate = (d: Date) => `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-const fmtDateLong = (d: Date) => `${DAYS[d.getDay()]}, ${fmtDate(d)}`;
+const fmtDateLong = (d: Date) =>
+  `${DAYS[d.getDay()]}, ${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 const fmtTime = (d: Date) => {
   const h = d.getHours();
   return `${h % 12 || 12}:${pad(d.getMinutes())} ${h >= 12 ? "PM" : "AM"}`;
 };
-const fmtPKR = (n: number) => `PKR ${n.toLocaleString("en-US")}`;
-const addDays = (d: Date, days: number) => {
-  const c = new Date(d);
-  c.setDate(c.getDate() + days);
-  return c;
+const localISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+// "2026-09-21T00:00:00.000000Z" -> "2026-09-21"
+const toISO = (v: unknown): string => {
+  if (!v || v === "-") return "";
+  return String(v).slice(0, 10);
+};
+
+// "2026-09-02" -> "02 Sep 2026"
+const fmtISO = (iso: string) => {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${d} ${MONTHS[Number(m) - 1]} ${y}`;
+};
+
+const dash = (v: unknown) =>
+  v !== null && typeof v !== "undefined" && String(v).trim() !== "" ? String(v) : "—";
+
+const daysBetween = (a: string, b: string) => {
+  if (!a || !b) return 0;
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+};
+
+// Join se expiry tak ke dinon se plan ka naam
+const planOf = (start: string, end: string): string => {
+  const days = daysBetween(start, end);
+  if (days <= 0) return "—";
+  if (days <= 35) return "Monthly";
+  if (days >= 80 && days <= 100) return "Quarterly";
+  if (days >= 350 && days <= 380) return "Yearly";
+  return `${Math.max(1, Math.round(days / 30))} Months`;
 };
 
 // Builds the page number list, e.g. [1, 2, 3, "...", 13]
@@ -71,106 +117,68 @@ const getPages = (total: number, current: number): (number | "...")[] => {
   return [1, "...", current, "...", total];
 };
 
-const badgeClass = (t: MembershipType) => {
-  if (t === "Package") return "ms-badge package";
+const typeClass = (t: MembershipType) => {
+  if (t === "Package Only") return "ms-badge package";
   if (t === "Package + Trainer") return "ms-badge trainer";
+  if (t === "Normal + Trainer") return "ms-badge normal-trainer";
   return "ms-badge normal";
 };
 
-/* ----------------------------- Mock data -----------------------------
-   TODO: Backend ready hone par MEMBERSHIPS aur STATS ko API se replace kar dena.
----------------------------------------------------------------------- */
-
-const D = (y: number, m: number, d: number) => new Date(y, m - 1, d);
-
-const seed = (
-  id: number,
-  name: string,
-  phone: string,
-  pkg: string,
-  plan: Plan,
-  totalFees: number,
-  paidAmount: number,
-  lastPayment: Date,
-  expiryDate: Date,
-  membershipType: MembershipType
-): MembershipRecord => ({
-  id,
-  name,
-  phone,
-  cnic: `35202-${String(1000000 + id * 104729).slice(0, 7)}-${id % 10}`,
-  pkg,
-  plan,
-  totalFees,
-  paidAmount,
-  lastPayment,
-  expiryDate,
-  membershipType,
-});
-
-const NAMES = [
-  "Ahmed Khan", "Maryam Iqbal", "Hassan Raza", "Noor Fatima", "Talha Mehmood",
-  "Sana Javed", "Daniyal Sheikh", "Iqra Aslam", "Faizan Butt", "Laiba Nadeem",
-  "Rehan Siddiqui", "Areeba Zafar", "Waqas Hussain", "Mahnoor Ali", "Shahid Afridi",
-  "Komal Riaz", "Junaid Qureshi", "Zoya Anwar", "Adeel Chaudhry", "Hiba Tariq",
-];
-
-const PACKAGES: Array<{ pkg: string; plan: Plan; fees: number; type: MembershipType; days: number }> = [
-  { pkg: "Monthly Basic", plan: "Monthly", fees: 5000, type: "Normal", days: 30 },
-  { pkg: "Monthly Premium", plan: "Monthly", fees: 8000, type: "Normal", days: 30 },
-  { pkg: "Quarterly", plan: "Quarterly", fees: 12000, type: "Package", days: 90 },
-  { pkg: "Monthly Basic + Trainer", plan: "Monthly", fees: 8000, type: "Package + Trainer", days: 30 },
-  { pkg: "Yearly", plan: "Yearly", fees: 80000, type: "Package", days: 365 },
-  { pkg: "Monthly Student", plan: "Monthly", fees: 4000, type: "Normal", days: 30 },
-];
-
-const buildMockData = (): MembershipRecord[] => {
-  const list: MembershipRecord[] = [
-    seed(1, "Ali Raza", "0300 1234567", "Monthly Basic", "Monthly", 5000, 5000, D(2026, 9, 27), D(2026, 9, 30), "Normal"),
-    seed(2, "Sara Khan", "0301 2345678", "Monthly Premium", "Monthly", 8000, 8000, D(2026, 9, 27), D(2026, 10, 2), "Normal"),
-    seed(3, "Usman Tariq", "0302 3456789", "Quarterly", "Quarterly", 12000, 12000, D(2026, 9, 26), D(2026, 10, 4), "Normal"),
-    seed(4, "Ayesha Malik", "0303 4567890", "Monthly Basic", "Monthly", 5000, 3000, D(2026, 9, 25), D(2026, 10, 5), "Normal"),
-    seed(5, "Hamza Ali", "0304 5678901", "Monthly Premium", "Monthly", 8000, 8000, D(2026, 9, 24), D(2026, 10, 6), "Normal"),
-    seed(6, "Bilal Ahmed", "0305 6789012", "Monthly Student", "Monthly", 4000, 2000, D(2026, 9, 24), D(2026, 10, 26), "Normal"),
-    seed(7, "Fatima Noor", "0306 7890123", "Quarterly", "Quarterly", 15000, 15000, D(2026, 9, 23), D(2026, 12, 25), "Package"),
-    seed(8, "Zain Abbas", "0307 8901234", "Monthly Basic + Trainer", "Monthly", 8000, 8000, D(2026, 9, 22), D(2026, 10, 24), "Package + Trainer"),
-    seed(9, "Omar Farooq", "0308 9012345", "Yearly", "Yearly", 80000, 80000, D(2026, 9, 21), D(2027, 9, 21), "Package"),
-    seed(10, "Hina Shah", "0309 0123456", "Monthly Premium", "Monthly", 8000, 4000, D(2026, 9, 20), D(2026, 10, 20), "Normal"),
-  ];
-
-  for (let i = 10; i < 128; i++) {
-    const p = PACKAGES[i % PACKAGES.length];
-    const last = addDays(D(2026, 9, 19), -(i - 10));
-    const partial = i % 4 === 0;
-    list.push({
-      id: i + 1,
-      name: NAMES[i % NAMES.length],
-      phone: `03${pad(10 + ((i * 7) % 40))} ${1000000 + ((i * 7919) % 9000000)}`,
-      cnic: `35202-${1000000 + ((i * 104729) % 9000000)}-${i % 10}`,
-      pkg: p.pkg,
-      plan: p.plan,
-      totalFees: p.fees,
-      paidAmount: partial ? Math.round(p.fees / 2) : p.fees,
-      lastPayment: last,
-      expiryDate: addDays(last, p.days),
-      membershipType: p.type,
-    });
-  }
-
-  return list;
+const extractList = (json: any): ApiRow[] => {
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json?.data)) return json.data;
+  return [];
 };
 
-const MEMBERSHIPS: MembershipRecord[] = buildMockData();
+const mapRow = (m: ApiRow): MembershipRecord => {
+  const joinedOn = toISO(m.joined_on);
+  const expiryDate = toISO(m.fees_expiry_on);
 
-const STATS = [
-  { id: "total", title: "Total Members", period: "All time", value: "128", change: "+12%", up: true, good: true, vs: "vs. last month", variant: "red", icon: <Users size={26} /> },
-  { id: "active", title: "Active Members", period: "Current", value: "111", change: "+6%", up: true, good: true, vs: "vs. last month", variant: "green", icon: <UserCheck size={26} /> },
-  { id: "expired", title: "Expired Members", period: "Last 7 days", value: "7", change: "+2%", up: true, good: false, vs: "vs. last month", variant: "amber", icon: <UserX size={26} /> },
-  { id: "hold", title: "On Hold / Paused", period: "Current", value: "5", change: "-3%", up: false, good: true, vs: "vs. last month", variant: "orange", icon: <Pause size={26} /> },
-];
+  return {
+    id: m.id,
+    name: m.name ?? "",
+    phone: m.phone ?? "",
+    cnic: m.cnic ?? "",
+    email: m.email ?? "",
+    pkg: m.package || "—",
+    plan: planOf(joinedOn, expiryDate),
+    trainer: m.trainer ?? "",
+    membershipType: m.type ?? "Normal",
+    paymentStatus: m.payment_status ?? "Unpaid",
+    joinedOn,
+    feesPaidOn: toISO(m.fees_paid_on),
+    expiryDate,
+    cnicFrontUrl: m.cnic_front_url ?? null,
+    cnicBackUrl: m.cnic_back_url ?? null,
+  };
+};
 
-const TABS: TabKey[] = ["All", "Normal", "Package", "Package + Trainer"];
-const PLAN_OPTIONS: PlanFilter[] = ["All Plans", "Monthly", "Quarterly", "Yearly"];
+/* CNIC image: load na ho to link dikha deta hai */
+const CnicImage = ({ url, label }: { url: string | null; label: string }) => {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
+
+  if (!url) return <span className="ms-detail-value">Not uploaded</span>;
+
+  if (failed) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="ms-cnic-fail">
+        Image load nahi hui, link kholo
+      </a>
+    );
+  }
+
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="ms-cnic-link">
+      <img src={url} alt={label} className="ms-cnic-img" onError={() => setFailed(true)} />
+    </a>
+  );
+};
+
+const TABS: TabKey[] = ["All", "Normal", "Normal + Trainer", "Package Only", "Package + Trainer"];
 const PAGE_SIZE = 10;
 const BOTTOM_GAP = 24;
 
@@ -181,11 +189,17 @@ const Memberships = () => {
   const pageRef = useRef<HTMLDivElement>(null);
   const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
 
+  const [members, setMembers] = useState<MembershipRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
   const [now, setNow] = useState(() => new Date());
   const [tab, setTab] = useState<TabKey>("All");
   const [query, setQuery] = useState("");
-  const [plan, setPlan] = useState<PlanFilter>("All Plans");
+  const [plan, setPlan] = useState("All Plans");
   const [page, setPage] = useState(1);
+  const [activeMember, setActiveMember] = useState<MembershipRecord | null>(null);
 
   // Make the page its own scroll container regardless of the layout
   useLayoutEffect(() => {
@@ -206,26 +220,121 @@ const Memberships = () => {
     return () => clearInterval(t);
   }, []);
 
+  /* Escape se modal band */
+  useEffect(() => {
+    if (!activeMember) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setActiveMember(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeMember]);
+
+  /* Members load karo (attendance wali hi API) */
+  const loadMembers = useCallback(async (signal: AbortSignal) => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/attendance?date=${localISO(new Date())}`, {
+        signal,
+        headers: {
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (res.status === 401) throw new Error("Session expire ho gaya, dobara login karo.");
+      if (!res.ok) throw new Error(`Members load nahi huay (${res.status}).`);
+
+      const list = extractList(await res.json()).map(mapRow);
+      list.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+      setMembers(list);
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+      setError(e?.message || "Kuch ghalat ho gaya.");
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadMembers(controller.signal);
+    return () => controller.abort();
+  }, [loadMembers, reloadKey]);
+
   /* Back to page 1 whenever a filter changes */
   useEffect(() => {
     setPage(1);
   }, [tab, query, plan]);
 
+  /* ---- Stats (derived from data) ---- */
+  const todayISO = localISO(now);
+
+  const stats = useMemo(() => {
+    const expired = members.filter((m) => m.expiryDate && m.expiryDate < todayISO).length;
+    const unpaid = members.filter((m) => m.paymentStatus === "Unpaid").length;
+
+    return [
+      {
+        id: "total",
+        title: "Total Members",
+        period: "All time",
+        value: String(members.length),
+        variant: "red",
+        icon: <Users size={26} />,
+      },
+      {
+        id: "active",
+        title: "Active Members",
+        period: "Fees valid",
+        value: String(members.length - expired),
+        variant: "green",
+        icon: <UserCheck size={26} />,
+      },
+      {
+        id: "expired",
+        title: "Expired Members",
+        period: "Fees expired",
+        value: String(expired),
+        variant: "amber",
+        icon: <UserX size={26} />,
+      },
+      {
+        id: "unpaid",
+        title: "Unpaid Members",
+        period: "Payment pending",
+        value: String(unpaid),
+        variant: "orange",
+        icon: <Wallet size={26} />,
+      },
+    ];
+  }, [members, todayISO]);
+
+  const planOptions = useMemo(() => {
+    const set = new Set(members.map((m) => m.plan).filter((p) => p && p !== "—"));
+    return ["All Plans", ...Array.from(set).sort()];
+  }, [members]);
+
+  /* ---- Filtering + pagination ---- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const qDigits = q.replace(/[\s-]/g, "");
 
-    return MEMBERSHIPS.filter((m) => {
+    return members.filter((m) => {
       if (tab !== "All" && m.membershipType !== tab) return false;
       if (plan !== "All Plans" && m.plan !== plan) return false;
       if (!q) return true;
       return (
         m.name.toLowerCase().includes(q) ||
+        m.pkg.toLowerCase().includes(q) ||
+        m.trainer.toLowerCase().includes(q) ||
         (qDigits.length > 0 &&
           (m.phone.replace(/\s/g, "").includes(qDigits) || m.cnic.replace(/-/g, "").includes(qDigits)))
       );
     });
-  }, [tab, query, plan]);
+  }, [members, tab, query, plan]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -233,6 +342,8 @@ const Memberships = () => {
   const rows = filtered.slice(startIdx, startIdx + PAGE_SIZE);
   const showingFrom = filtered.length === 0 ? 0 : startIdx + 1;
   const showingTo = startIdx + rows.length;
+
+  const payClass = (s: PaymentStatus) => `ms-pay ${s.toLowerCase()}`;
 
   return (
     <div
@@ -258,22 +369,13 @@ const Memberships = () => {
 
       {/* Stat cards */}
       <div className="ms-stats">
-        {STATS.map((s) => (
+        {stats.map((s) => (
           <div key={s.id} className="ms-stat-card">
             <div className={`ms-stat-icon ${s.variant}`}>{s.icon}</div>
             <div className="ms-stat-info">
               <span className="ms-stat-title">{s.title}</span>
               <span className="ms-stat-period">{s.period}</span>
-              <span className="ms-stat-value">{s.value}</span>
-              <span className={`ms-stat-change ${s.good ? "good" : "bad"}`}>
-                {s.up ? (
-                  <ArrowUp size={16} strokeWidth={2.5} />
-                ) : (
-                  <ArrowDown size={16} strokeWidth={2.5} />
-                )}
-                <strong>{s.change}</strong>
-              </span>
-              <span className="ms-stat-vs">{s.vs}</span>
+              <span className="ms-stat-value">{loading ? "—" : s.value}</span>
             </div>
           </div>
         ))}
@@ -309,12 +411,8 @@ const Memberships = () => {
 
             <div className="ms-select-wrap">
               <LayoutGrid size={14} className="ms-select-lead" />
-              <select
-                className="ms-select"
-                value={plan}
-                onChange={(e) => setPlan(e.target.value as PlanFilter)}
-              >
-                {PLAN_OPTIONS.map((p) => (
+              <select className="ms-select" value={plan} onChange={(e) => setPlan(e.target.value)}>
+                {planOptions.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>
@@ -338,55 +436,69 @@ const Memberships = () => {
                 <th>#</th>
                 <th>Member Name</th>
                 <th>Phone</th>
+                <th>CNIC</th>
                 <th>Package</th>
                 <th>Plan</th>
-                <th>Total Fees</th>
-                <th>Paid</th>
-                <th>Remaining</th>
-                <th>Last Payment</th>
+                <th>Trainer</th>
+                <th className="center">Payment</th>
+                <th>Fees Paid On</th>
                 <th>Expiry Date</th>
                 <th className="center">Membership Type</th>
                 <th className="center">View</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={12} className="ms-empty">
+                    Loading members...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={12} className="ms-empty ms-error">
+                    <div>{error}</div>
+                    <button type="button" className="ms-retry" onClick={() => setReloadKey((k) => k + 1)}>
+                      Retry
+                    </button>
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="ms-empty">
                     No memberships found.
                   </td>
                 </tr>
               ) : (
-                rows.map((m, i) => {
-                  const remaining = Math.max(0, m.totalFees - m.paidAmount);
-                  return (
-                    <tr key={m.id}>
-                      <td className="muted">{startIdx + i + 1}</td>
-                      <td className="member-name">{m.name}</td>
-                      <td>{m.phone}</td>
-                      <td>{m.pkg}</td>
-                      <td>{m.plan}</td>
-                      <td>{fmtPKR(m.totalFees)}</td>
-                      <td>{fmtPKR(m.paidAmount)}</td>
-                      <td className={remaining > 0 ? "due" : "muted"}>{fmtPKR(remaining)}</td>
-                      <td>{fmtDate(m.lastPayment)}</td>
-                      <td>{fmtDate(m.expiryDate)}</td>
-                      <td className="center">
-                        <span className={badgeClass(m.membershipType)}>{m.membershipType}</span>
-                      </td>
-                      <td className="center">
-                        <button
-                          type="button"
-                          className="ms-view-btn"
-                          aria-label={`View ${m.name}`}
-                          onClick={() => navigate(viewMemberRoute(m.id))}
-                        >
-                          <Eye size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
+                rows.map((m, i) => (
+                  <tr key={m.id}>
+                    <td className="muted">{startIdx + i + 1}</td>
+                    <td className="member-name">{m.name}</td>
+                    <td>{dash(m.phone)}</td>
+                    <td>{dash(m.cnic)}</td>
+                    <td>{m.pkg}</td>
+                    <td>{m.plan}</td>
+                    <td>{m.trainer || "—"}</td>
+                    <td className="center">
+                      <span className={payClass(m.paymentStatus)}>{m.paymentStatus}</span>
+                    </td>
+                    <td>{fmtISO(m.feesPaidOn)}</td>
+                    <td>{fmtISO(m.expiryDate)}</td>
+                    <td className="center">
+                      <span className={typeClass(m.membershipType)}>{m.membershipType}</span>
+                    </td>
+                    <td className="center">
+                      <button
+                        type="button"
+                        className="ms-view-btn"
+                        aria-label={`View ${m.name}`}
+                        onClick={() => setActiveMember(m)}
+                      >
+                        <Eye size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -438,6 +550,96 @@ const Memberships = () => {
           </div>
         </div>
       </div>
+
+      {/* Member Details modal */}
+      {activeMember && (
+        <div className="ms-overlay" onClick={() => setActiveMember(null)}>
+          <div
+            className="ms-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="ms-modal-header">
+              <h2>Member Details</h2>
+              <button
+                type="button"
+                className="ms-modal-close"
+                aria-label="Close"
+                onClick={() => setActiveMember(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="ms-modal-profile">
+              <div>
+                <h3>{activeMember.name}</h3>
+                <p>{dash(activeMember.email)}</p>
+              </div>
+              <div className="ms-modal-badges">
+                <span className={payClass(activeMember.paymentStatus)}>{activeMember.paymentStatus}</span>
+              </div>
+            </div>
+
+            <div className="ms-modal-grid">
+              <div className="ms-detail">
+                <span className="ms-detail-label">Phone</span>
+                <span className="ms-detail-value">{dash(activeMember.phone)}</span>
+              </div>
+              <div className="ms-detail">
+                <span className="ms-detail-label">CNIC</span>
+                <span className="ms-detail-value">{dash(activeMember.cnic)}</span>
+              </div>
+              <div className="ms-detail">
+                <span className="ms-detail-label">Package</span>
+                <span className="ms-detail-value">{activeMember.pkg}</span>
+              </div>
+              <div className="ms-detail">
+                <span className="ms-detail-label">Member Type</span>
+                <span className="ms-detail-value">{activeMember.membershipType}</span>
+              </div>
+              <div className="ms-detail">
+                <span className="ms-detail-label">Plan</span>
+                <span className="ms-detail-value">{activeMember.plan}</span>
+              </div>
+              <div className="ms-detail">
+                <span className="ms-detail-label">Trainer</span>
+                <span className="ms-detail-value">{activeMember.trainer || "No trainer assigned"}</span>
+              </div>
+              <div className="ms-detail">
+                <span className="ms-detail-label">Joined On</span>
+                <span className="ms-detail-value">{fmtISO(activeMember.joinedOn)}</span>
+              </div>
+              <div className="ms-detail">
+                <span className="ms-detail-label">Fees Paid On</span>
+                <span className="ms-detail-value">{fmtISO(activeMember.feesPaidOn)}</span>
+              </div>
+              <div className="ms-detail">
+                <span className="ms-detail-label">Fees Expiry On</span>
+                <span className="ms-detail-value ms-detail-highlight">{fmtISO(activeMember.expiryDate)}</span>
+              </div>
+            </div>
+
+            <div className="ms-cnic-images">
+              <div className="ms-cnic-block">
+                <span className="ms-detail-label">CNIC Front</span>
+                <CnicImage url={activeMember.cnicFrontUrl} label="CNIC Front" />
+              </div>
+              <div className="ms-cnic-block">
+                <span className="ms-detail-label">CNIC Back</span>
+                <CnicImage url={activeMember.cnicBackUrl} label="CNIC Back" />
+              </div>
+            </div>
+
+            <div className="ms-modal-footer">
+              <button type="button" className="ms-btn-secondary" onClick={() => setActiveMember(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -26,7 +26,6 @@ type AttendanceStatus = "Present" | "Absent";
 interface Member {
   id: number;
   name: string;
-  avatar: string;
   phone: string;
   cnic: string;
   package: string;
@@ -39,6 +38,9 @@ interface Member {
   feesExpiryOn: string;
   joinedOn: string;
   email: string;
+  // NAYE FIELDS 👇
+  cnicFrontUrl: string | null;
+  cnicBackUrl: string | null;
 }
 
 // Backend se jaisa data aata hai (AttendanceController@index se)
@@ -58,6 +60,9 @@ interface ApiAttendanceRow {
   joined_on: string | null;
   email: string;
   avatar: string | null;
+  // NAYE FIELDS 👇
+  cnic_front_url: string | null;
+  cnic_back_url: string | null;
 }
 
 // AttendanceController@toggle ka response shape
@@ -89,7 +94,6 @@ function mapApiToMember(m: ApiAttendanceRow): Member {
   return {
     id: m.id,
     name: m.name,
-    avatar: m.avatar || `https://i.pravatar.cc/80?u=${m.id}`,
     phone: m.phone,
     cnic: m.cnic,
     package: m.package,
@@ -102,6 +106,9 @@ function mapApiToMember(m: ApiAttendanceRow): Member {
     feesExpiryOn: m.fees_expiry_on ?? "-",
     joinedOn: m.joined_on ?? "-",
     email: m.email,
+    // NAYE FIELDS 👇
+    cnicFrontUrl: m.cnic_front_url,
+    cnicBackUrl: m.cnic_back_url,
   };
 }
 
@@ -515,7 +522,6 @@ const AttendancePage: React.FC = () => {
                   <td>{pageStart + idx + 1}.</td>
                   <td>
                     <div className="member-cell">
-                      <img src={m.avatar} alt={m.name} />
                       <span>{m.name}</span>
                     </div>
                   </td>
@@ -593,7 +599,6 @@ const AttendancePage: React.FC = () => {
             </div>
 
             <div className="modal-profile">
-              <img src={activeMember.avatar} alt={activeMember.name} />
               <div>
                 <h3>{activeMember.name}</h3>
                 <p>{activeMember.email}</p>
@@ -649,6 +654,49 @@ const AttendancePage: React.FC = () => {
                 <span className="modal-value modal-value-highlight">
                   {activeMember.feesExpiryOn}
                 </span>
+              </div>
+            </div>
+
+            {/* CNIC IMAGES — NAYA SECTION 👇 */}
+            <div className="modal-cnic-images">
+              <div className="modal-cnic-block">
+                <span className="modal-label">CNIC Front</span>
+                {activeMember.cnicFrontUrl ? (
+                  <a
+                    href={activeMember.cnicFrontUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="modal-cnic-link"
+                  >
+                    <img
+                      src={activeMember.cnicFrontUrl}
+                      alt="CNIC Front"
+                      className="modal-cnic-img"
+                    />
+                  </a>
+                ) : (
+                  <span className="modal-value">Not uploaded</span>
+                )}
+              </div>
+
+              <div className="modal-cnic-block">
+                <span className="modal-label">CNIC Back</span>
+                {activeMember.cnicBackUrl ? (
+                  <a
+                    href={activeMember.cnicBackUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="modal-cnic-link"
+                  >
+                    <img
+                      src={activeMember.cnicBackUrl}
+                      alt="CNIC Back"
+                      className="modal-cnic-img"
+                    />
+                  </a>
+                ) : (
+                  <span className="modal-value">Not uploaded</span>
+                )}
               </div>
             </div>
 

@@ -8,6 +8,7 @@ use App\Models\Package;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class MemberController extends Controller
 {
@@ -65,6 +66,14 @@ class MemberController extends Controller
                         : null,
                     'fee_expire'     => $end ? $end->format('M j, Y') : null,
                     'days_to_expire' => $daysToExpire,
+
+                    // CNIC Images — full URL
+                    'cnic_front_url' => $m->cnic_front_path
+                        ? Storage::disk('public')->url($m->cnic_front_path)
+                        : null,
+                    'cnic_back_url'  => $m->cnic_back_path
+                        ? Storage::disk('public')->url($m->cnic_back_path)
+                        : null,
                 ];
             });
 

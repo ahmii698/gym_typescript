@@ -155,32 +155,10 @@
 }
 
 .mem-stat-value {
-  margin-bottom: 8px;
   font-size: 26px;
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
-}
-
-.mem-stat-change {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-}
-
-.mem-stat-change.good {
-  color: #22c55e;
-}
-
-.mem-stat-change.bad {
-  color: #ef233c;
-}
-
-.mem-stat-vs {
-  margin-top: 2px;
-  font-size: 12px;
-  color: #8a8a93;
 }
 
 /* ------------------------------- Panel ------------------------------- */
@@ -244,7 +222,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 300px;
+  width: 340px;
   height: 38px;
   padding: 0 14px;
   background: #0f0f0f;
@@ -365,6 +343,30 @@
   color: #8a8a93 !important;
 }
 
+/* Error + retry */
+
+.mem-error {
+  color: #ff5a70 !important;
+}
+
+.mem-retry {
+  margin-top: 12px;
+  height: 34px;
+  padding: 0 18px;
+  background: #ef233c;
+  border: 1px solid #ef233c;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+}
+
+.mem-retry:hover {
+  box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
+}
+
 /* Status badges */
 
 .mem-status {
@@ -379,6 +381,12 @@
   background: rgba(34, 197, 94, 0.15);
   border: 1px solid rgba(34, 197, 94, 0.35);
   color: #22c55e;
+}
+
+.mem-status.on-leave {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
 }
 
 .mem-status.inactive {

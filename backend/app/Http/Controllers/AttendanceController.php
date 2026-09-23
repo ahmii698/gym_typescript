@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\Member;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 class AttendanceController extends Controller
 {
@@ -46,6 +47,14 @@ class AttendanceController extends Controller
                 'joined_on'      => $member->start_date,
                 'email'          => $member->email,
                 'avatar'         => null,
+
+                // CNIC Images — full URL banake bhej rahe hain
+                'cnic_front_url' => $member->cnic_front_path
+                    ? Storage::disk('public')->url($member->cnic_front_path)
+                    : null,
+                'cnic_back_url'  => $member->cnic_back_path
+                    ? Storage::disk('public')->url($member->cnic_back_path)
+                    : null,
             ];
         });
 

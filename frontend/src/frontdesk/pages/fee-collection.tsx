@@ -27,7 +27,6 @@ interface Member {
   id: number;
   name: string;
   phone: string;
-  avatar: string;
   package: string;
   packagePrice: number | null;
   type: PlanType;
@@ -36,6 +35,9 @@ interface Member {
   lastPayment: string | null;
   feeExpire: string | null;
   daysToExpire: number | null;
+  // NAYE FIELDS 👇
+  cnicFrontUrl: string | null;
+  cnicBackUrl: string | null;
 }
 
 interface PackageItem {
@@ -71,19 +73,11 @@ const authHeaders = (): Record<string, string> => {
   };
 };
 
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
-  return (first + last).toUpperCase();
-}
-
 function mapMember(raw: any): Member {
   return {
     id: raw.id,
     name: raw.full_name,
     phone: raw.contact_number,
-    avatar: getInitials(raw.full_name || "?"),
     package: raw.package_name ?? "-",
     packagePrice: raw.package_price !== null ? Number(raw.package_price) : null,
     type: memberTypeToLabel[raw.member_type] ?? "Normal",
@@ -92,6 +86,9 @@ function mapMember(raw: any): Member {
     lastPayment: raw.last_payment,
     feeExpire: raw.fee_expire,
     daysToExpire: raw.days_to_expire,
+    // NAYE FIELDS 👇
+    cnicFrontUrl: raw.cnic_front_url ?? null,
+    cnicBackUrl: raw.cnic_back_url ?? null,
   };
 }
 
@@ -121,9 +118,8 @@ function FeeCollection() {
   const [paymentFilter, setPaymentFilter] = useState<"All" | PaymentStatus>("All");
   const [typeFilter, setTypeFilter] = useState<string>("All");
   const [stateFilter, setStateFilter] = useState<"All" | MemberState>("All");
-const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expired" | "Not Expired">("All");
+  const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expired" | "Not Expired">("All");
   const [activeTab, setActiveTab] = useState<TabKey>("all");
-  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [page, setPage] = useState(1);
 
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -161,7 +157,6 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
     loadMembers();
   }, []);
 
-  /* make the page its own scroll container, same as Members / Payments / Add Member / Attendance */
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
@@ -249,29 +244,6 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
     setExpireFilter("All");
     setActiveTab("all");
     setPage(1);
-    setSelected(new Set());
-  }
-
-  function toggleSelectAllOnPage() {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      const allSelected = pageMembers.every((m) => next.has(m.id));
-      if (allSelected) {
-        pageMembers.forEach((m) => next.delete(m.id));
-      } else {
-        pageMembers.forEach((m) => next.add(m.id));
-      }
-      return next;
-    });
-  }
-
-  function toggleSelectOne(id: number) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   }
 
   function statusBadge(m: Member) {
@@ -283,9 +255,6 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
     }
     return <span className="fc-badge fc-badge--paid">Paid</span>;
   }
-
-  const pageAllSelected =
-    pageMembers.length > 0 && pageMembers.every((m) => selected.has(m.id));
 
   /* ---------------- pagination number list ---------------- */
 
@@ -318,7 +287,7 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
       });
       if (res.ok) setHistory(await res.json());
     } catch {
-      // silently ignore, history section will just show empty
+      // silently ignore
     } finally {
       setHistoryLoading(false);
     }
@@ -542,13 +511,6 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
         <table className="fc-table">
           <thead>
             <tr>
-              <th className="fc-th-checkbox">
-                <input
-                  type="checkbox"
-                  checked={pageAllSelected}
-                  onChange={toggleSelectAllOnPage}
-                />
-              </th>
               <th>#</th>
               <th>Member Name</th>
               <th>Phone</th>
@@ -563,14 +525,14 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={10} className="fc-empty">
+                <td colSpan={9} className="fc-empty">
                   Loading members...
                 </td>
               </tr>
             )}
             {!loading && pageMembers.length === 0 && (
               <tr>
-                <td colSpan={10} className="fc-empty">
+                <td colSpan={9} className="fc-empty">
                   No members match the current filters.
                 </td>
               </tr>
@@ -578,17 +540,9 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
             {!loading &&
               pageMembers.map((m, idx) => (
                 <tr key={m.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(m.id)}
-                      onChange={() => toggleSelectOne(m.id)}
-                    />
-                  </td>
                   <td className="fc-muted">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
                   <td>
                     <div className="fc-member">
-                      <span className="fc-avatar">{m.avatar}</span>
                       <span>{m.name}</span>
                       {m.memberState === "Inactive" && (
                         <span className="fc-inactive-tag">Inactive</span>
@@ -676,7 +630,6 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
           <div className="fc-modal" onClick={(e) => e.stopPropagation()}>
             <div className="fc-modal__header">
               <div className="fc-member">
-                <span className="fc-avatar fc-avatar--lg">{selectedMember.avatar}</span>
                 <div>
                   <h2 className="fc-modal__name">{selectedMember.name}</h2>
                   <span className="fc-muted">{selectedMember.phone}</span>
@@ -738,6 +691,49 @@ const [expireFilter, setExpireFilter] = useState<"All" | "Expiring Soon" | "Expi
                   </span>
                 </div>
               )}
+
+              {/* CNIC IMAGES — NAYA SECTION 👇 */}
+              <div className="fc-cnic-images">
+                <div className="fc-cnic-block">
+                  <span className="fc-cnic-label">CNIC Front</span>
+                  {selectedMember.cnicFrontUrl ? (
+                    <a
+                      href={selectedMember.cnicFrontUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="fc-cnic-link"
+                    >
+                      <img
+                        src={selectedMember.cnicFrontUrl}
+                        alt="CNIC Front"
+                        className="fc-cnic-img"
+                      />
+                    </a>
+                  ) : (
+                    <span className="fc-cnic-empty">Not uploaded</span>
+                  )}
+                </div>
+
+                <div className="fc-cnic-block">
+                  <span className="fc-cnic-label">CNIC Back</span>
+                  {selectedMember.cnicBackUrl ? (
+                    <a
+                      href={selectedMember.cnicBackUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="fc-cnic-link"
+                    >
+                      <img
+                        src={selectedMember.cnicBackUrl}
+                        alt="CNIC Back"
+                        className="fc-cnic-img"
+                      />
+                    </a>
+                  ) : (
+                    <span className="fc-cnic-empty">Not uploaded</span>
+                  )}
+                </div>
+              </div>
 
               <div className="fc-history">
                 <span className="fc-history__title">Payment History</span>

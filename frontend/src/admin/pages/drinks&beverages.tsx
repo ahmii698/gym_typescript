@@ -178,36 +178,6 @@ const XIcon = () => (
     <path d="M18 6L6 18M6 6l12 12" />
   </Icon>
 );
-const ArrowUpIcon = () => (
-  <Icon strokeWidth={2.5}>
-    <path d="M12 19V5M5 12l7-7 7 7" />
-  </Icon>
-);
-const ArrowDownIcon = () => (
-  <Icon strokeWidth={2.5}>
-    <path d="M12 5v14M19 12l-7 7-7-7" />
-  </Icon>
-);
-const MinusIcon = () => (
-  <Icon strokeWidth={2.5}>
-    <path d="M5 12h14" />
-  </Icon>
-);
-
-const DrinkThumb = ({ pack, color }: { pack: Pack; color: string }) =>
-  pack === "can" ? (
-    <svg viewBox="0 0 24 32" width="18" height="24" aria-hidden="true">
-      <rect x="4" y="3" width="16" height="26" rx="3" fill={color} />
-      <rect x="4" y="3" width="16" height="4" rx="2" fill="#fff" opacity="0.35" />
-      <rect x="8" y="12" width="8" height="8" rx="2" fill="#000" opacity="0.28" />
-    </svg>
-  ) : (
-    <svg viewBox="0 0 24 32" width="18" height="24" aria-hidden="true">
-      <rect x="9.5" y="1" width="5" height="4" rx="1" fill="#e6edf5" />
-      <path d="M9 5h6l2.5 5v17a3 3 0 0 1-3 3h-5a3 3 0 0 1-3-3V10L9 5z" fill={color} />
-      <rect x="6.5" y="14" width="11" height="8" fill="#fff" opacity="0.3" />
-    </svg>
-  );
 
 /* ---------- Add Drink form state ---------- */
 interface DrinkFormState {
@@ -252,7 +222,6 @@ export default function DrinksBeverages() {
   const role = localStorage.getItem("role");
   const token = localStorage.getItem("token");
 
-  // Add Item + Sell dono ab admin aur frontdesk dono kar sakte hain
   const canManageDrinks = role === "admin" || role === "frontdesk";
 
   useLayoutEffect(() => {
@@ -377,7 +346,7 @@ export default function DrinksBeverages() {
       }
 
       setShowAddModal(false);
-      fetchDrinks(); // list refresh
+      fetchDrinks();
     } catch (err) {
       console.error(err);
       setFormError("Kuch masla ho gaya, dobara try karein.");
@@ -558,13 +527,7 @@ export default function DrinksBeverages() {
                     <td className="muted">{startIndex + i + 1}</td>
                     <td>
                       <div className="drk-item">
-                        <span className="drk-thumb">
-                          {item.image ? (
-                            <img src={item.image} alt="" />
-                          ) : (
-                            <DrinkThumb pack={item.pack} color={item.color} />
-                          )}
-                        </span>
+                        {/* Image / thumb hata diya gaya hai */}
                         <span className="item-name">{item.name}</span>
                       </div>
                     </td>
