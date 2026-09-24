@@ -92,7 +92,6 @@
   margin-bottom: 24px;
 }
 
-/* All 4 cards share the same red box; only the icon color differs */
 .dash-stat-card {
   display: flex;
   align-items: flex-start;
@@ -198,7 +197,7 @@
   gap: 16px;
 }
 
-/* Row 1: revenue chart 70% + last 5 memberships 30% */
+/* Row 1: revenue chart 70% + last 5 inventory 30% */
 .dash-grid-70-30 {
   grid-template-columns: 7fr 3fr;
 }
@@ -337,6 +336,14 @@
   color: #ffffff;
 }
 
+/* Empty state cell (used in Inventory & Memberships Expiring Soon) */
+.dash-empty-cell {
+  text-align: center !important;
+  padding: 20px 8px !important;
+  color: #8a8f9c;
+  font-size: 13px;
+}
+
 .days-badge {
   display: inline-flex;
   align-items: center;
@@ -439,6 +446,7 @@
   fill: #8b96ab;
 }
 
+/* ------ OLD line chart styles (kept for safety, not used) ------ */
 .chart-line {
   fill: none;
   stroke: #ef233c;
@@ -484,7 +492,123 @@
   color: #a7b0c3;
 }
 
-/* Member growth bar chart */
+/* ============================================ */
+/*  MONTHLY REVENUE BAR CHART (NEW)             */
+/* ============================================ */
+
+.dash-revenue-chart {
+  display: flex;
+  gap: 12px;
+  height: 260px;
+  padding: 16px 8px 0 0;
+  margin-top: 4px;
+}
+
+.dash-revenue-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: calc(100% - 24px);
+  padding: 4px 4px 4px 0;
+  font-size: 11px;
+  color: #6b7280;
+  min-width: 62px;
+  text-align: right;
+}
+
+.dash-revenue-bars {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 12px;
+  height: calc(100% - 24px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+
+/* faint horizontal grid lines */
+.dash-revenue-bars::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.04) 0,
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 1px,
+    transparent 20%
+  );
+  pointer-events: none;
+}
+
+.dash-revenue-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.dash-revenue-bar {
+  width: 60%;
+  max-width: 48px;
+  border-radius: 6px 6px 0 0;
+  min-height: 3px;
+  background: linear-gradient(180deg, #ff2d4d 0%, #a3162a 100%);
+  box-shadow: 0 0 14px rgba(239, 35, 60, 0.25);
+  position: relative;
+  transition: height 0.4s ease, opacity 0.2s ease;
+  cursor: pointer;
+}
+
+.dash-revenue-bar:hover {
+  opacity: 0.85;
+  box-shadow: 0 0 20px rgba(239, 35, 60, 0.45);
+}
+
+.dash-revenue-value {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dash-revenue-label {
+  font-size: 12px;
+  color: #9aa0ab;
+  font-weight: 500;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.dash-revenue-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a8f9c;
+  font-size: 13px;
+}
+
+/* ============================================ */
+/*  MEMBER GROWTH CHART (12 months)             */
+/* ============================================ */
+
+.dash-growth-chart {
+  height: 300px;
+}
+
+/* ------- Old member growth bar chart (kept for safety) ------- */
 
 .dash-bar-scroll {
   overflow-x: auto;

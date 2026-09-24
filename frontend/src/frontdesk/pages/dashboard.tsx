@@ -1,4 +1,5 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Users,
   Footprints,
@@ -7,7 +8,12 @@ import {
   ChevronDown,
   CalendarDays,
 } from "lucide-react";
+import { API_URL } from "../../../config";
 import "./dashboard.css";
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
 
 interface StatCard {
   id: string;
@@ -19,207 +25,233 @@ interface StatCard {
   variant: "red" | "green" | "orange" | "redSolid";
 }
 
-interface Member {
+interface RecentMember {
   id: number;
   name: string;
-  avatar: string;
   package: string;
-  joinDate: string;
+  join_date: string;
   status: string;
 }
 
-interface FeeDue {
+interface UpcomingDue {
   id: number;
   name: string;
-  avatar: string;
   package: string;
-  dueIn: string;
-  amount: string;
+  due_date: string;
+  days_left: number;
+  amount: number;
 }
 
-const statCards: StatCard[] = [
-  {
-    id: "total",
-    title: "Total Members",
-    value: "248",
-    trend: "12% from last month",
-    trendUp: true,
-    icon: <Users size={22} />,
-    variant: "red",
-  },
-  {
-    id: "active",
-    title: "Active Members",
-    value: "186",
-    trend: "8% from last month",
-    trendUp: true,
-    icon: <Footprints size={22} />,
-    variant: "green",
-  },
-  {
-    id: "pending",
-    title: "Pending Due (This Month)",
-    value: "42",
-    trend: "5% from last month",
-    trendUp: false,
-    icon: <Clock size={22} />,
-    variant: "orange",
-  },
-  {
-    id: "fees",
-    title: "Fees Collected (This Month)",
-    value: "PKR 320,450",
-    trend: "15% from last month",
-    trendUp: true,
-    icon: <Database size={22} />,
-    variant: "redSolid",
-  },
-];
+interface DashboardStats {
+  totalMembers: number;
+  activeMembers: number;
+  pendingDue: number;
+  feesCollected: number;
+  feesTrend: number;
+  membersTrend: number;
+  feesByMethod: {
+    cash: number;
+    bank_transfer: number;
+    online: number;
+    card: number;
+  };
+  chart: {
+    labels: string[];
+    total: number[];
+    active: number[];
+  };
+  upcomingDues: UpcomingDue[];
+  recentMembers: RecentMember[];
+}
 
-const chartLabels = [
-  "Aug 23",
-  "Aug 24",
-  "Aug 25",
-  "Aug 26",
-  "Aug 27",
-  "Aug 28",
-  "Aug 29",
-  "Aug 30",
-];
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
 
-const totalMembersData = [150, 175, 178, 185, 195, 193, 205, 215];
-const activeMembersData = [95, 120, 130, 140, 145, 150, 155, 160];
-
-const recentMembers: Member[] = [
-  {
-    id: 1,
-    name: "Ahmed Khan",
-    avatar: "https://i.pravatar.cc/40?img=12",
-    package: "Premium",
-    joinDate: "Aug 25, 2025",
-    status: "Active",
-  },
-  {
-    id: 2,
-    name: "Usman Ali",
-    avatar: "https://i.pravatar.cc/40?img=13",
-    package: "Standard",
-    joinDate: "Aug 24, 2025",
-    status: "Active",
-  },
-  {
-    id: 3,
-    name: "Ayesha Fatima",
-    avatar: "https://i.pravatar.cc/40?img=5",
-    package: "Premium",
-    joinDate: "Aug 23, 2025",
-    status: "Active",
-  },
-  {
-    id: 4,
-    name: "Bilal Hussain",
-    avatar: "https://i.pravatar.cc/40?img=14",
-    package: "Standard",
-    joinDate: "Aug 22, 2025",
-    status: "Active",
-  },
-  {
-    id: 5,
-    name: "Sara Khan",
-    avatar: "https://i.pravatar.cc/40?img=9",
-    package: "Basic",
-    joinDate: "Aug 21, 2025",
-    status: "Active",
-  },
-];
-
-const upcomingDues: FeeDue[] = [
-  {
-    id: 1,
-    name: "Usman Ali",
-    avatar: "https://i.pravatar.cc/40?img=13",
-    package: "Premium",
-    dueIn: "2 days",
-    amount: "PKR 5,000",
-  },
-  {
-    id: 2,
-    name: "Ayesha Fatima",
-    avatar: "https://i.pravatar.cc/40?img=5",
-    package: "Standard",
-    dueIn: "3 days",
-    amount: "PKR 12,000",
-  },
-  {
-    id: 3,
-    name: "Bilal Hussain",
-    avatar: "https://i.pravatar.cc/40?img=14",
-    package: "Basic",
-    dueIn: "4 days",
-    amount: "PKR 3,000",
-  },
-  {
-    id: 4,
-    name: "Sara Khan",
-    avatar: "https://i.pravatar.cc/40?img=9",
-    package: "Premium",
-    dueIn: "5 days",
-    amount: "PKR 5,000",
-  },
-];
-
-// Helper to build smooth-ish SVG point string
-const buildPoints = (
-  data: number[],
-  width: number,
-  height: number,
-  max: number
-) => {
-  const step = width / (data.length - 1);
-  return data
-    .map((val, i) => {
-      const x = i * step;
-      const y = height - (val / max) * height;
-      return `${x},${y}`;
-    })
-    .join(" ");
+const authHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem("token");
+  return {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 };
 
-const CHART_WIDTH = 700;
-const CHART_HEIGHT = 260;
-const CHART_MAX = 300;
+const formatPKR = (amount: number) => {
+  return `PKR ${amount.toLocaleString("en-PK")}`;
+};
+
 const BOTTOM_GAP = 24;
 
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
+
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const pageRef = useRef<HTMLDivElement>(null);
   const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
 
-  /* make the page its own scroll container, same as the rest of the app */
+  const [stats, setStats] = useState<DashboardStats>({
+    totalMembers: 0,
+    activeMembers: 0,
+    pendingDue: 0,
+    feesCollected: 0,
+    feesTrend: 0,
+    membersTrend: 0,
+    feesByMethod: { cash: 0, bank_transfer: 0, online: 0, card: 0 },
+    chart: { labels: [], total: [], active: [] },
+    upcomingDues: [],
+    recentMembers: [],
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  /* ---------------- Fetch dashboard stats ---------------- */
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch(`${API_URL}/dashboard/stats`, {
+          headers: authHeaders(),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setStats({
+            totalMembers: data.total_members ?? 0,
+            activeMembers: data.active_members ?? 0,
+            pendingDue: data.pending_due ?? 0,
+            feesCollected: Number(data.fees_collected) || 0,
+            feesTrend: data.fees_trend ?? 0,
+            membersTrend: data.members_trend ?? 0,
+            feesByMethod: {
+              cash: Number(data.fees_by_method?.cash) || 0,
+              bank_transfer: Number(data.fees_by_method?.bank_transfer) || 0,
+              online: Number(data.fees_by_method?.online) || 0,
+              card: Number(data.fees_by_method?.card) || 0,
+            },
+            chart: {
+              labels: data.chart?.labels ?? [],
+              total: data.chart?.total ?? [],
+              active: data.chart?.active ?? [],
+            },
+            upcomingDues: Array.isArray(data.upcoming_dues)
+              ? data.upcoming_dues
+              : [],
+            recentMembers: Array.isArray(data.recent_members)
+              ? data.recent_members
+              : [],
+          });
+        }
+      } catch (err) {
+        console.error("Dashboard stats load nahi ho sake", err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  /* ---------------- Page height ---------------- */
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
       const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
       setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
     };
-
     updateHeight();
     window.addEventListener("resize", updateHeight);
     return () => window.removeEventListener("resize", updateHeight);
   }, []);
 
-  const totalPoints = buildPoints(
-    totalMembersData,
-    CHART_WIDTH,
-    CHART_HEIGHT,
-    CHART_MAX
-  );
-  const activePoints = buildPoints(
-    activeMembersData,
-    CHART_WIDTH,
-    CHART_HEIGHT,
-    CHART_MAX
-  );
-  const areaPoints = `0,${CHART_HEIGHT} ${totalPoints} ${CHART_WIDTH},${CHART_HEIGHT}`;
+  /* ---------------- Dynamic stat cards ---------------- */
+  const statCards: StatCard[] = [
+    {
+      id: "total",
+      title: "Total Members",
+      value: loadingStats ? "..." : String(stats.totalMembers),
+      trend: `${Math.abs(stats.membersTrend)}% from last month`,
+      trendUp: stats.membersTrend >= 0,
+      icon: <Users size={22} />,
+      variant: "red",
+    },
+    {
+      id: "active",
+      title: "Active Members",
+      value: loadingStats ? "..." : String(stats.activeMembers),
+      trend: `${Math.abs(stats.membersTrend)}% from last month`,
+      trendUp: stats.membersTrend >= 0,
+      icon: <Footprints size={22} />,
+      variant: "green",
+    },
+    {
+      id: "pending",
+      title: "Pending Due (This Month)",
+      value: loadingStats ? "..." : String(stats.pendingDue),
+      trend: `${stats.pendingDue} members pending`,
+      trendUp: false,
+      icon: <Clock size={22} />,
+      variant: "orange",
+    },
+    {
+      id: "fees",
+      title: "Fees Collected (This Month)",
+      value: loadingStats ? "..." : formatPKR(stats.feesCollected),
+      trend: `${Math.abs(stats.feesTrend)}% from last month`,
+      trendUp: stats.feesTrend >= 0,
+      icon: <Database size={22} />,
+      variant: "redSolid",
+    },
+  ];
+
+  /* ---------------- Chart calculations ---------------- */
+  const chartData = stats.chart;
+  const allChartValues = [...chartData.total, ...chartData.active];
+  const rawMax = allChartValues.length > 0 ? Math.max(...allChartValues) : 10;
+  const chartMax = Math.max(10, Math.ceil(rawMax / 10) * 10);
+
+  const yAxisSteps = Array.from({ length: 6 }, (_, i) => {
+    const val = Math.round((chartMax / 5) * (5 - i));
+    return val;
+  });
+
+  /* ---------------- Payment status percentages ---------------- */
+  const paidPercent = stats.totalMembers
+    ? Math.round((stats.activeMembers / stats.totalMembers) * 100)
+    : 0;
+  const pendingPercent = stats.totalMembers
+    ? Math.round((stats.pendingDue / stats.totalMembers) * 100)
+    : 0;
+  const overduePercent = Math.max(0, 100 - paidPercent - pendingPercent);
+
+  /* ---------------- Fee method rows ---------------- */
+  const totalMethodAmount =
+    stats.feesByMethod.cash +
+    stats.feesByMethod.bank_transfer +
+    stats.feesByMethod.online +
+    stats.feesByMethod.card;
+
+  const effectiveMethods =
+    totalMethodAmount > 0
+      ? stats.feesByMethod
+      : {
+          cash: stats.feesCollected,
+          bank_transfer: 0,
+          online: 0,
+          card: 0,
+        };
+
+  const effectiveTotal =
+    effectiveMethods.cash +
+    effectiveMethods.bank_transfer +
+    effectiveMethods.online +
+    effectiveMethods.card;
+
+  const methodRows = [
+    { label: "Cash",                  amount: effectiveMethods.cash,          percent: effectiveTotal ? Math.round((effectiveMethods.cash / effectiveTotal) * 100) : 0 },
+    { label: "Bank Transfer",         amount: effectiveMethods.bank_transfer, percent: effectiveTotal ? Math.round((effectiveMethods.bank_transfer / effectiveTotal) * 100) : 0 },
+    { label: "JazzCash / Easypaisa",  amount: effectiveMethods.online,        percent: effectiveTotal ? Math.round((effectiveMethods.online / effectiveTotal) * 100) : 0 },
+    { label: "Card",                  amount: effectiveMethods.card,          percent: effectiveTotal ? Math.round((effectiveMethods.card / effectiveTotal) * 100) : 0 },
+  ].filter((row) => row.amount > 0);
+
+  const topMethodPercent = methodRows.length > 0 ? methodRows[0].percent : 0;
 
   return (
     <div
@@ -254,7 +286,7 @@ const Dashboard: React.FC = () => {
             <h3>Membership Overview</h3>
             <button className="db-dropdown-btn">
               <CalendarDays size={14} />
-              Last 7 Days
+              Last 6 Months
               <ChevronDown size={14} />
             </button>
           </div>
@@ -268,45 +300,56 @@ const Dashboard: React.FC = () => {
             </span>
           </div>
 
-          <div className="db-chart-wrap">
+          {/* BAR CHART */}
+          <div className="db-bar-chart-wrap">
             <div className="db-chart-yaxis">
-              {[300, 250, 200, 150, 100, 50, 0].map((v) => (
+              {yAxisSteps.map((v) => (
                 <span key={v}>{v}</span>
               ))}
             </div>
-            <svg
-              className="db-chart-svg"
-              viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-              preserveAspectRatio="none"
-            >
-              <defs>
-                <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(239,35,60,0.35)" />
-                  <stop offset="100%" stopColor="rgba(239,35,60,0)" />
-                </linearGradient>
-              </defs>
-              <polygon points={areaPoints} fill="url(#areaFill)" />
-              <polyline
-                points={activePoints}
-                fill="none"
-                stroke="#9aa0ab"
-                strokeWidth="2"
-              />
-              <polyline
-                points={totalPoints}
-                fill="none"
-                stroke="#ef233c"
-                strokeWidth="2.5"
-              />
-            </svg>
-          </div>
-          <div className="db-chart-xaxis">
-            {chartLabels.map((label) => (
-              <span key={label}>{label}</span>
-            ))}
+            <div className="db-bar-chart">
+              {chartData.labels.length === 0 ? (
+                <div className="db-bar-empty">No data available</div>
+              ) : (
+                chartData.labels.map((label, i) => {
+                  const totalVal = chartData.total[i] ?? 0;
+                  const activeVal = chartData.active[i] ?? 0;
+                  const totalHeight =
+                    chartMax > 0 ? (totalVal / chartMax) * 100 : 0;
+                  const activeHeight =
+                    chartMax > 0 ? (activeVal / chartMax) * 100 : 0;
+                  return (
+                    <div className="db-bar-group" key={`${label}-${i}`}>
+                      <div className="db-bar-pair">
+                        <div
+                          className="db-bar db-bar-total"
+                          style={{ height: `${totalHeight}%` }}
+                          title={`Total: ${totalVal}`}
+                        >
+                          {totalVal > 0 && (
+                            <span className="db-bar-value">{totalVal}</span>
+                          )}
+                        </div>
+                        <div
+                          className="db-bar db-bar-active"
+                          style={{ height: `${activeHeight}%` }}
+                          title={`Active: ${activeVal}`}
+                        >
+                          {activeVal > 0 && (
+                            <span className="db-bar-value">{activeVal}</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="db-bar-label">{label}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Donut */}
         <div className="db-panel db-donut-panel">
           <div className="db-panel-header">
             <h3>Payment Status</h3>
@@ -314,7 +357,9 @@ const Dashboard: React.FC = () => {
           <div className="db-donut-body">
             <div className="db-donut-chart">
               <div className="db-donut-center">
-                <span className="db-donut-value">248</span>
+                <span className="db-donut-value">
+                  {loadingStats ? "..." : stats.totalMembers}
+                </span>
                 <span className="db-donut-label">Total Members</span>
               </div>
             </div>
@@ -323,21 +368,27 @@ const Dashboard: React.FC = () => {
                 <span className="db-legend-dot db-dot-green" />
                 <div>
                   <p className="db-legend-title">Paid</p>
-                  <p className="db-legend-sub">186 (75%)</p>
+                  <p className="db-legend-sub">
+                    {stats.activeMembers} ({paidPercent}%)
+                  </p>
                 </div>
               </div>
               <div className="db-donut-legend-item">
                 <span className="db-legend-dot db-dot-orange" />
                 <div>
                   <p className="db-legend-title">Pending</p>
-                  <p className="db-legend-sub">42 (17%)</p>
+                  <p className="db-legend-sub">
+                    {stats.pendingDue} ({pendingPercent}%)
+                  </p>
                 </div>
               </div>
               <div className="db-donut-legend-item">
                 <span className="db-legend-dot db-dot-red" />
                 <div>
                   <p className="db-legend-title">Overdue</p>
-                  <p className="db-legend-sub db-legend-sub-red">20 (8%)</p>
+                  <p className="db-legend-sub db-legend-sub-red">
+                    0 ({overduePercent}%)
+                  </p>
                 </div>
               </div>
             </div>
@@ -347,6 +398,7 @@ const Dashboard: React.FC = () => {
 
       {/* Bottom Row */}
       <div className="db-bottom-row">
+        {/* Recent Members — AB DYNAMIC */}
         <div className="db-panel db-table-panel">
           <div className="db-panel-header">
             <div className="db-panel-title-group">
@@ -358,7 +410,12 @@ const Dashboard: React.FC = () => {
                 <p className="db-panel-subtitle">Latest 5 members added</p>
               </div>
             </div>
-            <button className="db-view-all-btn">View All</button>
+            <button
+              className="db-view-all-btn"
+              onClick={() => navigate("/frontdesk/fee-collection")}
+            >
+              View All
+            </button>
           </div>
           <table className="db-table">
             <thead>
@@ -371,26 +428,42 @@ const Dashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {recentMembers.map((m, idx) => (
-                <tr key={m.id}>
-                  <td>{idx + 1}</td>
-                  <td>
-                    <div className="db-member-cell">
-                      <img src={m.avatar} alt={m.name} className="db-avatar" />
-                      <span>{m.name}</span>
-                    </div>
-                  </td>
-                  <td>{m.package}</td>
-                  <td>{m.joinDate}</td>
-                  <td>
-                    <span className="db-badge db-badge-green">{m.status}</span>
+              {stats.recentMembers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="db-empty-cell">
+                    No recent members.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                stats.recentMembers.map((m, idx) => (
+                  <tr key={m.id}>
+                    <td>{idx + 1}</td>
+                    <td>
+                      <div className="db-member-cell">
+                        <span>{m.name}</span>
+                      </div>
+                    </td>
+                    <td>{m.package}</td>
+                    <td>{m.join_date}</td>
+                    <td>
+                      <span
+                        className={`db-badge ${
+                          m.status === "Active"
+                            ? "db-badge-green"
+                            : "db-badge-red"
+                        }`}
+                      >
+                        {m.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
+        {/* Upcoming Fee Dues — DYNAMIC */}
         <div className="db-panel db-table-panel">
           <div className="db-panel-header">
             <div className="db-panel-title-group">
@@ -404,7 +477,12 @@ const Dashboard: React.FC = () => {
                 </p>
               </div>
             </div>
-            <button className="db-view-all-btn">View All</button>
+            <button
+              className="db-view-all-btn"
+              onClick={() => navigate("/frontdesk/fee-collection")}
+            >
+              View All
+            </button>
           </div>
           <table className="db-table">
             <thead>
@@ -417,26 +495,40 @@ const Dashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {upcomingDues.map((d, idx) => (
-                <tr key={d.id}>
-                  <td>{idx + 1}</td>
-                  <td>
-                    <div className="db-member-cell">
-                      <img src={d.avatar} alt={d.name} className="db-avatar" />
-                      <span>{d.name}</span>
-                    </div>
-                  </td>
-                  <td>{d.package}</td>
-                  <td>{d.dueIn}</td>
-                  <td>
-                    <span className="db-badge db-badge-red">{d.amount}</span>
+              {stats.upcomingDues.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="db-empty-cell">
+                    No upcoming dues in next 7 days.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                stats.upcomingDues.map((d, idx) => (
+                  <tr key={d.id}>
+                    <td>{idx + 1}</td>
+                    <td>
+                      <div className="db-member-cell">
+                        <span>{d.name}</span>
+                      </div>
+                    </td>
+                    <td>{d.package}</td>
+                    <td>
+                      <span className="db-due-days">
+                        {d.days_left} day{d.days_left === 1 ? "" : "s"}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="db-badge db-badge-red">
+                        {formatPKR(Number(d.amount) || 0)}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
+        {/* Fee Collection Summary */}
         <div className="db-panel db-summary-panel">
           <div className="db-panel-header">
             <div className="db-panel-title-group">
@@ -448,33 +540,34 @@ const Dashboard: React.FC = () => {
                 <p className="db-panel-subtitle">This Month</p>
               </div>
             </div>
-            <span className="db-summary-trend">↑ 15%</span>
+            <span className="db-summary-trend">
+              {stats.feesTrend >= 0 ? "↑" : "↓"} {Math.abs(stats.feesTrend)}%
+            </span>
           </div>
           <p className="db-summary-trend-sub">vs last month</p>
 
-          <h2 className="db-summary-total">PKR 320,450</h2>
+          <h2 className="db-summary-total">{formatPKR(stats.feesCollected)}</h2>
           <p className="db-summary-total-label">Total Collected</p>
 
           <div className="db-summary-breakdown">
-            <div className="db-summary-row">
-              <span>Cash</span>
-              <span className="db-summary-amount">PKR 120,450</span>
-              <span className="db-summary-percent">37%</span>
-            </div>
-            <div className="db-summary-row">
-              <span>Bank Transfer</span>
-              <span className="db-summary-amount">PKR 150,000</span>
-              <span className="db-summary-percent">47%</span>
-            </div>
-            <div className="db-summary-row">
-              <span>JazzCash / Easypaisa</span>
-              <span className="db-summary-amount">PKR 50,000</span>
-              <span className="db-summary-percent">16%</span>
-            </div>
+            {methodRows.length === 0 ? (
+              <p className="db-summary-empty">Is month koi payment nahi hui.</p>
+            ) : (
+              methodRows.map((row) => (
+                <div className="db-summary-row" key={row.label}>
+                  <span>{row.label}</span>
+                  <span className="db-summary-amount">{formatPKR(row.amount)}</span>
+                  <span className="db-summary-percent">{row.percent}%</span>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="db-summary-progress">
-            <div className="db-summary-progress-fill" style={{ width: "37%" }} />
+            <div
+              className="db-summary-progress-fill"
+              style={{ width: `${topMethodPercent}%` }}
+            />
           </div>
         </div>
       </div>

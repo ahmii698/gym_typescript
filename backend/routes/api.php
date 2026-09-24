@@ -3,8 +3,10 @@
 use App\Http\Controllers\AccessoryController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DrinkController;
 use App\Http\Controllers\MemberController;
+use App\Http\Controllers\OwnerDashboardController;
 use App\Http\Controllers\PackageController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentController;
@@ -21,6 +23,12 @@ Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']
 // ---------- Protected routes (login zaroori) ----------
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Dashboard stats (front desk / admin)
+    Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
+
+    // Owner Dashboard stats (owner panel)
+    Route::get('/owner/dashboard/stats', [OwnerDashboardController::class, 'stats']);
 
     // Members
     Route::get('/members/fee-overview', [MemberController::class, 'feeOverview']);
@@ -49,21 +57,33 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/packages/{package}', [PackageController::class, 'update']);
     Route::delete('/packages/{package}', [PackageController::class, 'destroy']);
 
-    // Attendance (view + toggle — admin aur frontdesk dono)
+    // Attendance (view + toggle + history — admin aur frontdesk dono)
+    // NOTE: checkins / checkin-stats routes {member} wale routes se pehle honi chahiye,
+    // warna Laravel "checkins" ya "checkin-stats" ko {member} ID samajh kar match karega.
+    Route::get('/attendance/checkins', [AttendanceController::class, 'checkins']);
+    Route::get('/attendance/checkin-stats', [AttendanceController::class, 'checkinStats']);
     Route::get('/attendance', [AttendanceController::class, 'index']);
     Route::post('/attendance/{member}/toggle', [AttendanceController::class, 'toggle']);
     Route::get('/attendance/stats', [AttendanceController::class, 'stats']);
+    Route::get('/attendance/{member}/history', [AttendanceController::class, 'history']);
 
     // Drinks (view + add + sell — admin aur frontdesk dono)
     Route::get('/drinks', [DrinkController::class, 'index']);
     Route::post('/drinks', [DrinkController::class, 'store']);
     Route::post('/drinks/{drink}/sell', [DrinkController::class, 'sell']);
+    Route::post('/drinks/{drink}/restock', [DrinkController::class, 'restock']);
+    Route::get('/drinks/{drink}/history', [DrinkController::class, 'history']);
 
-    // Accessories / Inventory (view + add + edit + delete — admin aur frontdesk dono)
+    // Accessories / Inventory (view + add + edit + delete + restock + history — admin aur frontdesk dono)
+    // NOTE: spend-summary route {accessory} wale routes se pehle honi chahiye,
+    // warna Laravel "spend-summary" ko ek {accessory} ID samajh kar match karega.
+    Route::get('/accessories/spend-summary', [AccessoryController::class, 'spendSummary']);
     Route::get('/accessories', [AccessoryController::class, 'index']);
     Route::post('/accessories', [AccessoryController::class, 'store']);
     Route::put('/accessories/{accessory}', [AccessoryController::class, 'update']);
     Route::delete('/accessories/{accessory}', [AccessoryController::class, 'destroy']);
+    Route::post('/accessories/{accessory}/restock', [AccessoryController::class, 'restock']);
+    Route::get('/accessories/{accessory}/history', [AccessoryController::class, 'history']);
 
     // Sirf admin
     Route::middleware('role:admin')->group(function () {

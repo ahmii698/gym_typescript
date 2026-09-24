@@ -6,7 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class Drink extends Model
 {
-    protected $fillable = ['name', 'category', 'unit', 'quantity', 'low_stock_threshold', 'price', 'image'];
+    protected $fillable = [
+        'name', 'category', 'unit', 'quantity', 'low_stock_threshold',
+        'price', 'cost_price', 'image',
+    ];
 
     // status attribute jo frontend directly use kar sake
     protected $appends = ['status'];
@@ -21,5 +24,10 @@ class Drink extends Model
     public function sales()
     {
         return $this->hasMany(DrinkSale::class);
+    }
+
+    public function restocks()
+    {
+        return $this->hasMany(DrinkRestock::class);
     }
 }

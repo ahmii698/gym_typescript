@@ -9,7 +9,7 @@ import {
   Users,
   CalendarCheck,
   IdCard,
-  CreditCard,
+  // CreditCard,
   UserPlus,
 } from "lucide-react";
 import logoImg from "../../assets/logo.png";
@@ -29,7 +29,7 @@ const bottomItems = [
   { to: "/admin/members", label: "Members", icon: Users },
   { to: "/admin/checkins", label: "Check-ins", icon: CalendarCheck },
   { to: "/admin/memberships", label: "Memberships", icon: IdCard },
-  { to: "/admin/payments", label: "Payments", icon: CreditCard },
+  // { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/register", label: "Create Admin", icon: UserPlus },
 ];
 

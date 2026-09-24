@@ -218,6 +218,7 @@
 .db-dot-green { background-color: #22c55e; }
 .db-dot-orange { background-color: #f59e0b; }
 
+/* ===== Chart (line chart styles — kept for safety) ===== */
 .db-chart-wrap {
   display: flex;
   gap: 10px;
@@ -246,6 +247,126 @@
   margin-top: 8px;
   font-size: 11px;
   color: #6b7280;
+}
+
+/* ===== BAR CHART (NEW) ===== */
+.db-bar-chart-wrap {
+  display: flex;
+  gap: 12px;
+  height: 260px;
+  padding: 16px 8px 0 0;
+  margin-top: 4px;
+}
+
+.db-bar-chart-wrap .db-chart-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: calc(100% - 22px);
+  padding: 4px 4px 4px 0;
+  font-size: 11px;
+  color: #6b7280;
+  min-width: 26px;
+  text-align: right;
+}
+
+.db-bar-chart {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 10px;
+  height: calc(100% - 22px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0;
+  position: relative;
+}
+
+/* faint horizontal grid lines */
+.db-bar-chart::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.04) 0,
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 1px,
+    transparent 20%
+  );
+  pointer-events: none;
+}
+
+.db-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.db-bar-pair {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+}
+
+.db-bar {
+  width: 18px;
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+  position: relative;
+  transition: height 0.4s ease, opacity 0.2s ease;
+  cursor: pointer;
+}
+
+.db-bar-total {
+  background: linear-gradient(180deg, #ef233c 0%, #a3162a 100%);
+  box-shadow: 0 0 12px rgba(239, 35, 60, 0.25);
+}
+
+.db-bar-active {
+  background: linear-gradient(180deg, #9aa0ab 0%, #5a5f68 100%);
+}
+
+.db-bar:hover {
+  opacity: 0.8;
+}
+
+.db-bar-value {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.db-bar-label {
+  font-size: 11px;
+  color: #9aa0ab;
+  font-weight: 500;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.db-bar-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9aa0ab;
+  font-size: 13px;
 }
 
 /* ===== Donut ===== */
@@ -449,6 +570,14 @@
   color: #8a8f9c;
   min-width: 32px;
   text-align: right;
+}
+
+.db-summary-empty {
+  margin: 0;
+  font-size: 12.5px;
+  color: #8a8f9c;
+  text-align: center;
+  padding: 8px 0;
 }
 
 .db-summary-progress {

@@ -214,7 +214,7 @@ const Icon = {
   ),
 };
 
-const PACKAGE_ICONS: Record<PackageIcon, () => JSX.Element> = {
+const PACKAGE_ICONS: Record<PackageIcon, () => React.ReactElement> = {
   dumbbell: Icon.Dumbbell,
   users: Icon.Users,
   user: Icon.User,

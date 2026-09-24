@@ -3,8 +3,8 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type MouseEvent,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Users,
   UserPlus,
@@ -17,9 +17,10 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowRight,
-  ChevronDown,
   TrendingUp,
+  ChevronDown,
 } from "lucide-react";
+import { API_URL } from "../../../config";
 import "./dashboard.css";
 
 /* ---------------------------- Types & data ---------------------------- */
@@ -37,156 +38,71 @@ interface StatCard {
 }
 
 interface ExpiringMember {
-  name: string;
-  type: string;
-  expiry: string;
-  daysLeft: number;
-}
-
-interface Transaction {
-  member: string;
-  type: string;
-  amount: number;
-  date: string;
-  status: "Paid" | "Pending";
-}
-
-interface RecentMembership {
+  id: number;
   name: string;
   plan: string;
+  expiry: string;
+  days_left: number;
 }
 
-const STATS: StatCard[] = [
-  {
-    id: "active",
-    title: "Active Members",
-    period: "Right now",
-    value: "1,240",
-    change: "+6%",
-    direction: "up",
-    positive: true,
-    variant: "green",
-    icon: <Users size={26} />,
-  },
-  {
-    id: "new-members",
-    title: "New Members",
-    period: "This Month",
-    value: "34",
-    change: "+18%",
-    direction: "up",
-    positive: true,
-    variant: "red",
-    icon: <UserPlus size={26} />,
-  },
-  {
-    id: "overdue",
-    title: "Overdue Payments",
-    period: "This Month",
-    value: "PKR 27,500",
-    change: "-12%",
-    direction: "down",
-    positive: true,
-    variant: "orange",
-    icon: <Clock size={26} />,
-  },
-  {
-    id: "revenue",
-    title: "Revenue Collected",
-    period: "This Month",
-    value: "PKR 203,000",
-    change: "+28%",
-    direction: "up",
-    positive: true,
-    variant: "blue",
-    icon: <DollarSign size={26} />,
-  },
-];
+interface RecentAccessory {
+  id: number;
+  name: string;
+  category: string;
+  quantity: number;
+}
 
-const EXPIRING: ExpiringMember[] = [
-  { name: "Ali Raza", type: "Monthly", expiry: "30 Sep 2025", daysLeft: 3 },
-  { name: "Sara Khan", type: "Monthly", expiry: "02 Oct 2025", daysLeft: 5 },
-  { name: "Usman Tariq", type: "Quarterly", expiry: "04 Oct 2025", daysLeft: 7 },
-  { name: "Ayesha Malik", type: "Monthly", expiry: "05 Oct 2025", daysLeft: 8 },
-  { name: "Hamza Ali", type: "Monthly", expiry: "06 Oct 2025", daysLeft: 9 },
-];
+interface MonthlyRevenue {
+  label: string;
+  month: string;
+  amount: number;
+}
 
-const TRANSACTIONS: Transaction[] = [
-  { member: "Ali Raza", type: "Membership", amount: 5000, date: "Today", status: "Paid" },
-  { member: "Sara Khan", type: "Renewal", amount: 8000, date: "Today", status: "Paid" },
-  { member: "Usman Tariq", type: "Membership", amount: 12000, date: "Today", status: "Paid" },
-  { member: "Ayesha Malik", type: "Renewal", amount: 5000, date: "Yesterday", status: "Paid" },
-  { member: "Hamza Ali", type: "Membership", amount: 8000, date: "Yesterday", status: "Pending" },
-];
+interface MonthlyGrowth {
+  label: string;
+  month: number;
+  total: number;
+}
 
-const RECENT_MEMBERSHIPS: RecentMembership[] = [
-  { name: "Bilal Ahmed", plan: "Monthly" },
-  { name: "Fatima Noor", plan: "Quarterly" },
-  { name: "Zain Abbas", plan: "Monthly" },
-  { name: "Hina Shah", plan: "Yearly" },
-  { name: "Omar Farooq", plan: "Monthly" },
-];
+interface RecentStaff {
+  id: number;
+  name: string;
+  role: string;
+  specialization: string;
+  experience: string;
+  status: string;
+}
 
-type Period = "This Month" | "Last Month";
+interface OwnerStats {
+  activeMembers: number;
+  activeTrend: number;
+  newMembers: number;
+  newMembersTrend: number;
+  overdueAmount: number;
+  overdueTrend: number;
+  revenue: number;
+  revenueTrend: number;
+  recentAccessories: RecentAccessory[];
+  monthlyRevenue: MonthlyRevenue[];
+  monthlyGrowth: MonthlyGrowth[];
+  expiringMembers: ExpiringMember[];
+  recentStaff: RecentStaff[];
+  selectedYear: number;
+  availableYears: number[];
+}
 
-const REVENUE: Record<Period, { month: string; data: number[] }> = {
-  "This Month": {
-    month: "Sep",
-    data: [
-      38000, 44000, 50000, 60000, 68000, 60000, 52000, 60000, 70000, 72000,
-      80000, 88000, 100000, 115000, 108000, 100000, 98000, 110000, 125000,
-      133000, 128000, 122000, 130000, 142000, 150000, 165000, 182000, 195000,
-      210000, 203000,
-    ],
-  },
-  "Last Month": {
-    month: "Aug",
-    data: [
-      30000, 36000, 42000, 48000, 55000, 62000, 58000, 64000, 72000, 78000,
-      85000, 92000, 98000, 104000, 110000, 105000, 112000, 120000, 126000,
-      132000, 138000, 134000, 142000, 150000, 158000, 166000, 172000, 180000,
-      188000, 195000,
-    ],
-  },
+const authHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem("token");
+  return {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 };
 
-type GrowthYear = "This Year" | "Last Year";
-
-// Total members at each month (Jan → Dec)
-const GROWTH: Record<GrowthYear, number[]> = {
-  "This Year": [1220, 690, 890, 1010, 1150, 980, 1080, 1160, 1240, 1180, 1290, 1410],
-  "Last Year": [640, 720, 690, 810, 760, 880, 940, 900, 1020, 980, 1100, 1180],
-};
-
-/* ------------------------------ Chart config ------------------------------ */
-
-// Revenue line chart
-const W = 600;
-const H = 260;
-const PAD_L = 62;
-const PAD_R = 24;
-const PAD_T = 14;
-const PAD_B = 30;
-const Y_MAX = 250000;
-const DEFAULT_INDEX = 25;
-const Y_TICKS = [0, 50000, 100000, 150000, 200000, 250000];
-const X_TICK_INDEXES = [0, 4, 9, 14, 19, 24, 29];
-
-// Member growth bar chart
-const G_W = 1000;
-const G_H = 280;
-const G_PAD_L = 52;
-const G_PAD_R = 16;
-const G_PAD_T = 16;
-const G_PAD_B = 32;
-const G_Y_MAX = 1500;
-const G_TICKS = [0, 300, 600, 900, 1200, 1500];
+/* ------------------------------ Helpers ------------------------------ */
 
 const formatTick = (v: number) => (v === 0 ? "PKR 0" : `PKR ${v / 1000}K`);
 const formatPKR = (v: number) => `PKR ${v.toLocaleString("en-US")}`;
-const formatCount = (v: number) => v.toLocaleString("en-US");
-
-/* ------------------------------ Date helpers ------------------------------ */
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -211,15 +127,83 @@ const formatTime = (d: Date) => {
 const BOTTOM_GAP = 24;
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const pageRef = useRef<HTMLDivElement>(null);
   const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
 
   const [now, setNow] = useState(new Date());
-  const [period, setPeriod] = useState<Period>("This Month");
-  const [activeIndex, setActiveIndex] = useState(DEFAULT_INDEX);
 
-  const [growthYear, setGrowthYear] = useState<GrowthYear>("This Year");
-  const [activeBar, setActiveBar] = useState<number | null>(null);
+  // Year filter
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Dynamic stats from backend
+  const [ownerStats, setOwnerStats] = useState<OwnerStats>({
+    activeMembers: 0,
+    activeTrend: 0,
+    newMembers: 0,
+    newMembersTrend: 0,
+    overdueAmount: 0,
+    overdueTrend: 0,
+    revenue: 0,
+    revenueTrend: 0,
+    recentAccessories: [],
+    monthlyRevenue: [],
+    monthlyGrowth: [],
+    expiringMembers: [],
+    recentStaff: [],
+    selectedYear: new Date().getFullYear(),
+    availableYears: [],
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  // Fetch owner stats (dependent on selectedYear)
+  useEffect(() => {
+    const fetchOwnerStats = async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}/owner/dashboard/stats?year=${selectedYear}`,
+          { headers: authHeaders() }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setOwnerStats({
+            activeMembers: data.active_members ?? 0,
+            activeTrend: data.active_trend ?? 0,
+            newMembers: data.new_members ?? 0,
+            newMembersTrend: data.new_members_trend ?? 0,
+            overdueAmount: Number(data.overdue_amount) || 0,
+            overdueTrend: data.overdue_trend ?? 0,
+            revenue: Number(data.revenue) || 0,
+            revenueTrend: data.revenue_trend ?? 0,
+            recentAccessories: Array.isArray(data.recent_accessories)
+              ? data.recent_accessories
+              : [],
+            monthlyRevenue: Array.isArray(data.monthly_revenue)
+              ? data.monthly_revenue
+              : [],
+            monthlyGrowth: Array.isArray(data.monthly_growth)
+              ? data.monthly_growth
+              : [],
+            expiringMembers: Array.isArray(data.expiring_members)
+              ? data.expiring_members
+              : [],
+            recentStaff: Array.isArray(data.recent_staff)
+              ? data.recent_staff
+              : [],
+            selectedYear: data.selected_year ?? selectedYear,
+            availableYears: Array.isArray(data.available_years)
+              ? data.available_years
+              : [],
+          });
+        }
+      } catch (err) {
+        console.error("Owner stats load nahi ho sake", err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    fetchOwnerStats();
+  }, [selectedYear]);
 
   // Make the dashboard its own scroll container regardless of the layout
   useLayoutEffect(() => {
@@ -239,49 +223,93 @@ const Dashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  /* ---- Revenue line chart ---- */
-  const { month, data } = REVENUE[period];
-  const stepX = (W - PAD_L - PAD_R) / (data.length - 1);
-  const plotH = H - PAD_T - PAD_B;
+  /* ---- Dynamic stat cards ---- */
+  const statsCards: StatCard[] = [
+    {
+      id: "active",
+      title: "Active Members",
+      period: "Right now",
+      value: loadingStats
+        ? "..."
+        : ownerStats.activeMembers.toLocaleString("en-US"),
+      change: `${Math.abs(ownerStats.activeTrend)}%`,
+      direction: ownerStats.activeTrend >= 0 ? "up" : "down",
+      positive: ownerStats.activeTrend >= 0,
+      variant: "green",
+      icon: <Users size={26} />,
+    },
+    {
+      id: "new-members",
+      title: "New Members",
+      period: "This Month",
+      value: loadingStats
+        ? "..."
+        : ownerStats.newMembers.toLocaleString("en-US"),
+      change: `${Math.abs(ownerStats.newMembersTrend)}%`,
+      direction: ownerStats.newMembersTrend >= 0 ? "up" : "down",
+      positive: ownerStats.newMembersTrend >= 0,
+      variant: "red",
+      icon: <UserPlus size={26} />,
+    },
+    {
+      id: "overdue",
+      title: "Overdue Payments",
+      period: "This Month",
+      value: loadingStats
+        ? "..."
+        : `PKR ${ownerStats.overdueAmount.toLocaleString("en-US")}`,
+      change: `${Math.abs(ownerStats.overdueTrend)}%`,
+      direction: ownerStats.overdueTrend >= 0 ? "up" : "down",
+      positive: ownerStats.overdueTrend <= 0,
+      variant: "orange",
+      icon: <Clock size={26} />,
+    },
+    {
+      id: "revenue",
+      title: "Revenue Collected",
+      period: "This Month",
+      value: loadingStats
+        ? "..."
+        : `PKR ${ownerStats.revenue.toLocaleString("en-US")}`,
+      change: `${Math.abs(ownerStats.revenueTrend)}%`,
+      direction: ownerStats.revenueTrend >= 0 ? "up" : "down",
+      positive: ownerStats.revenueTrend >= 0,
+      variant: "blue",
+      icon: <DollarSign size={26} />,
+    },
+  ];
 
-  const getX = (i: number) => PAD_L + i * stepX;
-  const getY = (v: number) => PAD_T + plotH - (v / Y_MAX) * plotH;
+  /* ---- Monthly Revenue Bar Chart (selected year, 12 months) ---- */
+  const revenueAmounts = ownerStats.monthlyRevenue.map((m) => m.amount);
+  const revenueRawMax =
+    revenueAmounts.length > 0 ? Math.max(...revenueAmounts) : 0;
+  const revenueMax = Math.max(
+    10000,
+    Math.ceil(revenueRawMax / 10000) * 10000
+  );
 
-  const linePath = data
-    .map((v, i) => `${i === 0 ? "M" : "L"} ${getX(i)} ${getY(v)}`)
-    .join(" ");
-  const areaPath = `${linePath} L ${getX(data.length - 1)} ${PAD_T + plotH} L ${getX(0)} ${
-    PAD_T + plotH
-  } Z`;
+  const revenueYTicks = Array.from({ length: 6 }, (_, i) => {
+    const val = Math.round((revenueMax / 5) * (5 - i));
+    return val;
+  });
 
-  const handleMove = (e: MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const svgX = ((e.clientX - rect.left) / rect.width) * W;
-    const idx = Math.round((svgX - PAD_L) / stepX);
-    setActiveIndex(Math.max(0, Math.min(data.length - 1, idx)));
-  };
+  /* ---- Member Growth Bar Chart (selected year, 12 months) ---- */
+  const growthData = ownerStats.monthlyGrowth;
+  const growthTotals = growthData.map((g) => g.total);
+  const growthRawMax =
+    growthTotals.length > 0 ? Math.max(...growthTotals) : 0;
+  const growthMax = Math.max(100, Math.ceil(growthRawMax / 100) * 100);
 
-  const activeValue = data[activeIndex];
-  const tooltipLeft = Math.min(88, Math.max(12, (getX(activeIndex) / W) * 100));
-  const tooltipTop = (getY(activeValue) / H) * 100;
+  const growthYTicks = Array.from({ length: 6 }, (_, i) => {
+    const val = Math.round((growthMax / 5) * (5 - i));
+    return val;
+  });
 
-  /* ---- Member growth bar chart ---- */
-  const growthData = GROWTH[growthYear];
-  const growthYearNum =
-    growthYear === "This Year" ? now.getFullYear() : now.getFullYear() - 1;
-  const slotW = (G_W - G_PAD_L - G_PAD_R) / growthData.length;
-  const barW = slotW * 0.55;
-  const gBase = G_H - G_PAD_B;
-  const gPlotH = gBase - G_PAD_T;
-
-  const gY = (v: number) => G_PAD_T + gPlotH - (v / G_Y_MAX) * gPlotH;
-  const barX = (i: number) => G_PAD_L + i * slotW + (slotW - barW) / 2;
-
-  const barTooltipLeft =
-    activeBar === null
-      ? 0
-      : Math.min(92, Math.max(8, ((G_PAD_L + activeBar * slotW + slotW / 2) / G_W) * 100));
-  const barTooltipTop = activeBar === null ? 0 : (gY(growthData[activeBar]) / G_H) * 100;
+  // Dropdown ke liye saal
+  const yearOptions =
+    ownerStats.availableYears.length > 0
+      ? ownerStats.availableYears
+      : [new Date().getFullYear()];
 
   return (
     <div
@@ -293,7 +321,9 @@ const Dashboard = () => {
       <div className="dash-header">
         <div>
           <h1 className="dash-title">Welcome back, Owner!</h1>
-          <p className="dash-subtitle">Here's what's happening at your gym today.</p>
+          <p className="dash-subtitle">
+            Here's what's happening at your gym today.
+          </p>
         </div>
 
         <div className="dash-datetime">
@@ -305,16 +335,18 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards — DYNAMIC */}
       <div className="dash-stats">
-        {STATS.map((s) => (
+        {statsCards.map((s) => (
           <div key={s.id} className={`dash-stat-card ${s.variant}`}>
             <div className={`dash-stat-icon ${s.variant}`}>{s.icon}</div>
             <div className="dash-stat-info">
               <span className="dash-stat-title">{s.title}</span>
               <span className="dash-stat-period">{s.period}</span>
               <span className="dash-stat-value">{s.value}</span>
-              <span className={`dash-stat-change ${s.positive ? "good" : "bad"}`}>
+              <span
+                className={`dash-stat-change ${s.positive ? "good" : "bad"}`}
+              >
                 {s.direction === "up" ? (
                   <ArrowUp size={16} strokeWidth={2.5} />
                 ) : (
@@ -328,9 +360,9 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Row 1: monthly revenue trend (70%) + last 5 memberships (30%) */}
+      {/* Row 1: monthly revenue bar chart (70%) + last 5 inventory items (30%) */}
       <div className="dash-grid dash-grid-70-30">
-        {/* Monthly revenue trend */}
+        {/* Monthly Revenue Bar Chart — 12 months of selected year */}
         <div className="dash-panel">
           <div className="dash-panel-head">
             <div className="dash-panel-icon">
@@ -338,115 +370,77 @@ const Dashboard = () => {
             </div>
             <div className="dash-panel-heading">
               <h2>Monthly Revenue Trend</h2>
+              <p>{selectedYear} — All 12 months</p>
             </div>
 
+            {/* Year selector */}
             <div className="dash-select-wrap">
               <select
                 className="dash-select"
-                value={period}
-                onChange={(e) => {
-                  setPeriod(e.target.value as Period);
-                  setActiveIndex(DEFAULT_INDEX);
-                }}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
               >
-                <option value="This Month">This Month</option>
-                <option value="Last Month">Last Month</option>
+                {yearOptions.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
               </select>
               <ChevronDown size={14} className="dash-select-icon" />
             </div>
           </div>
 
-          <div className="dash-chart">
-            <svg
-              viewBox={`0 0 ${W} ${H}`}
-              className="dash-chart-svg"
-              onMouseMove={handleMove}
-              onMouseLeave={() => setActiveIndex(DEFAULT_INDEX)}
-            >
-              <defs>
-                <linearGradient id="dashAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ef233c" stopOpacity="0.45" />
-                  <stop offset="100%" stopColor="#ef233c" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-
-              {/* Grid + Y labels */}
-              {Y_TICKS.map((t) => (
-                <g key={t}>
-                  <line
-                    x1={PAD_L}
-                    x2={W - PAD_R}
-                    y1={getY(t)}
-                    y2={getY(t)}
-                    className="chart-grid"
-                  />
-                  <text
-                    x={PAD_L - 8}
-                    y={getY(t) + 4}
-                    textAnchor="end"
-                    className="chart-label"
-                  >
-                    {formatTick(t)}
-                  </text>
-                </g>
+          <div className="dash-revenue-chart">
+            <div className="dash-revenue-yaxis">
+              {revenueYTicks.map((t) => (
+                <span key={t}>{formatTick(t)}</span>
               ))}
-
-              {/* X labels */}
-              {X_TICK_INDEXES.map((i) => (
-                <text
-                  key={i}
-                  x={getX(i)}
-                  y={H - 8}
-                  textAnchor="middle"
-                  className="chart-label"
-                >
-                  {`${i + 1} ${month}`}
-                </text>
-              ))}
-
-              {/* Area + line */}
-              <path d={areaPath} fill="url(#dashAreaGrad)" />
-              <path d={linePath} className="chart-line" />
-
-              {/* Active point */}
-              <line
-                x1={getX(activeIndex)}
-                x2={getX(activeIndex)}
-                y1={PAD_T}
-                y2={PAD_T + plotH}
-                className="chart-guide"
-              />
-              <circle
-                cx={getX(activeIndex)}
-                cy={getY(activeValue)}
-                r={5}
-                className="chart-dot"
-              />
-            </svg>
-
-            <div
-              className="dash-tooltip"
-              style={{ left: `${tooltipLeft}%`, top: `${tooltipTop}%` }}
-            >
-              <strong>{formatPKR(activeValue)}</strong>
-              <span>
-                {activeIndex + 1} {month}
-              </span>
+            </div>
+            <div className="dash-revenue-bars">
+              {ownerStats.monthlyRevenue.length === 0 ? (
+                <div className="dash-revenue-empty">No data available</div>
+              ) : (
+                ownerStats.monthlyRevenue.map((m) => {
+                  const height =
+                    revenueMax > 0 ? (m.amount / revenueMax) * 100 : 0;
+                  return (
+                    <div className="dash-revenue-group" key={m.month}>
+                      <div
+                        className="dash-revenue-bar"
+                        style={{ height: `${height}%` }}
+                        title={`${m.label}: ${formatPKR(m.amount)}`}
+                      >
+                        {m.amount > 0 && (
+                          <span className="dash-revenue-value">
+                            {m.amount >= 1000
+                              ? `${Math.round(m.amount / 1000)}K`
+                              : m.amount}
+                          </span>
+                        )}
+                      </div>
+                      <span className="dash-revenue-label">{m.label}</span>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
 
-        {/* Last 5 memberships */}
+        {/* Last 5 Inventory Items — DYNAMIC */}
         <div className="dash-panel">
           <div className="dash-panel-head">
             <div className="dash-panel-icon">
               <CreditCard size={22} />
             </div>
             <div className="dash-panel-heading">
-              <h2>Last 5 Memberships</h2>
-              <p>Recently purchased plans</p>
+              <h2>Inventory</h2>
             </div>
-            <button type="button" className="dash-pill-btn">
+            <button
+              type="button"
+              className="dash-pill-btn"
+              onClick={() => navigate("/admin/inventory/accessories")}
+            >
               View All <ArrowRight size={14} />
             </button>
           </div>
@@ -455,26 +449,36 @@ const Dashboard = () => {
             <table className="dash-table">
               <thead>
                 <tr>
-                  <th>Member Name</th>
-                  <th className="right">Plan</th>
+                  <th>Item Name</th>
+                  <th className="right">Category</th>
+                  <th className="center">Qty</th>
                 </tr>
               </thead>
               <tbody>
-                {RECENT_MEMBERSHIPS.map((m) => (
-                  <tr key={m.name}>
-                    <td className="member-name">{m.name}</td>
-                    <td className="right">
-                      <span className="plan-badge">{m.plan}</span>
+                {ownerStats.recentAccessories.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="dash-empty-cell">
+                      No recent inventory items.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  ownerStats.recentAccessories.map((item) => (
+                    <tr key={item.id}>
+                      <td className="member-name">{item.name}</td>
+                      <td className="right">
+                        <span className="plan-badge">{item.category}</span>
+                      </td>
+                      <td className="center">{item.quantity}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      {/* Member growth trend (full width) */}
+      {/* Member growth trend (full width) — 12 months DYNAMIC */}
       <div className="dash-panel dash-panel-full">
         <div className="dash-panel-head">
           <div className="dash-panel-icon">
@@ -482,111 +486,65 @@ const Dashboard = () => {
           </div>
           <div className="dash-panel-heading">
             <h2>Member Growth Trend</h2>
+            <p>{selectedYear} — Total members at each month</p>
           </div>
 
+          {/* Year selector */}
           <div className="dash-select-wrap">
             <select
               className="dash-select"
-              value={growthYear}
-              onChange={(e) => {
-                setGrowthYear(e.target.value as GrowthYear);
-                setActiveBar(null);
-              }}
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
             >
-              <option value="This Year">This Year</option>
-              <option value="Last Year">Last Year</option>
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
             </select>
             <ChevronDown size={14} className="dash-select-icon" />
           </div>
         </div>
 
-        <div className="dash-bar-scroll">
-          <div className="dash-chart dash-bar-inner">
-            <svg
-              viewBox={`0 0 ${G_W} ${G_H}`}
-              className={`dash-chart-svg dash-bar-svg ${
-                activeBar !== null ? "has-active" : ""
-              }`}
-              onMouseLeave={() => setActiveBar(null)}
-            >
-              <defs>
-                <linearGradient id="dashBarGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ff2d4d" />
-                  <stop offset="100%" stopColor="#d90429" />
-                </linearGradient>
-              </defs>
-
-              {/* Grid + Y labels */}
-              {G_TICKS.map((t) => (
-                <g key={t}>
-                  <line
-                    x1={G_PAD_L}
-                    x2={G_W - G_PAD_R}
-                    y1={gY(t)}
-                    y2={gY(t)}
-                    className="chart-grid"
-                  />
-                  <text
-                    x={G_PAD_L - 10}
-                    y={gY(t) + 4}
-                    textAnchor="end"
-                    className="chart-label"
-                  >
-                    {formatCount(t)}
-                  </text>
-                </g>
-              ))}
-
-              {/* Bars + X labels */}
-              {growthData.map((v, i) => (
-                <g key={MONTHS[i]}>
-                  <rect
-                    x={barX(i)}
-                    y={gY(v)}
-                    width={barW}
-                    height={gBase - gY(v)}
-                    rx={3}
-                    className={`bar-rect ${activeBar === i ? "active" : ""}`}
-                  />
-                  <text
-                    x={G_PAD_L + i * slotW + slotW / 2}
-                    y={G_H - 10}
-                    textAnchor="middle"
-                    className="chart-label"
-                  >
-                    {MONTHS[i]}
-                  </text>
-                  {/* Full-height hover area */}
-                  <rect
-                    x={G_PAD_L + i * slotW}
-                    y={G_PAD_T}
-                    width={slotW}
-                    height={gPlotH + G_PAD_B}
-                    className="bar-hit"
-                    onMouseEnter={() => setActiveBar(i)}
-                  />
-                </g>
-              ))}
-            </svg>
-
-            {activeBar !== null && (
-              <div
-                className="dash-tooltip"
-                style={{ left: `${barTooltipLeft}%`, top: `${barTooltipTop}%` }}
-              >
-                <strong>{formatCount(growthData[activeBar])} members</strong>
-                <span>
-                  {MONTHS[activeBar]} {growthYearNum}
-                </span>
-              </div>
+        <div className="dash-revenue-chart dash-growth-chart">
+          <div className="dash-revenue-yaxis">
+            {growthYTicks.map((t) => (
+              <span key={t}>{t.toLocaleString("en-US")}</span>
+            ))}
+          </div>
+          <div className="dash-revenue-bars">
+            {growthData.length === 0 ? (
+              <div className="dash-revenue-empty">No data available</div>
+            ) : (
+              growthData.map((g) => {
+                const height = growthMax > 0 ? (g.total / growthMax) * 100 : 0;
+                return (
+                  <div className="dash-revenue-group" key={g.month}>
+                    <div
+                      className="dash-revenue-bar"
+                      style={{ height: `${height}%` }}
+                      title={`${g.label}: ${g.total} members`}
+                    >
+                      {g.total > 0 && (
+                        <span className="dash-revenue-value">
+                          {g.total >= 1000
+                            ? `${(g.total / 1000).toFixed(1)}K`
+                            : g.total}
+                        </span>
+                      )}
+                    </div>
+                    <span className="dash-revenue-label">{g.label}</span>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
       </div>
 
-      {/* Row 2: memberships expiring soon + recent transactions */}
+      {/* Row 2: memberships expiring soon + recent staff */}
       <div className="dash-grid dash-grid-row2">
-        {/* Memberships expiring soon */}
+        {/* Memberships expiring soon — DYNAMIC */}
         <div className="dash-panel">
           <div className="dash-panel-head">
             <div className="dash-panel-icon">
@@ -596,7 +554,11 @@ const Dashboard = () => {
               <h2>Memberships Expiring Soon</h2>
               <p>Next 7 days</p>
             </div>
-            <button type="button" className="dash-pill-btn">
+            <button
+              type="button"
+              className="dash-pill-btn"
+              onClick={() => navigate("/admin/memberships")}
+            >
               View All <ArrowRight size={14} />
             </button>
           </div>
@@ -612,32 +574,44 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {EXPIRING.map((m) => (
-                  <tr key={m.name}>
-                    <td className="member-name">{m.name}</td>
-                    <td>{m.type}</td>
-                    <td>{m.expiry}</td>
-                    <td className="center">
-                      <span className="days-badge">{m.daysLeft}</span>
+                {ownerStats.expiringMembers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="dash-empty-cell">
+                      No memberships expiring in next 7 days.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  ownerStats.expiringMembers.map((m) => (
+                    <tr key={m.id}>
+                      <td className="member-name">{m.name}</td>
+                      <td>{m.plan}</td>
+                      <td>{m.expiry}</td>
+                      <td className="center">
+                        <span className="days-badge">{m.days_left}</span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Recent transactions */}
+        {/* Recent Staff (Members) — DYNAMIC */}
         <div className="dash-panel">
           <div className="dash-panel-head">
             <div className="dash-panel-icon">
               <Receipt size={22} />
             </div>
             <div className="dash-panel-heading">
-              <h2>Recent Transactions</h2>
-              <p>Latest payments received</p>
+              <h2>Members</h2>
+              <p>Recent trainers & front desk</p>
             </div>
-            <button type="button" className="dash-pill-btn">
+            <button
+              type="button"
+              className="dash-pill-btn"
+              onClick={() => navigate("/admin/members")}
+            >
               View All <ArrowRight size={14} />
             </button>
           </div>
@@ -646,31 +620,39 @@ const Dashboard = () => {
             <table className="dash-table">
               <thead>
                 <tr>
-                  <th>Member</th>
-                  <th>Type</th>
-                  <th className="right">Amount</th>
-                  <th>Date</th>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Specialization</th>
+                  <th className="center">Exp.</th>
                   <th className="center">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {TRANSACTIONS.map((t, i) => (
-                  <tr key={`${t.member}-${i}`}>
-                    <td className="member-name">{t.member}</td>
-                    <td>{t.type}</td>
-                    <td className="right amount">{formatPKR(t.amount)}</td>
-                    <td>{t.date}</td>
-                    <td className="center">
-                      <span
-                        className={`status-badge ${
-                          t.status === "Paid" ? "paid" : "pending"
-                        }`}
-                      >
-                        {t.status}
-                      </span>
+                {ownerStats.recentStaff.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="dash-empty-cell">
+                      No recent staff members.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  ownerStats.recentStaff.map((s) => (
+                    <tr key={`${s.role}-${s.id}`}>
+                      <td className="member-name">{s.name}</td>
+                      <td>{s.role}</td>
+                      <td>{s.specialization}</td>
+                      <td className="center">{s.experience}</td>
+                      <td className="center">
+                        <span
+                          className={`status-badge ${
+                            s.status === "Active" ? "paid" : "pending"
+                          }`}
+                        >
+                          {s.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

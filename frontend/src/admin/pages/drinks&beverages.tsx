@@ -14,6 +14,7 @@ interface DrinkItem {
   quantity: number;
   status: Status;
   price: number;
+  cost_price: number;
   pack: Pack;
   color: string;
   image?: string | null;
@@ -27,7 +28,17 @@ interface ApiDrink {
   quantity: number;
   status: Status;
   price: string | number;
+  cost_price: string | number;
   image: string | null;
+}
+
+interface HistoryRow {
+  type: "sale" | "restock";
+  quantity: number;
+  amount: number | null;
+  profit: number | null;
+  by: string | null;
+  created_at: string;
 }
 
 const CATEGORY_STYLE: Record<string, { pack: Pack; color: string }> = {
@@ -41,6 +52,8 @@ const CATEGORY_STYLE: Record<string, { pack: Pack; color: string }> = {
 };
 const DEFAULT_STYLE: { pack: Pack; color: string } = { pack: "can", color: "#8a8a93" };
 
+const toNum = (v: string | number) => (typeof v === "string" ? parseFloat(v) : v);
+
 const mapApiDrink = (d: ApiDrink): DrinkItem => {
   const style = CATEGORY_STYLE[d.category] ?? DEFAULT_STYLE;
   return {
@@ -50,7 +63,8 @@ const mapApiDrink = (d: ApiDrink): DrinkItem => {
     unit: d.unit,
     quantity: d.quantity,
     status: d.status,
-    price: typeof d.price === "string" ? parseFloat(d.price) : d.price,
+    price: toNum(d.price),
+    cost_price: toNum(d.cost_price ?? 0),
     image: d.image,
     ...style,
   };
@@ -136,6 +150,11 @@ const BanIcon = () => (
     <path d="M5.6 5.6l12.8 12.8" />
   </Icon>
 );
+const TrendUpIcon = () => (
+  <Icon>
+    <path d="M3 17l6-6 4 4 8-8M15 7h6v6" />
+  </Icon>
+);
 const SearchIcon = () => (
   <Icon>
     <circle cx="11" cy="11" r="7" />
@@ -178,6 +197,12 @@ const XIcon = () => (
     <path d="M18 6L6 18M6 6l12 12" />
   </Icon>
 );
+const EditIcon = () => (
+  <Icon>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+  </Icon>
+);
 
 /* ---------- Add Drink form state ---------- */
 interface DrinkFormState {
@@ -186,6 +211,7 @@ interface DrinkFormState {
   unit: string;
   quantity: string;
   low_stock_threshold: string;
+  cost_price: string;
   price: string;
 }
 
@@ -195,8 +221,11 @@ const EMPTY_FORM: DrinkFormState = {
   unit: "",
   quantity: "",
   low_stock_threshold: "5",
+  cost_price: "",
   price: "",
 };
+
+const money = (n: number) => `Rs ${n.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
 
 /* ---------- Page ---------- */
 export default function DrinksBeverages() {
@@ -219,10 +248,33 @@ export default function DrinksBeverages() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // History modal
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyItem, setHistoryItem] = useState<DrinkItem | null>(null);
+  const [historyRows, setHistoryRows] = useState<HistoryRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Restock modal
+  const [showRestockModal, setShowRestockModal] = useState(false);
+  const [restockItem, setRestockItem] = useState<DrinkItem | null>(null);
+  const [restockQty, setRestockQty] = useState("");
+  const [restockCost, setRestockCost] = useState("");
+  const [restockError, setRestockError] = useState<string | null>(null);
+  const [restockSubmitting, setRestockSubmitting] = useState(false);
+
+  // Edit price modal (cost_price / price, bina stock chede)
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editItem, setEditItem] = useState<DrinkItem | null>(null);
+  const [editCostPrice, setEditCostPrice] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   const role = localStorage.getItem("role");
   const token = localStorage.getItem("token");
 
   const canManageDrinks = role === "admin" || role === "frontdesk";
+  const canEditDrink = role === "admin"; // PUT /drinks/{drink} route admin-only hai
 
   useLayoutEffect(() => {
     const updateHeight = () => {
@@ -286,16 +338,26 @@ export default function DrinksBeverages() {
 
   const countBy = (s: Status) => items.filter((i) => i.status === s).length;
 
+  // Agar poora current stock bik jaye to kitna profit banega (selling - cost) * qty
+  const potentialProfit = useMemo(
+    () => items.reduce((sum, i) => sum + (i.price - i.cost_price) * i.quantity, 0),
+    [items]
+  );
+
   const STATS = [
     { id: "total", title: "Total Items", period: "All time", value: items.length, variant: "red", Icon: BoxIcon },
     { id: "in", title: "In Stock", period: "Right now", value: countBy("in"), variant: "green", Icon: CheckBoxIcon },
     { id: "low", title: "Low Stock", period: "Right now", value: countBy("low"), variant: "amber", Icon: AlertIcon },
     { id: "out", title: "Out of Stock", period: "Right now", value: countBy("out"), variant: "orange", Icon: BanIcon },
+    {
+      id: "profit",
+      title: "Potential Profit",
+      period: "If all stock sold",
+      value: money(potentialProfit),
+      variant: "purple",
+      Icon: TrendUpIcon,
+    },
   ] as const;
-
-  const handleView = (item: DrinkItem) => {
-    console.log("View item:", item);
-  };
 
   const openAddModal = () => {
     setForm(EMPTY_FORM);
@@ -315,8 +377,14 @@ export default function DrinksBeverages() {
   const handleAddDrink = async () => {
     setFormError(null);
 
-    if (!form.name.trim() || !form.unit.trim() || form.quantity === "" || form.price === "") {
-      setFormError("Name, Unit, Quantity aur Price zaroori hain.");
+    if (
+      !form.name.trim() ||
+      !form.unit.trim() ||
+      form.quantity === "" ||
+      form.price === "" ||
+      form.cost_price === ""
+    ) {
+      setFormError("Name, Unit, Quantity, Cost Price aur Selling Price zaroori hain.");
       return;
     }
 
@@ -335,6 +403,7 @@ export default function DrinksBeverages() {
           unit: form.unit.trim(),
           quantity: Number(form.quantity),
           low_stock_threshold: Number(form.low_stock_threshold || 5),
+          cost_price: Number(form.cost_price),
           price: Number(form.price),
         }),
       });
@@ -376,9 +445,142 @@ export default function DrinksBeverages() {
       setItems((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, quantity: drink.quantity, status: drink.status } : i))
       );
+      // Agar history modal isi item ki khuli hai to use bhi refresh kar do
+      if (historyOpen && historyItem?.id === item.id) {
+        handleView({ ...item, quantity: drink.quantity, status: drink.status });
+      }
     } catch (err) {
       console.error(err);
       alert("Kuch masla ho gaya, dobara try karein.");
+    }
+  };
+
+  const handleView = async (item: DrinkItem) => {
+    setHistoryItem(item);
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/drinks/${item.id}/history`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to load history");
+      const data: HistoryRow[] = await res.json();
+      setHistoryRows(data);
+    } catch (err) {
+      console.error(err);
+      setHistoryRows([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const closeHistory = () => {
+    setHistoryOpen(false);
+    setHistoryItem(null);
+    setHistoryRows([]);
+  };
+
+  const openRestockModal = (item: DrinkItem) => {
+    setRestockItem(item);
+    setRestockQty("");
+    setRestockCost(item.cost_price ? String(item.cost_price) : "");
+    setRestockError(null);
+    setShowRestockModal(true);
+  };
+
+  const closeRestockModal = () => {
+    if (restockSubmitting) return;
+    setShowRestockModal(false);
+    setRestockItem(null);
+  };
+
+  const handleRestock = async () => {
+    if (!restockItem) return;
+    if (!restockQty || Number(restockQty) <= 0) {
+      setRestockError("Sahi quantity dalein.");
+      return;
+    }
+
+    setRestockSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/drinks/${restockItem.id}/restock`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          quantity: Number(restockQty),
+          cost_price: restockCost === "" ? undefined : Number(restockCost),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setRestockError(data?.message ?? "Restock nahi ho saka.");
+        return;
+      }
+
+      setShowRestockModal(false);
+      fetchDrinks();
+    } catch (err) {
+      console.error(err);
+      setRestockError("Kuch masla ho gaya, dobara try karein.");
+    } finally {
+      setRestockSubmitting(false);
+    }
+  };
+
+  const openEditModal = (item: DrinkItem) => {
+    setEditItem(item);
+    setEditCostPrice(String(item.cost_price));
+    setEditPrice(String(item.price));
+    setEditError(null);
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    if (editSubmitting) return;
+    setShowEditModal(false);
+    setEditItem(null);
+  };
+
+  const handleUpdateDrink = async () => {
+    if (!editItem) return;
+    if (editCostPrice === "" || editPrice === "") {
+      setEditError("Cost Price aur Selling Price zaroori hain.");
+      return;
+    }
+
+    setEditSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/drinks/${editItem.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          cost_price: Number(editCostPrice),
+          price: Number(editPrice),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setEditError(data?.message ?? "Price update nahi ho saki.");
+        return;
+      }
+
+      setShowEditModal(false);
+      fetchDrinks();
+    } catch (err) {
+      console.error(err);
+      setEditError("Kuch masla ho gaya, dobara try karein.");
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -498,6 +700,8 @@ export default function DrinksBeverages() {
                 <th>Category</th>
                 <th>Unit</th>
                 <th className="center">Quantity</th>
+                <th className="center">Cost</th>
+                <th className="center">Price</th>
                 <th className="center">Status</th>
                 <th className="center">Actions</th>
               </tr>
@@ -505,19 +709,19 @@ export default function DrinksBeverages() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="drk-empty">
+                  <td colSpan={9} className="drk-empty">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="drk-empty">
+                  <td colSpan={9} className="drk-empty">
                     {error}
                   </td>
                 </tr>
               ) : pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="drk-empty">
+                  <td colSpan={9} className="drk-empty">
                     No drinks found. Try a different search or filter.
                   </td>
                 </tr>
@@ -527,13 +731,14 @@ export default function DrinksBeverages() {
                     <td className="muted">{startIndex + i + 1}</td>
                     <td>
                       <div className="drk-item">
-                        {/* Image / thumb hata diya gaya hai */}
                         <span className="item-name">{item.name}</span>
                       </div>
                     </td>
                     <td className="muted">{item.category}</td>
                     <td className="muted">{item.unit}</td>
                     <td className="center">{item.quantity}</td>
+                    <td className="center muted">{money(item.cost_price)}</td>
+                    <td className="center">{money(item.price)}</td>
                     <td className="center">
                       <span className={`drk-status ${item.status}`}>
                         {STATUS_LABEL[item.status]}
@@ -545,19 +750,39 @@ export default function DrinksBeverages() {
                           type="button"
                           className="drk-view-btn"
                           onClick={() => handleView(item)}
-                          aria-label={`View ${item.name}`}
+                          aria-label={`View ${item.name} history`}
                         >
                           <EyeIcon />
                         </button>
                         {canManageDrinks && (
+                          <>
+                            <button
+                              type="button"
+                              className="drk-view-btn"
+                              onClick={() => handleSell(item)}
+                              disabled={item.quantity <= 0}
+                              aria-label={`Sell ${item.name}`}
+                            >
+                              Sell
+                            </button>
+                            <button
+                              type="button"
+                              className="drk-view-btn"
+                              onClick={() => openRestockModal(item)}
+                              aria-label={`Restock ${item.name}`}
+                            >
+                              Restock
+                            </button>
+                          </>
+                        )}
+                        {canEditDrink && (
                           <button
                             type="button"
                             className="drk-view-btn"
-                            onClick={() => handleSell(item)}
-                            disabled={item.quantity <= 0}
-                            aria-label={`Sell ${item.name}`}
+                            onClick={() => openEditModal(item)}
+                            aria-label={`Edit ${item.name} price`}
                           >
-                            Sell
+                            <EditIcon />
                           </button>
                         )}
                       </div>
@@ -687,16 +912,29 @@ export default function DrinksBeverages() {
                 </div>
               </div>
 
-              <div className="drk-form-group">
-                <label>Price (per unit)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder="0.00"
-                  value={form.price}
-                  onChange={(e) => handleFormChange("price", e.target.value)}
-                />
+              <div className="drk-form-row">
+                <div className="drk-form-group">
+                  <label>Cost Price (khareed, per unit)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                    value={form.cost_price}
+                    onChange={(e) => handleFormChange("cost_price", e.target.value)}
+                  />
+                </div>
+                <div className="drk-form-group">
+                  <label>Selling Price (per unit)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                    value={form.price}
+                    onChange={(e) => handleFormChange("price", e.target.value)}
+                  />
+                </div>
               </div>
 
               {formError && <p className="drk-form-error">{formError}</p>}
@@ -709,6 +947,162 @@ export default function DrinksBeverages() {
               <button className="drk-btn-primary" onClick={handleAddDrink} disabled={submitting}>
                 {submitting ? "Adding..." : "Add Drink"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restock Modal */}
+      {showRestockModal && restockItem && (
+        <div className="drk-modal-overlay" onClick={closeRestockModal}>
+          <div className="drk-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="drk-modal-header">
+              <h2>Restock — {restockItem.name}</h2>
+              <button className="drk-modal-close" onClick={closeRestockModal} aria-label="Close">
+                <XIcon />
+              </button>
+            </div>
+
+            <div className="drk-modal-body">
+              <div className="drk-form-group">
+                <label>Quantity to Add</label>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="0"
+                  value={restockQty}
+                  onChange={(e) => setRestockQty(e.target.value)}
+                />
+              </div>
+              <div className="drk-form-group">
+                <label>New Cost Price (optional, agar badal gayi hai)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder={String(restockItem.cost_price)}
+                  value={restockCost}
+                  onChange={(e) => setRestockCost(e.target.value)}
+                />
+              </div>
+              {restockError && <p className="drk-form-error">{restockError}</p>}
+            </div>
+
+            <div className="drk-modal-footer">
+              <button className="drk-btn-secondary" onClick={closeRestockModal} disabled={restockSubmitting}>
+                Cancel
+              </button>
+              <button className="drk-btn-primary" onClick={handleRestock} disabled={restockSubmitting}>
+                {restockSubmitting ? "Adding..." : "Add Stock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Price Modal — sirf cost_price / price, stock quantity nahi chedta */}
+      {showEditModal && editItem && (
+        <div className="drk-modal-overlay" onClick={closeEditModal}>
+          <div className="drk-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="drk-modal-header">
+              <h2>Edit Price — {editItem.name}</h2>
+              <button className="drk-modal-close" onClick={closeEditModal} aria-label="Close">
+                <XIcon />
+              </button>
+            </div>
+
+            <div className="drk-modal-body">
+              <div className="drk-form-group">
+                <label>Cost Price (khareed, per unit)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="0.00"
+                  value={editCostPrice}
+                  onChange={(e) => setEditCostPrice(e.target.value)}
+                />
+              </div>
+              <div className="drk-form-group">
+                <label>Selling Price (per unit)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="0.00"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                />
+              </div>
+              {editError && <p className="drk-form-error">{editError}</p>}
+            </div>
+
+            <div className="drk-modal-footer">
+              <button className="drk-btn-secondary" onClick={closeEditModal} disabled={editSubmitting}>
+                Cancel
+              </button>
+              <button className="drk-btn-primary" onClick={handleUpdateDrink} disabled={editSubmitting}>
+                {editSubmitting ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {historyOpen && historyItem && (
+        <div className="drk-modal-overlay" onClick={closeHistory}>
+          <div className="drk-modal-card drk-history-card" onClick={(e) => e.stopPropagation()}>
+            <div className="drk-modal-header">
+              <h2>{historyItem.name} — History</h2>
+              <button className="drk-modal-close" onClick={closeHistory} aria-label="Close">
+                <XIcon />
+              </button>
+            </div>
+
+            <div className="drk-history-body">
+              {historyLoading ? (
+                <p className="drk-empty">Loading...</p>
+              ) : historyRows.length === 0 ? (
+                <p className="drk-empty">Abhi tak koi sell ya restock nahi hui.</p>
+              ) : (
+                <table className="drk-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th className="center">Qty</th>
+                      <th className="center">Amount</th>
+                      <th className="center">Profit</th>
+                      <th>By</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyRows.map((row, i) => (
+                      <tr key={i}>
+                        <td>
+                          <span className={`drk-history-tag ${row.type}`}>
+                            {row.type === "sale" ? "Sold" : "Restocked"}
+                          </span>
+                        </td>
+                        <td className="center">{row.quantity > 0 ? `+${row.quantity}` : row.quantity}</td>
+                        <td className="center">{row.amount !== null ? money(row.amount) : "—"}</td>
+                        <td className="center">
+                          {row.profit !== null ? (
+                            <span className={row.profit >= 0 ? "drk-profit-pos" : "drk-profit-neg"}>
+                              {money(row.profit)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="muted">{row.by ?? "—"}</td>
+                        <td className="muted">{new Date(row.created_at).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>

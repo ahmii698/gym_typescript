@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Users,
   CalendarCheck,
@@ -6,18 +6,15 @@ import {
   CalendarRange,
   Calendar,
   Search,
-  ChevronDown,
+ 
   ChevronLeft,
   ChevronRight,
-  ArrowUp,
 } from "lucide-react";
+import { API_URL } from "../../../config";
 import "./CheckIns.css";
 
 /* ---------------------------- Types ---------------------------- */
 
-type MembershipType = "Normal Client" | "Student";
-type Plan = "Monthly" | "Quarterly" | "Yearly";
-type PlanFilter = "All Plans" | Plan;
 type RangeKey = "today" | "week" | "month" | "custom";
 
 interface CheckInRecord {
@@ -26,9 +23,30 @@ interface CheckInRecord {
   phone: string;
   cnic: string;
   pkg: string;
-  checkedInAt: Date;
-  membershipType: MembershipType;
-  plan: Plan;
+  date: string; // "2026-09-24"
+  checkIn: string | null; // "09:45:00"
+}
+
+interface ApiCheckInsResponse {
+  data: {
+    id: number;
+    name: string;
+    phone: string;
+    cnic: string;
+    package: string;
+    date: string;
+    check_in: string | null;
+  }[];
+  total: number;
+  current_page: number;
+  last_page: number;
+}
+
+interface Stats {
+  today: number;
+  week: number;
+  month: number;
+  total: number;
 }
 
 /* ---------------------------- Helpers ---------------------------- */
@@ -43,14 +61,23 @@ const fmtTime = (d: Date) => {
   const h = d.getHours();
   return `${h % 12 || 12}:${pad(d.getMinutes())} ${h >= 12 ? "PM" : "AM"}`;
 };
-const fmtDateTime = (d: Date) => `${fmtDate(d)}, ${fmtTime(d)}`;
 const toInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const fromInput = (s: string) => {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 };
 
-// Builds the page number list, e.g. [1, 2, 3, "...", 13]
+// "2026-09-24" + "09:45:00" -> display string, no timezone surprises
+const fmtRecordDateTime = (dateStr: string, checkIn: string | null) => {
+  const d = fromInput(dateStr);
+  const dateLabel = fmtDate(d);
+  if (!checkIn) return dateLabel;
+  const [hh, mm] = checkIn.split(":").map(Number);
+  const h12 = hh % 12 || 12;
+  const ampm = hh >= 12 ? "PM" : "AM";
+  return `${dateLabel}, ${h12}:${pad(mm)} ${ampm}`;
+};
+
 const getPages = (total: number, current: number): (number | "...")[] => {
   if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
   if (current <= 3) return [1, 2, 3, "...", total];
@@ -58,95 +85,43 @@ const getPages = (total: number, current: number): (number | "...")[] => {
   return [1, "...", current, "...", total];
 };
 
-/* ----------------------------- Mock data -----------------------------
-   TODO: Jab backend ready ho to is section ko API call se replace kar dena
-   (CHECKINS ki jagah state + useEffect me fetch). Baqi UI same rahegi.
----------------------------------------------------------------------- */
+function getToken(): string | null {
+  return localStorage.getItem("token");
+}
 
-const at = (dayOffset: number, h: number, m: number) => {
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  d.setDate(d.getDate() - dayOffset);
-  return d;
-};
+async function apiFetchCheckIns(params: {
+  from: string;
+  to: string;
+  search: string;
+  page: number;
+}): Promise<ApiCheckInsResponse> {
+  const qs = new URLSearchParams({
+    from: params.from,
+    to: params.to,
+    page: String(params.page),
+  });
+  if (params.search.trim()) qs.set("search", params.search.trim());
 
-const seed = (
-  id: number,
-  name: string,
-  phone: string,
-  pkg: string,
-  membershipType: MembershipType,
-  plan: Plan,
-  off: number,
-  h: number,
-  m: number
-): CheckInRecord => ({
-  id,
-  name,
-  phone,
-  cnic: `35202-${String(1000000 + id * 104729).slice(0, 7)}-${id % 10}`,
-  pkg,
-  membershipType,
-  plan,
-  checkedInAt: at(off, h, m),
-});
+  const res = await fetch(`${API_URL}/attendance/checkins?${qs.toString()}`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+  });
+  if (!res.ok) throw new Error("Check-ins load nahi ho sakay.");
+  return res.json();
+}
 
-const NAMES = [
-  "Ahmed Khan", "Maryam Iqbal", "Hassan Raza", "Noor Fatima", "Talha Mehmood",
-  "Sana Javed", "Daniyal Sheikh", "Iqra Aslam", "Faizan Butt", "Laiba Nadeem",
-  "Rehan Siddiqui", "Areeba Zafar", "Waqas Hussain", "Mahnoor Ali", "Shahid Afridi",
-  "Komal Riaz", "Junaid Qureshi", "Zoya Anwar", "Adeel Chaudhry", "Hiba Tariq",
-];
-
-const PACKAGES: Array<[string, MembershipType, Plan]> = [
-  ["Monthly Basic", "Normal Client", "Monthly"],
-  ["Monthly Premium", "Normal Client", "Monthly"],
-  ["Quarterly", "Normal Client", "Quarterly"],
-  ["Monthly Student", "Student", "Monthly"],
-  ["Yearly Premium", "Normal Client", "Yearly"],
-];
-
-const buildMockData = (): CheckInRecord[] => {
-  const list: CheckInRecord[] = [
-    seed(1, "Ali Raza", "0300 1234567", "Monthly Basic", "Normal Client", "Monthly", 0, 9, 45),
-    seed(2, "Sara Khan", "0321 4567890", "Monthly Premium", "Normal Client", "Monthly", 0, 8, 32),
-    seed(3, "Usman Tariq", "0300 7890123", "Quarterly", "Normal Client", "Quarterly", 0, 6, 15),
-    seed(4, "Ayesha Malik", "0315 5678901", "Monthly Basic", "Normal Client", "Monthly", 1, 11, 20),
-    seed(5, "Hamza Ali", "0322 7788990", "Monthly Premium", "Normal Client", "Monthly", 1, 9, 10),
-    seed(6, "Bilal Ahmed", "0333 1122334", "Monthly Student", "Student", "Monthly", 1, 7, 55),
-    seed(7, "Fatima Noor", "0304 5566778", "Quarterly", "Normal Client", "Quarterly", 2, 18, 30),
-    seed(8, "Zain Abbas", "0311 9988776", "Monthly Basic", "Normal Client", "Monthly", 2, 17, 12),
-    seed(9, "Omar Farooq", "0324 6677889", "Monthly Premium", "Normal Client", "Monthly", 2, 15, 45),
-    seed(10, "Hina Shah", "0307 4455667", "Monthly Student", "Student", "Monthly", 2, 13, 22),
-  ];
-
-  for (let i = 10; i < 324; i++) {
-    const j = i - 10;
-    const [pkg, type, plan] = PACKAGES[i % PACKAGES.length];
-    list.push({
-      id: i + 1,
-      name: NAMES[i % NAMES.length],
-      phone: `03${pad(10 + ((i * 7) % 40))} ${1000000 + ((i * 7919) % 9000000)}`,
-      cnic: `35202-${1000000 + ((i * 104729) % 9000000)}-${i % 10}`,
-      pkg,
-      membershipType: type,
-      plan,
-      checkedInAt: at(2 + Math.floor(j / 9), 6 + ((j * 5) % 15), (j * 17) % 60),
-    });
-  }
-
-  return list.sort((a, b) => b.checkedInAt.getTime() - a.checkedInAt.getTime());
-};
-
-const CHECKINS: CheckInRecord[] = buildMockData();
-
-/* Stat cards (mock) — API se replace kar sakte ho */
-const STATS = [
-  { id: "today", title: "Today's Check-ins", period: "Today", value: "48", change: "+12%", vs: "vs. yesterday", variant: "red", icon: <CalendarCheck size={26} /> },
-  { id: "week", title: "Weekly Check-ins", period: "This Week", value: "236", change: "+18%", vs: "vs. last week", variant: "green", icon: <CalendarDays size={26} /> },
-  { id: "month", title: "Monthly Check-ins", period: "This Month", value: "912", change: "+22%", vs: "vs. last month", variant: "amber", icon: <CalendarRange size={26} /> },
-  { id: "total", title: "Total Check-ins", period: "All time", value: "5,482", change: "+17%", vs: "vs. last month", variant: "orange", icon: <Users size={26} /> },
-];
+async function apiFetchStats(): Promise<Stats> {
+  const res = await fetch(`${API_URL}/attendance/checkin-stats`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+  });
+  if (!res.ok) throw new Error("Stats load nahi ho sakay.");
+  return res.json();
+}
 
 const TABS: { key: RangeKey; label: string }[] = [
   { key: "today", label: "Today" },
@@ -155,8 +130,6 @@ const TABS: { key: RangeKey; label: string }[] = [
   { key: "custom", label: "Custom Date" },
 ];
 
-const PLAN_OPTIONS: PlanFilter[] = ["All Plans", "Monthly", "Quarterly", "Yearly"];
-const PAGE_SIZE = 10;
 const BOTTOM_GAP = 24;
 
 /* ----------------------------- Component ----------------------------- */
@@ -172,29 +145,32 @@ const CheckIns = () => {
   const [to, setTo] = useState(() => toInput(new Date()));
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [plan, setPlan] = useState<PlanFilter>("All Plans");
   const [page, setPage] = useState(1);
 
-  // Make the page its own scroll container regardless of the layout
+  const [records, setRecords] = useState<CheckInRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [stats, setStats] = useState<Stats | null>(null);
+
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
       const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
       setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
     };
-
     updateHeight();
     window.addEventListener("resize", updateHeight);
     return () => window.removeEventListener("resize", updateHeight);
   }, []);
 
-  /* Live clock */
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
 
-  /* Close date popover on outside click */
   useEffect(() => {
     if (!pickerOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -206,10 +182,52 @@ const CheckIns = () => {
     return () => document.removeEventListener("mousedown", onDown);
   }, [pickerOpen]);
 
-  /* Back to page 1 whenever a filter changes */
   useEffect(() => {
     setPage(1);
-  }, [from, to, query, plan]);
+  }, [from, to, query]);
+
+  // Fetch check-ins whenever filters/page change
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    apiFetchCheckIns({ from, to, search: query, page })
+      .then((res) => {
+        if (cancelled) return;
+        setRecords(
+          res.data.map((r) => ({
+            id: r.id,
+            name: r.name,
+            phone: r.phone,
+            cnic: r.cnic,
+            pkg: r.package,
+            date: r.date,
+            checkIn: r.check_in,
+          }))
+        );
+        setTotal(res.total);
+        setTotalPages(Math.max(1, res.last_page));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Check-ins load nahi ho sakay.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [from, to, query, page]);
+
+  // Fetch stat cards once
+  useEffect(() => {
+    apiFetchStats()
+      .then(setStats)
+      .catch(() => setStats(null));
+  }, []);
 
   const applyPreset = (key: RangeKey) => {
     setRange(key);
@@ -247,41 +265,19 @@ const CheckIns = () => {
     if (value < from) setFrom(value);
   };
 
-  const filtered = useMemo(() => {
-    const start = fromInput(from);
-    const end = fromInput(to);
-    end.setHours(23, 59, 59, 999);
-    const q = query.trim().toLowerCase();
-    const qDigits = q.replace(/[\s-]/g, "");
-
-    return CHECKINS.filter((r) => {
-      const t = r.checkedInAt.getTime();
-      if (t < start.getTime() || t > end.getTime()) return false;
-      if (plan !== "All Plans" && r.plan !== plan) return false;
-      if (!q) return true;
-      return (
-        r.name.toLowerCase().includes(q) ||
-        (qDigits.length > 0 &&
-          (r.phone.replace(/\s/g, "").includes(qDigits) || r.cnic.replace(/-/g, "").includes(qDigits)))
-      );
-    });
-  }, [from, to, query, plan]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const startIdx = (currentPage - 1) * PAGE_SIZE;
-  const rows = filtered.slice(startIdx, startIdx + PAGE_SIZE);
-  const showingFrom = filtered.length === 0 ? 0 : startIdx + 1;
-  const showingTo = startIdx + rows.length;
-
+  const showingFrom = total === 0 ? 0 : (page - 1) * 10 + 1;
+  const showingTo = (page - 1) * 10 + records.length;
   const rangeLabel = `${fmtDate(fromInput(from))} - ${fmtDate(fromInput(to))}`;
 
+  const STATS_CARDS = [
+    { id: "today", title: "Today's Check-ins", period: "Today", value: stats?.today ?? "-", variant: "red", icon: <CalendarCheck size={26} /> },
+    { id: "week", title: "Weekly Check-ins", period: "This Week", value: stats?.week ?? "-", variant: "green", icon: <CalendarDays size={26} /> },
+    { id: "month", title: "Monthly Check-ins", period: "This Month", value: stats?.month ?? "-", variant: "amber", icon: <CalendarRange size={26} /> },
+    { id: "total", title: "Total Check-ins", period: "All time", value: stats?.total ?? "-", variant: "orange", icon: <Users size={26} /> },
+  ];
+
   return (
-    <div
-      className="ci-page"
-      ref={pageRef}
-      style={pageHeight ? { height: pageHeight } : undefined}
-    >
+    <div className="ci-page" ref={pageRef} style={pageHeight ? { height: pageHeight } : undefined}>
       {/* Header */}
       <div className="ci-header">
         <div>
@@ -300,26 +296,26 @@ const CheckIns = () => {
 
       {/* Stat cards */}
       <div className="ci-stats">
-        {STATS.map((s) => (
+        {STATS_CARDS.map((s) => (
           <div key={s.id} className="ci-stat-card">
             <div className={`ci-stat-icon ${s.variant}`}>{s.icon}</div>
             <div className="ci-stat-info">
               <span className="ci-stat-title">{s.title}</span>
               <span className="ci-stat-period">{s.period}</span>
               <span className="ci-stat-value">{s.value}</span>
-              <span className="ci-stat-change good">
-                <ArrowUp size={16} strokeWidth={2.5} />
-                <strong>{s.change}</strong>
-              </span>
-              <span className="ci-stat-vs">{s.vs}</span>
             </div>
           </div>
         ))}
       </div>
 
+      {error && (
+        <div className="pkg-error-banner" role="alert" style={{ marginBottom: 14 }}>
+          {error}
+        </div>
+      )}
+
       {/* Table panel */}
       <div className="ci-panel">
-        {/* Toolbar */}
         <div className="ci-toolbar">
           <div className="ci-tabs">
             {TABS.map((t) => (
@@ -367,21 +363,6 @@ const CheckIns = () => {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
-
-            <div className="ci-select-wrap">
-              <select
-                className="ci-select"
-                value={plan}
-                onChange={(e) => setPlan(e.target.value as PlanFilter)}
-              >
-                {PLAN_OPTIONS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="ci-select-icon" />
-            </div>
           </div>
         </div>
 
@@ -395,35 +376,29 @@ const CheckIns = () => {
                 <th>Phone</th>
                 <th>Package</th>
                 <th>Check-in Time</th>
-                <th className="center">Membership Type</th>
-                <th className="center">Plan</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={7} className="ci-empty">
+                  <td colSpan={5} className="ci-empty">
+                    Loading...
+                  </td>
+                </tr>
+              ) : records.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="ci-empty">
                     No check-in records found.
                   </td>
                 </tr>
               ) : (
-                rows.map((r, i) => (
+                records.map((r, i) => (
                   <tr key={r.id}>
-                    <td className="muted">{startIdx + i + 1}</td>
+                    <td className="muted">{(page - 1) * 10 + i + 1}</td>
                     <td className="member-name">{r.name}</td>
                     <td>{r.phone}</td>
                     <td>{r.pkg}</td>
-                    <td>{fmtDateTime(r.checkedInAt)}</td>
-                    <td className="center">
-                      <span
-                        className={`ci-badge ${r.membershipType === "Student" ? "student" : "client"}`}
-                      >
-                        {r.membershipType}
-                      </span>
-                    </td>
-                    <td className="center">
-                      <span className="ci-badge plan">{r.plan}</span>
-                    </td>
+                    <td>{fmtRecordDateTime(r.date, r.checkIn)}</td>
                   </tr>
                 ))
               )}
@@ -434,21 +409,21 @@ const CheckIns = () => {
         {/* Footer / pagination */}
         <div className="ci-footer">
           <span className="ci-showing">
-            Showing {showingFrom} to {showingTo} of {filtered.length} results
+            Showing {showingFrom} to {showingTo} of {total} results
           </span>
 
           <div className="ci-pagination">
             <button
               type="button"
               className="ci-page-btn"
-              disabled={currentPage === 1}
-              onClick={() => setPage(currentPage - 1)}
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
               aria-label="Previous page"
             >
               <ChevronLeft size={14} />
             </button>
 
-            {getPages(totalPages, currentPage).map((p, i) =>
+            {getPages(totalPages, page).map((p, i) =>
               p === "..." ? (
                 <span key={`dots-${i}`} className="ci-page-btn dots">
                   ...
@@ -457,7 +432,7 @@ const CheckIns = () => {
                 <button
                   key={p}
                   type="button"
-                  className={`ci-page-btn ${p === currentPage ? "active" : ""}`}
+                  className={`ci-page-btn ${p === page ? "active" : ""}`}
                   onClick={() => setPage(p)}
                 >
                   {p}
@@ -468,8 +443,8 @@ const CheckIns = () => {
             <button
               type="button"
               className="ci-page-btn"
-              disabled={currentPage === totalPages}
-              onClick={() => setPage(currentPage + 1)}
+              disabled={page === totalPages}
+              onClick={() => setPage(page + 1)}
               aria-label="Next page"
             >
               <ChevronRight size={14} />

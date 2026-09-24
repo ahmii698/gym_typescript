@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, ChangeEvent, FormEvent } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../../../config";
 import "./add-member.css";
