@@ -70,8 +70,11 @@ const mapApiDrink = (d: ApiDrink): DrinkItem => {
   };
 };
 
-const CATEGORIES = [
-  "All Categories",
+const ALL_CATEGORIES = "All Categories";
+const NEW_CATEGORY = "__new__";
+
+// Default categories — nayi categories items se automatically add hongi
+const BASE_CATEGORIES = [
   "Energy Drink",
   "Sports Drink",
   "Soft Drink",
@@ -80,8 +83,6 @@ const CATEGORIES = [
   "Tea",
   "Protein Drink",
 ];
-
-const FORM_CATEGORIES = CATEGORIES.filter((c) => c !== "All Categories");
 
 const STATUS_LABEL: Record<Status, string> = {
   in: "In Stock",
@@ -217,7 +218,7 @@ interface DrinkFormState {
 
 const EMPTY_FORM: DrinkFormState = {
   name: "",
-  category: FORM_CATEGORIES[0],
+  category: BASE_CATEGORIES[0],
   unit: "",
   quantity: "",
   low_stock_threshold: "5",
@@ -237,7 +238,7 @@ export default function DrinksBeverages() {
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All Categories");
+  const [category, setCategory] = useState(ALL_CATEGORIES);
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -245,6 +246,7 @@ export default function DrinksBeverages() {
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState<DrinkFormState>(EMPTY_FORM);
+  const [customCategory, setCustomCategory] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -318,11 +320,23 @@ export default function DrinksBeverages() {
     setPage(1);
   }, [search, category, statusFilter]);
 
+  // Default + DB mein maujood saari categories (duplicates ke baghair)
+  const formCategories = useMemo(() => {
+    const list = [...BASE_CATEGORIES];
+    items.forEach((i) => {
+      const c = i.category?.trim();
+      if (c && !list.some((x) => x.toLowerCase() === c.toLowerCase())) list.push(c);
+    });
+    return list;
+  }, [items]);
+
+  const filterCategories = useMemo(() => [ALL_CATEGORIES, ...formCategories], [formCategories]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
       const matchName = !q || item.name.toLowerCase().includes(q);
-      const matchCat = category === "All Categories" || item.category === category;
+      const matchCat = category === ALL_CATEGORIES || item.category === category;
       const matchStatus = statusFilter === "all" || item.status === statusFilter;
       return matchName && matchCat && matchStatus;
     });
@@ -361,6 +375,7 @@ export default function DrinksBeverages() {
 
   const openAddModal = () => {
     setForm(EMPTY_FORM);
+    setCustomCategory("");
     setFormError(null);
     setShowAddModal(true);
   };
@@ -376,6 +391,19 @@ export default function DrinksBeverages() {
 
   const handleAddDrink = async () => {
     setFormError(null);
+
+    // Final category: ya dropdown wali, ya nayi likhi hui
+    let finalCategory = form.category;
+    if (form.category === NEW_CATEGORY) {
+      const typed = customCategory.trim();
+      if (!typed) {
+        setFormError("Nayi category ka naam likhein.");
+        return;
+      }
+      // Pehle se maujood ho to usi ka spelling/case use karo
+      finalCategory =
+        formCategories.find((c) => c.toLowerCase() === typed.toLowerCase()) ?? typed;
+    }
 
     if (
       !form.name.trim() ||
@@ -399,7 +427,7 @@ export default function DrinksBeverages() {
         },
         body: JSON.stringify({
           name: form.name.trim(),
-          category: form.category,
+          category: finalCategory,
           unit: form.unit.trim(),
           quantity: Number(form.quantity),
           low_stock_threshold: Number(form.low_stock_threshold || 5),
@@ -646,7 +674,7 @@ export default function DrinksBeverages() {
               onChange={(e) => setCategory(e.target.value)}
               aria-label="Filter by category"
             >
-              {CATEGORIES.map((c) => (
+              {filterCategories.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
@@ -871,11 +899,12 @@ export default function DrinksBeverages() {
                     value={form.category}
                     onChange={(e) => handleFormChange("category", e.target.value)}
                   >
-                    {FORM_CATEGORIES.map((c) => (
+                    {formCategories.map((c) => (
                       <option key={c} value={c}>
                         {c}
                       </option>
                     ))}
+                    <option value={NEW_CATEGORY}>+ Add new category...</option>
                   </select>
                 </div>
                 <div className="drk-form-group">
@@ -888,6 +917,19 @@ export default function DrinksBeverages() {
                   />
                 </div>
               </div>
+
+              {form.category === NEW_CATEGORY && (
+                <div className="drk-form-group">
+                  <label>New Category Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Protein Bar, Chocolate"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              )}
 
               <div className="drk-form-row">
                 <div className="drk-form-group">
