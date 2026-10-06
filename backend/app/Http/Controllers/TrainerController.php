@@ -16,12 +16,12 @@ class TrainerController extends Controller
         );
     }
 
-    // Front desk staff (users table, role = frontdesk) — sirf zaroori fields, password wagera nahi
+    // Front desk staff (users table, role = frontdesk)
     public function frontdesk()
     {
         $users = DB::table('users')
             ->where('role', 'frontdesk')
-            ->select('id', 'name', 'phone', 'email')
+            ->select('id', 'name', 'phone', 'email', 'base_salary')  // <-- base_salary add kiya
             ->orderBy('name')
             ->get();
 
@@ -78,6 +78,7 @@ class TrainerController extends Controller
             'role'              => ['nullable', 'string', 'max:255'],
             'status'            => ['nullable', Rule::in(['Active', 'On Leave', 'Inactive'])],
             'experience_years'  => ['nullable', 'integer', 'min:0', 'max:60'],
+            'base_salary'       => ['nullable', 'numeric', 'min:0'],  // <-- Yeh add kiya
             'photo_url'         => ['nullable', 'url', 'max:2048'],
         ]);
     }

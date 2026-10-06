@@ -87,12 +87,11 @@
 
 .mem-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
 
-/* All 4 cards share the same red box; only the icon color differs */
 .mem-stat-card {
   display: flex;
   align-items: flex-start;
@@ -155,7 +154,7 @@
 }
 
 .mem-stat-value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
@@ -454,11 +453,401 @@
   cursor: not-allowed;
 }
 
+/* =====================================================
+   SALARY ADD-ON STYLES (Black & Red theme)
+   ===================================================== */
+
+/* Salary cell in table */
+.mem-table .salary-cell {
+  color: #ef233c;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Remaining salary cell */
+.mem-table .remaining-cell {
+  color: #f59e0b;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.mem-table .remaining-cell.paid {
+  color: #22c55e;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+}
+
+/* Total cell (month-wise) */
+.mem-table .total-cell {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* Actions buttons */
+.mem-actions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.mem-action-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #262626;
+  border-radius: 8px;
+  background: #0f0f0f;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.mem-action-btn:hover {
+  border-color: #ef233c;
+  color: #ef233c;
+}
+
+.mem-action-btn.pay {
+  border-color: #1f1f1f;
+}
+
+.mem-action-btn.pay:hover {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+/* Refresh button */
+.mem-action-btn.refresh {
+  border-color: #1f1f1f;
+  color: #a1a1aa;
+}
+
+.mem-action-btn.refresh:hover:not(:disabled) {
+  background: rgba(239, 35, 60, 0.12);
+  border-color: #ef233c;
+  color: #ef233c;
+}
+
+.mem-action-btn.refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Spin animation while refreshing */
+.mem-action-btn.refresh.spinning svg {
+  animation: mem-spin 0.8s linear infinite;
+}
+
+@keyframes mem-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Total Record button */
+.mem-action-btn.total {
+  border-color: #1f1f1f;
+  color: #a1a1aa;
+}
+
+.mem-action-btn.total:hover {
+  background: rgba(239, 35, 60, 0.12);
+  border-color: #ef233c;
+  color: #ef233c;
+}
+
+/* =====================================================
+   MODAL STYLES (Edit / Pay / History / Total Record)
+   ===================================================== */
+
+.mem-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.mem-modal {
+  background: #0c0c0c;
+  border: 1px solid rgba(239, 35, 60, 0.35);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.mem-modal.mem-modal-wide {
+  max-width: 800px; /* Total Record modal ke liye thoda wide */
+}
+
+.mem-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.mem-modal-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.mem-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #262626;
+  border-radius: 8px;
+  background: #0f0f0f;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.mem-icon-btn:hover {
+  border-color: #ef233c;
+  color: #ef233c;
+}
+
+.mem-modal-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mem-modal-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(239, 35, 60, 0.12);
+  border: 1px solid rgba(239, 35, 60, 0.4);
+  color: #ff8a97;
+  font-size: 12.5px;
+}
+
+.mem-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mem-field label {
+  font-size: 12.5px;
+  color: #a1a1aa;
+}
+
+.mem-field input,
+.mem-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0f0f0f;
+  border: 1px solid #262626;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  color-scheme: dark;
+}
+
+.mem-field input:focus,
+.mem-field select:focus {
+  border-color: #ef233c;
+}
+
+.mem-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mem-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.mem-btn-ghost {
+  background: transparent;
+  border: 1px solid #262626;
+  color: #f2f2f2;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mem-btn-ghost:hover {
+  border-color: #ef233c;
+}
+
+.mem-btn-primary {
+  background: #ef233c;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
+  transition: background 0.2s ease;
+}
+
+.mem-btn-primary:hover {
+  background: #d91e34;
+}
+
+/* History table inside modal */
+.mem-history-wrap {
+  border: 1px solid #1a1a1a;
+  border-radius: 12px;
+  overflow: auto;
+  max-height: 400px;
+}
+
+.mem-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.mem-history-table th,
+.mem-history-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #1a1a1a;
+  white-space: nowrap;
+  color: #d4d4d8;
+}
+
+.mem-history-table th {
+  position: sticky;
+  top: 0;
+  background: #0f0f0f;
+  font-weight: 600;
+  color: #a1a1aa;
+  font-size: 12px;
+}
+
+.mem-history-table th.center,
+.mem-history-table td.center {
+  text-align: center;
+}
+
+.mem-history-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.mem-history-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* =====================================================
+   TOTAL RECORD MODAL — SUMMARY CARDS + TOTALS
+   ===================================================== */
+
+.mem-summary-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.mem-summary-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  background: #0f0f0f;
+}
+
+.mem-summary-label {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.mem-summary-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.mem-summary-value.paid {
+  color: #22c55e;
+}
+
+.mem-summary-value.pending {
+  color: #f59e0b;
+}
+
+.mem-summary-value.total {
+  color: #ef233c;
+}
+
+/* History title (used in Total Record modal) */
+.mem-history-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #a1a1aa;
+  margin: 8px 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* tfoot Grand Total */
+.mem-history-table tfoot td {
+  border-top: 2px solid #262626;
+  padding: 12px;
+  font-weight: 700;
+  background: #0f0f0f;
+}
+
+.mem-total-label {
+  color: #a1a1aa;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.mem-total-value {
+  color: #ef233c;
+  font-size: 15px;
+  font-weight: 700;
+}
+
 /* ---------------------------- Responsive ---------------------------- */
+
+@media (max-width: 1400px) {
+  .mem-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
 
 @media (max-width: 1280px) {
   .mem-stats {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mem-stat-value {
+    font-size: 24px;
   }
 }
 
@@ -470,6 +859,11 @@
   .mem-search {
     flex: 1;
     width: auto;
+  }
+
+  /* Total Record modal summary — 2 columns */
+  .mem-summary-row {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -498,4 +892,58 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .mem-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .mem-actions {
+    gap: 4px;
+  }
+
+  .mem-action-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Total Record modal summary — 1 column on mobile */
+  .mem-summary-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
+.mem-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.mem-filter-toggle {
+  display: flex;
+  gap: 6px;
+}
+.mem-filter-btn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mem-filter-btn.active {
+  background: #f31f3f;
+  border-color: #f31f3f;
+}
+.mem-filter-input {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  font-size: 13px;
+  color-scheme: dark;
 }

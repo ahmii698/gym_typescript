@@ -3,9 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   User,
-  KeyRound,
   LogOut,
-  Bell,
 } from "lucide-react";
 import "./header.css";
 
@@ -27,16 +25,6 @@ const Header = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleChangePassword = () => {
-    setDropdownOpen(false);
-    navigate("/admin/change-password");
-  };
-
-  const handleProfile = () => {
-    setDropdownOpen(false);
-    navigate("/admin/profile");
-  };
-
   const handleLogout = () => {
     setDropdownOpen(false);
     // TODO: replace with actual logout logic (clear auth token, redirect etc.)
@@ -51,11 +39,6 @@ const Header = () => {
       </div>
 
       <div className="admin-header-right">
-        <button className="admin-header-bell" type="button" aria-label="Notifications">
-          <Bell size={18} />
-          <span className="admin-header-bell-dot" />
-        </button>
-
         <div className="admin-header-profile" ref={dropdownRef}>
           <button
             className="admin-header-profile-btn"
@@ -77,23 +60,6 @@ const Header = () => {
 
           {dropdownOpen && (
             <div className="admin-header-dropdown">
-              <button
-                className="admin-header-dropdown-item"
-                type="button"
-                onClick={handleProfile}
-              >
-                <User size={16} />
-                <span>My Profile</span>
-              </button>
-              <button
-                className="admin-header-dropdown-item"
-                type="button"
-                onClick={handleChangePassword}
-              >
-                <KeyRound size={16} />
-                <span>Change Password</span>
-              </button>
-              <div className="admin-header-dropdown-divider" />
               <button
                 className="admin-header-dropdown-item danger"
                 type="button"

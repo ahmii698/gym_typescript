@@ -11,6 +11,9 @@ use App\Http\Controllers\PackageController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\FixedExpenseController;
+use App\Http\Controllers\ExtraExpenseController;
+use App\Http\Controllers\SalaryController;
 use Illuminate\Support\Facades\Route;
 
 // ---------- Public routes (bina login ke) ----------
@@ -85,6 +88,33 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/accessories/{accessory}/restock', [AccessoryController::class, 'restock']);
     Route::get('/accessories/{accessory}/history', [AccessoryController::class, 'history']);
 
+    // ---------- Fixed Expenses ----------
+    // NOTE: koi custom GET route (jaise /fixed-expenses/summary) ho to
+    // usay {fixed_expense} wale routes se PEHLE rakhna.
+    Route::get('/fixed-expenses', [FixedExpenseController::class, 'index']);
+    Route::post('/fixed-expenses', [FixedExpenseController::class, 'store']);
+    Route::put('/fixed-expenses/{id}', [FixedExpenseController::class, 'update']);
+    Route::delete('/fixed-expenses/{id}', [FixedExpenseController::class, 'destroy']);
+
+    // ---------- Extra Expenses ----------
+    Route::get('/extra-expenses', [ExtraExpenseController::class, 'index']);
+    Route::post('/extra-expenses', [ExtraExpenseController::class, 'store']);
+    Route::put('/extra-expenses/{id}', [ExtraExpenseController::class, 'update']);
+    Route::delete('/extra-expenses/{id}', [ExtraExpenseController::class, 'destroy']);
+
+    // ---------- Salary Payments ----------
+    // NOTE: /salary-summary, /staff-stats aur /salary-refresh ko /salary-payments/{id} se
+    // PEHLE rakhna zaroori hai, warna Laravel "summary" ya "refresh" ko
+    // {id} samajh kar match karega.
+    Route::get('/staff-stats', [SalaryController::class, 'staffStats']);   // <-- NAYA (date/month filter cards)
+    Route::get('/salary-summary', [SalaryController::class, 'summary']);
+    Route::post('/salary-base/update', [SalaryController::class, 'updateBaseSalary']);
+    Route::post('/salary-refresh', [SalaryController::class, 'refresh']);
+    Route::get('/salary-payments', [SalaryController::class, 'index']);
+    Route::post('/salary-payments', [SalaryController::class, 'store']);
+    Route::put('/salary-payments/{id}', [SalaryController::class, 'update']);
+    Route::delete('/salary-payments/{id}', [SalaryController::class, 'destroy']);
+
     // Sirf admin
     Route::middleware('role:admin')->group(function () {
         Route::post('/admin/register', [AuthController::class, 'registerAdmin']);
@@ -93,5 +123,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Drinks — edit/delete sirf admin karega
         Route::put('/drinks/{drink}', [DrinkController::class, 'update']);
         Route::delete('/drinks/{drink}', [DrinkController::class, 'destroy']);
+
+        // Agar chahein to Fixed / Extra Expense ki edit/delete bhi
+        // sirf admin tak mehdood kar sakte hain. Filhaal sab logged-in
+        // users (admin + frontdesk) use kar sakte hain.
     });
 });

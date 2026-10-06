@@ -18,11 +18,16 @@ import Members from "./admin/pages/Members";
 import CheckIns from "./admin/pages/CheckIns";
 import Memberships from "./admin/pages/Memberships";
 import Payments from "./admin/pages/Payments";
-import Expenses from "./admin/pages/Expenses";
 import AdminReports from "./admin/pages/Reports";
 import AdminSettings from "./admin/pages/Settings";
 import Accessories from "./admin/pages/accessories";
 import DrinksBeverages from "./admin/pages/drinks&beverages";
+
+// --- Expense Pages Import ---
+import ExpenseOverview from "./admin/pages/expense";
+import FixedExpense from "./admin/pages/FixedExpense";
+import ExtraExpense from "./admin/pages/ExtraExpense";
+
 import "./App.css";
 
 function App() {
@@ -55,9 +60,22 @@ function App() {
         <Route path="checkins" element={<CheckIns />} />
         <Route path="memberships" element={<Memberships />} />
         <Route path="payments" element={<Payments />} />
-        <Route path="expenses" element={<Expenses />} />
+
+        {/* --- Expense Routes --- */}
+        {/* Overview: sab kuch combined (Fixed + Extra + Profit/Loss) */}
+        <Route path="expense" element={<ExpenseOverview />} />
+
+        {/* Individual Pages */}
+        <Route path="finance/fixed" element={<FixedExpense />} />
+        <Route path="finance/extra" element={<ExtraExpense />} />
+
+        {/* Purane route ko naye overview par redirect kar dein */}
+        <Route path="expenses" element={<Navigate to="expense" replace />} />
+
+        {/* --- Inventory --- */}
         <Route path="inventory/accessories" element={<Accessories />} />
         <Route path="inventory/drinks" element={<DrinksBeverages />} />
+
         <Route path="reports" element={<AdminReports />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>

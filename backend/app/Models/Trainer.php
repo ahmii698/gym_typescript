@@ -16,6 +16,7 @@ class Trainer extends Model
         'role',
         'status',
         'experience_years',
+        'base_salary',      // <-- Yeh add kiya
         'photo_url',
         'is_active',
     ];
@@ -23,6 +24,7 @@ class Trainer extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'experience_years' => 'integer',
+        'base_salary' => 'float',  // <-- Yeh add kiya
     ];
 
     public function members(): HasMany
