@@ -11,6 +11,28 @@
 
 .fd-header-left {
   flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+/* Hamburger: desktop par hidden */
+.fd-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  background: #14171f;
+  border: 1px solid #1e2129;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.fd-menu-btn:hover {
+  border-color: #e53935;
+  color: #e53935;
 }
 
 .fd-header-right {
@@ -181,4 +203,35 @@
 .fd-dropdown-logout:hover {
   background-color: rgba(229, 57, 53, 0.15);
   color: #e53935;
+}
+
+/* ============================================ */
+/*  RESPONSIVE                                  */
+/* ============================================ */
+
+/* Tablet and below: hamburger dikhao */
+@media (max-width: 1024px) {
+  .fd-menu-btn {
+    display: flex;
+  }
+}
+
+/* Mobile: bell aur date/time hata do */
+@media (max-width: 640px) {
+  .fd-header {
+    padding: 12px 14px;
+  }
+
+  .fd-notification,
+  .fd-datetime {
+    display: none;
+  }
+
+  .fd-header-right {
+    gap: 0;
+  }
+
+  .fd-admin {
+    padding-left: 12px;
+  }
 }

@@ -1,6 +1,7 @@
 .members-page {
   /* Height is set precisely from JS; this is only the pre-measure fallback */
   height: calc(100vh - 130px);
+  height: calc(100dvh - 130px);
   overflow-x: hidden;
   overflow-y: auto;
   padding: 28px 24px;
@@ -11,6 +12,7 @@
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: #2a2a2a transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 .members-page::-webkit-scrollbar {
@@ -42,7 +44,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   margin-bottom: 24px;
 }
 
@@ -76,18 +79,20 @@
 .mem-date {
   font-size: 13px;
   color: #d4d4d8;
+  white-space: nowrap;
 }
 
 .mem-time {
   font-size: 13px;
   color: #a1a1aa;
+  white-space: nowrap;
 }
 
 /* ---------------------------- Stat cards ---------------------------- */
 
 .mem-stats {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -96,6 +101,7 @@
   display: flex;
   align-items: flex-start;
   gap: 18px;
+  min-width: 0;
   padding: 22px 20px;
   border: 1px solid rgba(239, 35, 60, 0.35);
   background: linear-gradient(135deg, rgba(239, 35, 60, 0.1), rgba(12, 12, 12, 0.9) 60%);
@@ -138,6 +144,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .mem-stat-title {
@@ -158,11 +165,14 @@
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ------------------------------- Panel ------------------------------- */
 
 .mem-panel {
+  min-width: 0;
   padding: 20px;
   background: rgba(12, 12, 12, 0.95);
   border: 1px solid #1f1f1f;
@@ -194,6 +204,7 @@
   border-radius: 10px;
   color: #d4d4d8;
   font-size: 13px;
+  white-space: nowrap;
   cursor: pointer;
   transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
 }
@@ -222,6 +233,7 @@
   align-items: center;
   gap: 10px;
   width: 340px;
+  max-width: 100%;
   height: 38px;
   padding: 0 14px;
   background: #0f0f0f;
@@ -285,8 +297,11 @@
 
 .mem-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #1a1a1a;
   border-radius: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
 }
 
 .mem-table {
@@ -374,6 +389,7 @@
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .mem-status.active {
@@ -413,6 +429,7 @@
 .mem-pagination {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -495,6 +512,7 @@
   place-items: center;
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
   border: 1px solid #262626;
   border-radius: 8px;
   background: #0f0f0f;
@@ -564,7 +582,7 @@
 .mem-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 1200;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(3px);
   display: flex;
@@ -580,7 +598,9 @@
   width: 100%;
   max-width: 460px;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 
@@ -592,15 +612,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 16px 18px;
   border-bottom: 1px solid #1f1f1f;
 }
 
 .mem-modal-head h2 {
   margin: 0;
+  min-width: 0;
   font-size: 16px;
   font-weight: 600;
   color: #fff;
+  overflow-wrap: anywhere;
 }
 
 .mem-icon-btn {
@@ -608,6 +631,7 @@
   place-items: center;
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
   border: 1px solid #262626;
   border-radius: 8px;
   background: #0f0f0f;
@@ -641,6 +665,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .mem-field label {
@@ -669,7 +694,7 @@
 
 .mem-form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -716,6 +741,7 @@
   border: 1px solid #1a1a1a;
   border-radius: 12px;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   max-height: 400px;
 }
 
@@ -762,7 +788,7 @@
 
 .mem-summary-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -771,6 +797,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
   padding: 12px 14px;
   border: 1px solid #262626;
   border-radius: 10px;
@@ -788,6 +815,7 @@
   font-size: 16px;
   font-weight: 700;
   color: #ffffff;
+  overflow-wrap: anywhere;
 }
 
 .mem-summary-value.paid {
@@ -833,17 +861,60 @@
   font-weight: 700;
 }
 
-/* ---------------------------- Responsive ---------------------------- */
+/* ------------------------- Date filter bar ------------------------- */
+
+.mem-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.mem-filter-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.mem-filter-btn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mem-filter-btn.active {
+  background: #f31f3f;
+  border-color: #f31f3f;
+}
+
+.mem-filter-input {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  font-size: 13px;
+  color-scheme: dark;
+}
+
+/* ============================================ */
+/*  RESPONSIVE                                  */
+/* ============================================ */
 
 @media (max-width: 1400px) {
   .mem-stats {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1280px) {
   .mem-stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .mem-stat-value {
@@ -851,6 +922,7 @@
   }
 }
 
+/* Tablet / sidebar becomes a drawer */
 @media (max-width: 900px) {
   .mem-toolbar-right {
     width: 100%;
@@ -861,40 +933,162 @@
     width: auto;
   }
 
-  /* Total Record modal summary — 2 columns */
+  /* Table keeps its width and swipes sideways instead of squeezing */
+  .mem-table-wrap .mem-table {
+    min-width: 900px;
+  }
+
+  /* Total Record modal summary: 2 columns */
   .mem-summary-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+/* Phone */
 @media (max-width: 640px) {
   .members-page {
-    padding: 20px 14px;
+    padding: 18px 12px;
   }
 
+  /* Header */
   .mem-header {
     flex-direction: column;
-  }
-
-  .mem-datetime-text {
-    align-items: flex-start;
-  }
-
-  .mem-stats {
-    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 18px;
   }
 
   .mem-title {
     font-size: 22px;
   }
 
+  .mem-subtitle {
+    font-size: 13px;
+  }
+
+  .mem-datetime {
+    flex-direction: row-reverse;
+  }
+
+  .mem-datetime-text {
+    align-items: flex-start;
+  }
+
+  /* Stat cards: 2 per row, icon on top */
+  .mem-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .mem-stat-card {
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .mem-stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .mem-stat-info {
+    width: 100%;
+    flex: none;
+  }
+
+  .mem-stat-title {
+    font-size: 13px;
+  }
+
+  .mem-stat-period {
+    margin: 2px 0 6px;
+    font-size: 10px;
+  }
+
+  .mem-stat-value {
+    font-size: 18px;
+  }
+
+  /* Panel / toolbar */
+  .mem-panel {
+    padding: 14px;
+  }
+
+  .mem-toolbar {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  /* Tabs: one swipeable line */
+  .mem-tabs {
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .mem-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mem-tab {
+    flex-shrink: 0;
+    padding: 0 16px;
+  }
+
   .mem-toolbar-right {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
 
-  .mem-form-row {
-    grid-template-columns: 1fr;
+  .mem-search {
+    width: 100%;
+  }
+
+  .mem-search input {
+    font-size: 16px; /* stops iOS zoom on focus */
+  }
+
+  .mem-select {
+    width: 100%;
+    font-size: 16px;
+  }
+
+  .mem-select-wrap {
+    width: 100%;
+  }
+
+  /* Date filter bar */
+  .mem-filter-bar {
+    gap: 8px;
+  }
+
+  .mem-filter-toggle {
+    width: 100%;
+  }
+
+  .mem-filter-btn {
+    flex: 1;
+    padding: 9px 10px;
+  }
+
+  .mem-filter-input {
+    flex: 1 1 100%;
+    width: 100%;
+    font-size: 16px;
+  }
+
+  /* Table */
+  .mem-table th {
+    padding: 12px;
+  }
+
+  .mem-table td {
+    padding: 12px;
   }
 
   .mem-actions {
@@ -902,48 +1096,83 @@
   }
 
   .mem-action-btn {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
   }
 
-  /* Total Record modal summary — 1 column on mobile */
+  /* Footer */
+  .mem-footer {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .mem-pagination {
+    justify-content: center;
+  }
+
+  /* Modals */
+  .mem-modal-overlay {
+    padding: 12px;
+  }
+
+  .mem-modal,
+  .mem-modal.mem-modal-wide {
+    max-height: 92vh;
+    max-height: 92dvh;
+  }
+
+  .mem-modal-head {
+    padding: 14px;
+  }
+
+  .mem-modal-body {
+    padding: 14px;
+  }
+
+  .mem-form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mem-field input,
+  .mem-field select {
+    font-size: 16px; /* stops iOS zoom on focus */
+  }
+
+  .mem-modal-foot {
+    flex-direction: column-reverse;
+  }
+
+  .mem-modal-foot .mem-btn-ghost,
+  .mem-modal-foot .mem-btn-primary {
+    width: 100%;
+    padding: 11px 16px;
+  }
+
+  /* Total Record modal summary: 1 column */
   .mem-summary-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .mem-history-wrap {
+    max-height: 320px;
   }
 }
 
+/* Very narrow phones: one stat card per row */
+@media (max-width: 380px) {
+  .mem-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
+  .mem-stat-card {
+    flex-direction: row;
+    align-items: center;
+  }
 
-.mem-filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.mem-filter-toggle {
-  display: flex;
-  gap: 6px;
-}
-.mem-filter-btn {
-  padding: 9px 16px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: #fff;
-  font-size: 13px;
-  cursor: pointer;
-}
-.mem-filter-btn.active {
-  background: #f31f3f;
-  border-color: #f31f3f;
-}
-.mem-filter-input {
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: #fff;
-  font-size: 13px;
-  color-scheme: dark;
+  .mem-stat-info {
+    flex: 1;
+  }
 }

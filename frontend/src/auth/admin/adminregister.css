@@ -1,9 +1,26 @@
 .admin-register-wrapper {
-  position: relative;
-  min-height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
+  align-items: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background: #000000;
   color-scheme: dark;
+  z-index: 50;
+}
+
+.admin-register-wrapper *,
+.admin-register-wrapper *::before,
+.admin-register-wrapper *::after {
+  box-sizing: border-box;
 }
 
 /* Back button (top-left of the whole page) */
@@ -49,6 +66,8 @@
 
 .admin-register-banner {
   flex: 1;
+  height: 100vh;
+  height: 100dvh;
   background-size: cover;
   background-position: center;
   display: none;
@@ -56,6 +75,9 @@
 
 .admin-register-formside {
   flex: 1;
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -82,6 +104,7 @@
 .admin-register-logo img {
   height: 48px;
   width: auto;
+  max-width: 100%;
   object-fit: contain;
 }
 
@@ -160,6 +183,7 @@
 
 .admin-input-box input {
   flex: 1;
+  min-width: 0;
   height: 100%;
   background: transparent;
   border: none;
@@ -200,6 +224,8 @@
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   padding: 0;
 }
 
@@ -212,6 +238,7 @@
   margin-top: 6px;
   font-size: 12px;
   color: #ef233c;
+  overflow-wrap: anywhere;
 }
 
 .admin-register-btn {
@@ -261,8 +288,100 @@
   text-decoration: underline;
 }
 
+/* ============================================ */
+/*  RESPONSIVE                                  */
+/* ============================================ */
+
+/* Desktop: banner on the left */
 @media (min-width: 900px) {
   .admin-register-banner {
     display: block;
+  }
+}
+
+/* Tablet and below: banner hidden, leave room for the Back button */
+@media (max-width: 899px) {
+  .admin-register-formside {
+    align-items: flex-start;
+    padding: 76px 16px 40px;
+  }
+
+  .admin-back-btn {
+    top: 16px;
+    left: 16px;
+  }
+}
+
+/* Phone */
+@media (max-width: 640px) {
+  .admin-back-btn {
+    top: 12px;
+    left: 12px;
+    height: 40px;
+  }
+
+  .admin-register-formside {
+    padding: 68px 12px 120px; /* neeche extra jagah taake Register button nav bar ke peeche na chhupe */
+  }
+
+  .admin-register-card {
+    padding: 24px 18px;
+    border-radius: 14px;
+  }
+
+  .admin-register-logo {
+    margin-bottom: 16px;
+  }
+
+  .admin-register-logo img {
+    height: 42px;
+  }
+
+  .admin-register-icon {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 12px;
+  }
+
+  .admin-register-title {
+    font-size: 22px;
+  }
+
+  .admin-register-subtitle {
+    margin-bottom: 22px;
+    font-size: 13px;
+  }
+
+  .admin-form-group {
+    margin-bottom: 16px;
+  }
+
+  .admin-input-box {
+    height: 48px;
+  }
+
+  .admin-input-box input {
+    font-size: 16px; /* stops iOS zoom on focus */
+  }
+
+  .toggle-visibility {
+    width: 36px;
+    height: 36px;
+    margin-right: -8px;
+  }
+
+  .admin-register-btn {
+    height: 50px;
+  }
+}
+
+/* Very narrow phones */
+@media (max-width: 360px) {
+  .admin-register-card {
+    padding: 20px 14px;
+  }
+
+  .admin-register-title {
+    font-size: 20px;
   }
 }

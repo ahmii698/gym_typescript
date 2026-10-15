@@ -23,6 +23,7 @@ interface FormState {
   notes: string;
   feeAmount: string;
   paymentStatus: string;
+  installmentMonths: string;
 }
 
 interface PackageItem {
@@ -65,6 +66,7 @@ const initialState: FormState = {
   notes: "",
   feeAmount: "0",
   paymentStatus: "",
+  installmentMonths: "1",
 };
 
 const memberTypeOptions: { value: MemberType; title: string; desc: string }[] = [
@@ -74,7 +76,6 @@ const memberTypeOptions: { value: MemberType; title: string; desc: string }[] = 
   { value: "package-only", title: "Package Only", desc: "With Package (No Trainer)" },
 ];
 
-// Frontend value -> Laravel value
 const memberTypeToApi: Record<MemberType, string> = {
   normal: "normal_user",
   "normal-trainer": "normal_trainer",
@@ -82,7 +83,6 @@ const memberTypeToApi: Record<MemberType, string> = {
   "package-only": "package_only",
 };
 
-// Laravel field name -> form field name (errors ke liye)
 const apiFieldToForm: Record<string, keyof FormState> = {
   full_name: "fullName",
   cnic: "cnic",
@@ -100,6 +100,7 @@ const apiFieldToForm: Record<string, keyof FormState> = {
   trainer_id: "trainer",
   fee_amount: "feeAmount",
   payment_status: "paymentStatus",
+  installment_months: "installmentMonths",
 };
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
@@ -117,6 +118,19 @@ const formatCnic = (value: string): string => {
   if (digits.length <= 5) return digits;
   if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
   return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+};
+
+const formatPrice = (n: number | string): string => {
+  const num = Number(n);
+  if (isNaN(num)) return "Rs 0";
+  return `Rs ${num.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
+};
+
+// yyyy-mm-dd + N days => yyyy-mm-dd (timezone safe)
+const addDays = (dateStr: string, days: number): string => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
 };
 
 const firstError = (json: any): string => {
@@ -161,6 +175,14 @@ function AddMember() {
     };
     load();
   }, []);
+
+  // Package + Start Date select hote hi End Date automatic set ho jaye
+  useEffect(() => {
+    const pkg = packages.find((p) => String(p.id) === form.package);
+    if (!pkg || !form.startDate || !pkg.duration_days) return;
+    const end = addDays(form.startDate, Number(pkg.duration_days));
+    setForm((prev) => (prev.endDate === end ? prev : { ...prev, endDate: end }));
+  }, [form.package, form.startDate, packages]);
 
   const showAlert = (type: "error" | "success", text: string) => {
     setAlert({ type, text });
@@ -217,11 +239,15 @@ function AddMember() {
     e.preventDefault();
     setAlert(null);
 
-    // Client-side checks
+    // Client-side checks (CNIC images ab optional hain)
     const clientErrors: FormErrors = {};
-    if (!form.cnicFront) clientErrors.cnicFront = "CNIC front image zaroori hai.";
-    if (!form.cnicBack) clientErrors.cnicBack = "CNIC back image zaroori hai.";
     if (needsTrainer && !form.trainer) clientErrors.trainer = "Is member type ke liye trainer select karo.";
+    if (!form.installmentMonths || Number(form.installmentMonths) < 1) {
+      clientErrors.installmentMonths = "Installment months likhna zaroori hai (kam az kam 1).";
+    }
+    if (Number(form.installmentMonths) > 60) {
+      clientErrors.installmentMonths = "Installment months 60 se zyada nahi ho sakte.";
+    }
 
     if (Object.keys(clientErrors).length > 0) {
       setErrors(clientErrors);
@@ -232,8 +258,8 @@ function AddMember() {
     const fd = new FormData();
     fd.append("full_name", form.fullName.trim());
     fd.append("cnic", form.cnic);
-    fd.append("cnic_front", form.cnicFront as File);
-    fd.append("cnic_back", form.cnicBack as File);
+    if (form.cnicFront) fd.append("cnic_front", form.cnicFront);
+    if (form.cnicBack) fd.append("cnic_back", form.cnicBack);
     fd.append("contact_number", form.contactNumber.trim());
     if (form.email.trim()) fd.append("email", form.email.trim());
     if (form.dob) fd.append("date_of_birth", form.dob);
@@ -246,12 +272,13 @@ function AddMember() {
     if (needsTrainer && form.trainer) fd.append("trainer_id", form.trainer);
     fd.append("fee_amount", form.feeAmount || "0");
     if (form.paymentStatus) fd.append("payment_status", form.paymentStatus);
+    fd.append("installment_months", form.installmentMonths || "1");
 
     setSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/members`, {
         method: "POST",
-        headers: authHeaders(), // Content-Type mat lagana, browser khud boundary set karta hai
+        headers: authHeaders(),
         body: fd,
       });
       const json = await res.json().catch(() => ({}));
@@ -287,6 +314,14 @@ function AddMember() {
       setSubmitting(false);
     }
   };
+
+  // Per month fee preview
+  const perMonthFee = (() => {
+    const total = Number(form.feeAmount) || 0;
+    const months = Number(form.installmentMonths) || 1;
+    if (total <= 0 || months <= 0) return 0;
+    return Math.floor(total / months);
+  })();
 
   return (
     <div className="am-page">
@@ -343,10 +378,10 @@ function AddMember() {
             </div>
 
             <div className="am-row">
-              <Field label="CNIC Front Image" required error={errors.cnicFront}>
+              <Field label="CNIC Front Image" optional error={errors.cnicFront}>
                 <UploadBox key={`front-${formKey}`} file={form.cnicFront} onChange={handleFile("cnicFront")} />
               </Field>
-              <Field label="CNIC Back Image" required error={errors.cnicBack}>
+              <Field label="CNIC Back Image" optional error={errors.cnicBack}>
                 <UploadBox key={`back-${formKey}`} file={form.cnicBack} onChange={handleFile("cnicBack")} />
               </Field>
             </div>
@@ -526,6 +561,32 @@ function AddMember() {
                   <option value="partial">Partial</option>
                 </select>
               </Field>
+            </div>
+
+            {/* Installment Months — TYPE karein */}
+            <div className="am-row">
+              <Field label="Installment Months" required error={errors.installmentMonths}>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  placeholder="e.g. 12"
+                  value={form.installmentMonths}
+                  onChange={handleInput("installmentMonths")}
+                />
+              </Field>
+
+              {Number(form.feeAmount) > 0 && Number(form.installmentMonths) > 0 && (
+                <Field label="Per Month Fee">
+                  <div className="am-preview-fee">
+                    {formatPrice(perMonthFee)}
+                    <span className="am-preview-note">
+                      for {form.installmentMonths} month
+                      {Number(form.installmentMonths) > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                </Field>
+              )}
             </div>
 
             <div className="am-actions">

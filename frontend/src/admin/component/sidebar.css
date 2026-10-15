@@ -179,3 +179,100 @@
   margin-top: 8px;
   border-radius: 2px;
 }
+
+/* ------------------- Mobile toggle / close / backdrop ------------------- */
+
+/* Hidden on desktop */
+.sidebar-toggle,
+.sidebar-close,
+.sidebar-backdrop {
+  display: none;
+}
+
+/* ----------------------- Mobile drawer (<= 900px) ----------------------- */
+
+@media (max-width: 900px) {
+  .sidebar-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1100;
+    height: 100vh;
+    height: 100dvh;
+    width: 260px;
+    min-width: 260px;
+    max-width: 85vw;
+    transform: translateX(-100%);
+    transition: transform 0.28s ease;
+    box-shadow: none;
+  }
+
+  .sidebar-wrapper.open {
+    transform: translateX(0);
+    box-shadow: 8px 0 30px rgba(0, 0, 0, 0.6);
+  }
+
+  .sidebar-toggle {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 1000;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    background: #16161a;
+    border: 1px solid #2a2a32;
+    border-radius: 10px;
+    color: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .sidebar-toggle:hover,
+  .sidebar-toggle:active {
+    border-color: #ef233c;
+    color: #ef233c;
+  }
+
+  .sidebar-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    background: #16161a;
+    border: 1px solid #2a2a32;
+    border-radius: 8px;
+    color: #d3d9e6;
+    cursor: pointer;
+  }
+
+  .sidebar-close:hover {
+    border-color: #ef233c;
+    color: #ef233c;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    background: rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+  }
+
+  .sidebar-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

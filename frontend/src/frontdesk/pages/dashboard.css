@@ -86,6 +86,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .db-stat-title {
@@ -143,6 +144,7 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .db-icon-red { background-color: #ef233c; color: #fff; }
@@ -459,8 +461,16 @@
   gap: 16px;
 }
 
+/* Tables horizontal scroll ke liye wrapper */
+.db-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .db-table {
   width: 100%;
+  min-width: 440px;
   border-collapse: collapse;
 }
 
@@ -471,6 +481,7 @@
   font-weight: 500;
   padding: 8px 6px;
   border-bottom: 1px solid #1f1f1f;
+  white-space: nowrap;
 }
 
 .db-table tbody td {
@@ -478,6 +489,7 @@
   color: #d1d4dc;
   padding: 10px 6px;
   border-bottom: 1px solid #1a1a1a;
+  white-space: nowrap;
 }
 
 .db-table tbody tr:hover td {
@@ -597,5 +609,173 @@
 @media (prefers-reduced-motion: reduce) {
   .db-dashboard * {
     transition: none !important;
+  }
+}
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+
+/* Grid children overflow na karein */
+.db-middle-row > *,
+.db-bottom-row > *,
+.db-stats-row > * {
+  min-width: 0;
+}
+
+/* ---------- Laptop / small desktop ---------- */
+@media (max-width: 1200px) {
+  .db-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .db-bottom-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .db-summary-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- Tablet ---------- */
+@media (max-width: 1024px) {
+  /* JS wali fixed height hatao, page natural scroll kare */
+  .db-dashboard {
+    height: auto !important;
+    min-height: 100vh;
+    overflow-y: visible;
+  }
+
+  .db-middle-row {
+    grid-template-columns: 1fr;
+  }
+
+  .db-bottom-row {
+    grid-template-columns: 1fr;
+  }
+
+  .db-summary-panel {
+    grid-column: auto;
+  }
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 640px) {
+  .db-dashboard {
+    padding: 12px;
+    gap: 14px;
+  }
+
+  .db-stats-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .db-stat-card {
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .db-stat-icon-wrap {
+    width: 38px;
+    height: 38px;
+  }
+
+  .db-stat-value {
+    font-size: 18px;
+    word-break: break-word;
+  }
+
+  .db-stat-title {
+    font-size: 12px;
+  }
+
+  .db-stat-trend {
+    font-size: 11px;
+  }
+
+  .db-panel {
+    padding: 14px;
+  }
+
+  .db-panel-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .db-panel-header h3 {
+    font-size: 14px;
+  }
+
+  /* Bar chart */
+  .db-bar-chart-wrap {
+    height: 220px;
+    gap: 8px;
+    padding-right: 0;
+  }
+
+  .db-bar-chart {
+    gap: 4px;
+  }
+
+  .db-bar {
+    width: 12px;
+  }
+
+  .db-bar-pair {
+    gap: 2px;
+  }
+
+  .db-bar-value {
+    font-size: 9px;
+    top: -14px;
+  }
+
+  .db-bar-label {
+    font-size: 10px;
+  }
+
+  /* Donut */
+  .db-donut-chart {
+    width: 140px;
+    height: 140px;
+  }
+
+  .db-donut-chart::before {
+    width: 94px;
+    height: 94px;
+  }
+
+  .db-donut-value {
+    font-size: 20px;
+  }
+
+  /* Summary */
+  .db-summary-total {
+    font-size: 22px;
+  }
+
+  .db-summary-row {
+    gap: 8px;
+    font-size: 12px;
+  }
+}
+
+/* ---------- Chhote phones ---------- */
+@media (max-width: 400px) {
+  .db-stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .db-stat-card {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  /* Itni choti screen pe bars ke upar numbers overlap hote hain */
+  .db-bar-value {
+    display: none;
   }
 }

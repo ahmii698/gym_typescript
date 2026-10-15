@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   Users,
   UserCheck,
-  UserX,
   Dumbbell,
   Calendar,
   Search,

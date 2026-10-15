@@ -1,6 +1,7 @@
 .ms-page {
   /* Height is set precisely from JS; this is only the pre-measure fallback */
   height: calc(100vh - 130px);
+  height: calc(100dvh - 130px);
   overflow-x: hidden;
   overflow-y: auto;
   padding: 28px 24px;
@@ -11,6 +12,7 @@
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: #2a2a2a transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ms-page::-webkit-scrollbar {
@@ -42,7 +44,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   margin-bottom: 24px;
 }
 
@@ -76,32 +79,34 @@
 .ms-date {
   font-size: 13px;
   color: #d4d4d8;
+  white-space: nowrap;
 }
 
 .ms-time {
   font-size: 13px;
   color: #a1a1aa;
+  white-space: nowrap;
 }
 
 /* ---------------------------- Stat cards ---------------------------- */
 
 .ms-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 
-/* All 4 cards share the same red box; only the icon color differs */
 .ms-stat-card {
   display: flex;
   align-items: flex-start;
-  gap: 18px;
-  padding: 22px 20px;
+  gap: 14px;
+  padding: 18px 16px;
   border: 1px solid rgba(239, 35, 60, 0.35);
   background: linear-gradient(135deg, rgba(239, 35, 60, 0.1), rgba(12, 12, 12, 0.9) 60%);
   border-radius: 14px;
   transition: transform 0.2s ease;
+  min-width: 0;
 }
 
 .ms-stat-card:hover {
@@ -109,13 +114,14 @@
 }
 
 .ms-stat-icon {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
+  font-size: 22px;
 }
 
 .ms-stat-icon.red {
@@ -139,31 +145,35 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .ms-stat-title {
-  font-size: 14px;
+  font-size: 13px;
   color: #d4d4d8;
 }
 
 .ms-stat-period {
-  margin: 2px 0 8px;
-  font-size: 11px;
+  margin: 2px 0 6px;
+  font-size: 10.5px;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   color: #71717a;
 }
 
 .ms-stat-value {
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ------------------------------- Panel ------------------------------- */
 
 .ms-panel {
+  min-width: 0;
   padding: 20px;
   background: rgba(12, 12, 12, 0.95);
   border: 1px solid #1f1f1f;
@@ -195,6 +205,7 @@
   border-radius: 10px;
   color: #d4d4d8;
   font-size: 13px;
+  white-space: nowrap;
   cursor: pointer;
   transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
 }
@@ -225,6 +236,7 @@
   align-items: center;
   gap: 10px;
   width: 300px;
+  max-width: 100%;
   height: 38px;
   padding: 0 14px;
   background: #0f0f0f;
@@ -232,6 +244,10 @@
   border-radius: 10px;
   color: #a1a1aa;
   transition: border-color 0.2s ease;
+}
+
+.ms-search svg {
+  flex-shrink: 0;
 }
 
 .ms-search:focus-within {
@@ -302,6 +318,7 @@
 
 .ms-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #1a1a1a;
   border-radius: 12px;
   color-scheme: dark;
@@ -325,6 +342,7 @@
 
 .ms-table {
   width: 100%;
+  min-width: 1180px;
   border-collapse: collapse;
   font-size: 12.5px;
 }
@@ -400,7 +418,7 @@
   box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
 }
 
-/* Badges (same pill style as Members status) */
+/* Badges */
 
 .ms-badge,
 .ms-pay {
@@ -473,6 +491,7 @@
 .ms-add-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   height: 38px;
   padding: 0 20px;
@@ -484,6 +503,7 @@
   border: 1px solid #ef233c;
   border-radius: 10px;
   cursor: pointer;
+  white-space: nowrap;
   box-shadow: 0 0 14px rgba(239, 35, 60, 0.35);
   transition: filter 0.2s ease;
 }
@@ -511,6 +531,7 @@
 .ms-pagination {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -556,7 +577,7 @@
 .ms-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 1200;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -569,7 +590,9 @@
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 22px 24px;
   color: #ffffff;
   background: #0c0c0c;
@@ -584,6 +607,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 18px;
 }
 
@@ -596,6 +620,7 @@
 .ms-modal-close {
   width: 34px;
   height: 34px;
+  flex-shrink: 0;
   display: inline-grid;
   place-items: center;
   color: #ffffff;
@@ -620,26 +645,33 @@
   border-bottom: 1px solid #1f1f1f;
 }
 
+.ms-modal-profile > div:first-child {
+  min-width: 0;
+}
+
 .ms-modal-profile h3 {
   margin: 0 0 2px;
   font-size: 15px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .ms-modal-profile p {
   margin: 0;
   font-size: 13px;
   color: #d4d4d8;
+  overflow-wrap: anywhere;
 }
 
 .ms-modal-badges {
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
 }
 
 .ms-modal-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 24px;
   padding-bottom: 16px;
   margin-bottom: 16px;
@@ -671,7 +703,7 @@
 
 .ms-cnic-images {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 24px;
   padding-bottom: 18px;
   margin-bottom: 16px;
@@ -729,14 +761,179 @@
   border-color: #ef233c;
 }
 
-/* ---------------------------- Responsive ---------------------------- */
+/* =====================================================
+   MONTHLY FEE BREAKDOWN (Member Details modal)
+   ===================================================== */
 
-@media (max-width: 1280px) {
+.ms-monthly-breakdown {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #1f1f1f;
+}
+
+.ms-breakdown-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ms-breakdown-sub {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #a1a1aa;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.ms-breakdown-table-wrap {
+  max-height: 300px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #1a1a1a;
+  border-radius: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.ms-breakdown-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ms-breakdown-table th,
+.ms-breakdown-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #1a1a1a;
+  color: #d4d4d8;
+  white-space: nowrap;
+}
+
+.ms-breakdown-table th {
+  position: sticky;
+  top: 0;
+  background: #0f0f0f;
+  font-weight: 600;
+  color: #a1a1aa;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.ms-breakdown-table th.center,
+.ms-breakdown-table td.center {
+  text-align: center;
+}
+
+.ms-breakdown-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ms-breakdown-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.ms-breakdown-table .member-name {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.ms-breakdown-table .salary-cell {
+  color: #ef233c;
+  font-weight: 600;
+}
+
+.ms-breakdown-table .muted {
+  color: #8a8a93;
+}
+
+.ms-breakdown-table tfoot td {
+  border-top: 2px solid #262626;
+  padding: 12px;
+  font-weight: 700;
+  background: #0f0f0f;
+}
+
+.ms-total-label {
+  color: #a1a1aa;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.ms-total-value {
+  color: #ef233c;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* =====================================================
+   MONTHLY FEE TOGGLE BUTTON (Mark Paid / Unmark)
+   ===================================================== */
+
+.ms-toggle-fee-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid #262626;
+  background: #0f0f0f;
+  color: #d4d4d8;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ms-toggle-fee-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ms-toggle-fee-btn.pending {
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+.ms-toggle-fee-btn.pending:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.ms-toggle-fee-btn.paid {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.ms-toggle-fee-btn.paid:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.ms-toggle-fee-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================ */
+/*  RESPONSIVE                                  */
+/* ============================================ */
+
+@media (max-width: 1500px) {
   .ms-stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
+@media (max-width: 1100px) {
+  .ms-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Tablet / sidebar becomes a drawer */
 @media (max-width: 900px) {
   .ms-toolbar-right {
     width: 100%;
@@ -748,43 +945,195 @@
   }
 }
 
+/* Phone */
 @media (max-width: 640px) {
   .ms-page {
-    padding: 20px 14px;
+    padding: 18px 12px;
   }
 
+  /* Header */
   .ms-header {
     flex-direction: column;
-  }
-
-  .ms-datetime-text {
-    align-items: flex-start;
-  }
-
-  .ms-stats {
-    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 18px;
   }
 
   .ms-title {
     font-size: 22px;
   }
 
+  .ms-subtitle {
+    font-size: 13px;
+  }
+
+  .ms-datetime {
+    flex-direction: row-reverse;
+  }
+
+  .ms-datetime-text {
+    align-items: flex-start;
+  }
+
+  /* Stat cards: 2 per row, icon on top */
+  .ms-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .ms-stat-card {
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .ms-stat-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ms-stat-info {
+    width: 100%;
+    flex: none;
+  }
+
+  .ms-stat-period {
+    margin: 2px 0 6px;
+    font-size: 10px;
+  }
+
+  .ms-stat-value {
+    font-size: 17px;
+  }
+
+  /* Panel / toolbar */
+  .ms-panel {
+    padding: 14px;
+  }
+
+  .ms-toolbar {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  /* Tabs: one swipeable line */
+  .ms-tabs {
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .ms-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ms-tab {
+    flex-shrink: 0;
+    padding: 0 16px;
+  }
+
   .ms-toolbar-right {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
 
-  .ms-select,
+  .ms-search {
+    width: 100%;
+  }
+
+  .ms-search input {
+    font-size: 16px; /* stops iOS zoom on focus */
+  }
+
+  .ms-select-wrap {
+    width: 100%;
+  }
+
+  .ms-select {
+    width: 100%;
+    font-size: 16px;
+  }
+
   .ms-add-btn {
     width: 100%;
   }
 
-  .ms-add-btn {
+  /* Table */
+  .ms-table th {
+    padding: 12px 10px;
+  }
+
+  .ms-table td {
+    padding: 12px 10px;
+  }
+
+  /* Footer */
+  .ms-footer {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .ms-pagination {
     justify-content: center;
+  }
+
+  /* Member Details modal */
+  .ms-overlay {
+    padding: 12px;
+  }
+
+  .ms-modal {
+    padding: 16px;
+    max-height: 92vh;
+    max-height: 92dvh;
+  }
+
+  .ms-modal-profile {
+    flex-wrap: wrap;
   }
 
   .ms-modal-grid,
   .ms-cnic-images {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .ms-cnic-img {
+    height: 160px;
+  }
+
+  .ms-modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .ms-modal-footer .ms-btn-secondary {
+    width: 100%;
+    height: 42px;
+  }
+
+  .ms-breakdown-table-wrap {
+    max-height: 260px;
+  }
+}
+
+/* Very narrow phones: one stat card per row */
+@media (max-width: 380px) {
+  .ms-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ms-stat-card {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .ms-stat-info {
+    flex: 1;
   }
 }

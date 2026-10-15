@@ -9,6 +9,7 @@ import {
   CupSoda,
   Users,
   LogOut,
+  X,
 } from "lucide-react";
 import "./sidebar.css";
 
@@ -26,7 +27,12 @@ const navItems = [
   { to: "/frontdesk/trainers", label: "Trainers", icon: Users },
 ];
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -37,67 +43,86 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="sidebar">
-      {/* Logo */}
-      <div className="sidebar-logo">
-        <img src={logo} alt="FITZONE Logo" className="logo-img" />
-      </div>
-
-      {/* Nav */}
-      <nav className="sidebar-nav">
-        {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `sidebar-link${isActive ? " active" : ""}`
-            }
-          >
-            <Icon size={19} strokeWidth={2} className="sidebar-icon" />
-            <span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Banner */}
+    <>
+      {/* Backdrop (mobile only) */}
       <div
-        className="sidebar-banner"
-        style={{ backgroundImage: `url(${gymBanner})` }}
-      >
-        <div className="banner-overlay" />
-        <p className="banner-text">
-          <span className="banner-italic">YOUR</span>
-          <br />
-          FITNESS
-          <br />
-          <span className="banner-italic">OUR</span>
-          <br />
-          <span className="banner-accent">PRIORITY</span>
-        </p>
-      </div>
+        className={`fd-sidebar-backdrop${isOpen ? " show" : ""}`}
+        onClick={onClose}
+      />
 
-      {/* User footer */}
-      <div className="sidebar-footer">
-        <div className="footer-user">
-          <div className="footer-avatar">
-            <Users size={16} />
-            <span className="footer-status-dot" />
-          </div>
-          <div className="footer-info">
-            <span className="footer-name">Ahmed Khan</span>
-            <span className="footer-role">Front Desk</span>
-          </div>
-        </div>
+      <aside className={`fd-sidebar${isOpen ? " open" : ""}`}>
+        {/* Close button (mobile only) */}
         <button
-          className="footer-logout"
-          onClick={handleLogout}
-          aria-label="Logout"
-          title="Logout"
+          type="button"
+          className="fd-sidebar-close"
+          onClick={onClose}
+          aria-label="Close sidebar"
         >
-          <LogOut size={18} strokeWidth={2} />
+          <X size={20} />
         </button>
-      </div>
-    </aside>
+
+        {/* Logo */}
+        <div className="fd-sidebar-logo">
+          <img src={logo} alt="FITZONE Logo" className="fd-logo-img" />
+        </div>
+
+        {/* Nav */}
+        <nav className="fd-sidebar-nav">
+          {navItems.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `fd-sidebar-link${isActive ? " active" : ""}`
+              }
+            >
+              <Icon size={19} strokeWidth={2} className="fd-sidebar-icon" />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Banner */}
+        <div
+          className="fd-sidebar-banner"
+          style={{ backgroundImage: `url(${gymBanner})` }}
+        >
+          <div className="fd-banner-overlay" />
+          <p className="fd-banner-text">
+            <span className="fd-banner-italic">YOUR</span>
+            <br />
+            FITNESS
+            <br />
+            <span className="fd-banner-italic">OUR</span>
+            <br />
+            <span className="fd-banner-accent">PRIORITY</span>
+          </p>
+        </div>
+
+        {/* User footer */}
+        <div className="fd-sidebar-footer">
+          <div className="fd-footer-user">
+            <div className="fd-footer-avatar">
+              <Users size={16} />
+              <span className="fd-footer-status-dot" />
+            </div>
+            <div className="fd-footer-info">
+            
+              <span className="fd-footer-role">Front Desk</span>
+            </div>
+          </div>
+          <button
+            className="fd-footer-logout"
+            onClick={handleLogout}
+            aria-label="Logout"
+            title="Logout"
+          >
+            <LogOut size={18} strokeWidth={2} />
+          </button>
+        </div>
+      </aside>
+    </>
   );
 };
 

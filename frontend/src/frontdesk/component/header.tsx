@@ -1,18 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, User, LogOut } from "lucide-react";
+import { Bell, ChevronDown, User, LogOut, Menu } from "lucide-react";
 import "./header.css";
 
 interface HeaderProps {
   notificationCount?: number;
-  adminName?: string;
   adminRole?: string;
+  onMenuClick?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
   notificationCount = 3,
-  adminName = "Admin",
   adminRole = "Front Desk",
+  onMenuClick,
 }) => {
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -31,7 +31,7 @@ const Header: React.FC<HeaderProps> = ({
     hour12: true,
   });
 
-  // ✅ Bahar click karne pe dropdown band ho jaye
+  // Bahar click karne pe dropdown band ho jaye
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -45,7 +45,7 @@ const Header: React.FC<HeaderProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ✅ Logout handler
+  // Logout handler
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -56,7 +56,17 @@ const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="fd-header">
-      <div className="fd-header-left" />
+      <div className="fd-header-left">
+        {/* Hamburger (sirf mobile/tablet par dikhta hai) */}
+        <button
+          type="button"
+          className="fd-menu-btn"
+          onClick={onMenuClick}
+          aria-label="Open sidebar"
+        >
+          <Menu size={22} />
+        </button>
+      </div>
 
       <div className="fd-header-right">
         <div className="fd-notification">
@@ -71,7 +81,7 @@ const Header: React.FC<HeaderProps> = ({
           <span className="fd-time">{currentTime}</span>
         </div>
 
-        {/* ✅ Admin dropdown */}
+        {/* Front Desk dropdown */}
         <div className="fd-admin-wrapper" ref={dropdownRef}>
           <div
             className="fd-admin"
@@ -81,8 +91,7 @@ const Header: React.FC<HeaderProps> = ({
               <User size={18} />
             </div>
             <div className="fd-admin-info">
-              <span className="fd-admin-name">{adminName}</span>
-              <span className="fd-admin-role">{adminRole}</span>
+              <span className="fd-admin-name">{adminRole}</span>
             </div>
             <ChevronDown
               size={16}

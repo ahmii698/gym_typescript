@@ -1,4 +1,5 @@
-.sidebar {
+.fd-sidebar {
+  position: relative;
   width: 260px;
   height: 100vh;
   background: #0a0a0d;
@@ -9,30 +10,37 @@
   overflow: hidden;
 }
 
+/* Mobile-only elements hidden on desktop */
+.fd-sidebar-close,
+.fd-sidebar-backdrop {
+  display: none;
+}
+
 /* Logo */
-.sidebar-logo {
+.fd-sidebar-logo {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px 20px 20px;
 }
 
-.logo-img {
+.fd-logo-img {
   width: 170px;
+  max-width: 100%;
   height: auto;
   object-fit: contain;
   display: block;
 }
 
 /* Nav */
-.sidebar-nav {
+.fd-sidebar-nav {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 10px 14px;
 }
 
-.sidebar-link {
+.fd-sidebar-link {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -45,23 +53,23 @@
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-.sidebar-link:hover {
+.fd-sidebar-link:hover {
   background: rgba(255, 255, 255, 0.05);
   color: #ffffff;
 }
 
-.sidebar-link.active {
+.fd-sidebar-link.active {
   background: linear-gradient(90deg, #e11d2e, #b3121f);
   color: #ffffff;
   box-shadow: 0 4px 14px rgba(225, 29, 46, 0.35);
 }
 
-.sidebar-icon {
+.fd-sidebar-icon {
   flex-shrink: 0;
 }
 
 /* Banner */
-.sidebar-banner {
+.fd-sidebar-banner {
   position: relative;
   margin: 18px 14px 0;
   flex: 1;
@@ -73,7 +81,7 @@
   background-repeat: no-repeat;
 }
 
-.banner-overlay {
+.fd-banner-overlay {
   position: absolute;
   inset: 0;
   background: linear-gradient(
@@ -84,8 +92,7 @@
   );
 }
 
-/* ✅ Updated banner text — height barha di */
-.banner-text {
+.fd-banner-text {
   position: absolute;
   top: 22px;
   left: 22px;
@@ -101,18 +108,18 @@
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
 }
 
-.banner-italic {
+.fd-banner-italic {
   font-style: italic;
   font-weight: 800;
   color: #e5e5e7;
 }
 
-.banner-accent {
+.fd-banner-accent {
   color: #e11d2e;
 }
 
 /* Footer */
-.sidebar-footer {
+.fd-sidebar-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -121,13 +128,13 @@
   background: #0a0a0d;
 }
 
-.footer-user {
+.fd-footer-user {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.footer-avatar {
+.fd-footer-avatar {
   position: relative;
   width: 34px;
   height: 34px;
@@ -139,7 +146,7 @@
   color: #ffffff;
 }
 
-.footer-status-dot {
+.fd-footer-status-dot {
   position: absolute;
   bottom: -1px;
   right: -1px;
@@ -150,24 +157,24 @@
   border: 2px solid #0a0a0d;
 }
 
-.footer-info {
+.fd-footer-info {
   display: flex;
   flex-direction: column;
   line-height: 1.2;
 }
 
-.footer-name {
+.fd-footer-name {
   font-size: 13px;
   font-weight: 600;
   color: #ffffff;
 }
 
-.footer-role {
+.fd-footer-role {
   font-size: 11px;
   color: #7a7a80;
 }
 
-.footer-logout {
+.fd-footer-logout {
   background: transparent;
   border: none;
   color: #9a9aa2;
@@ -177,7 +184,71 @@
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-.footer-logout:hover {
+.fd-footer-logout:hover {
   background: rgba(225, 29, 46, 0.15);
   color: #e11d2e;
+}
+
+/* ============================================ */
+/*  MOBILE / TABLET DRAWER                      */
+/*  (breakpoint: jahan hamburger dikhta hai     */
+/*   wohi width rakho)                          */
+/* ============================================ */
+@media (max-width: 1024px) {
+  .fd-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1101;
+    height: 100vh;
+    height: 100dvh;
+    max-width: 85vw;
+    overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .fd-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+  }
+
+  .fd-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .fd-sidebar-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .fd-sidebar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #ffffff;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .fd-sidebar-close:hover {
+    color: #e11d2e;
+    border-color: #e11d2e;
+  }
 }

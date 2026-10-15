@@ -81,6 +81,8 @@ const formatPKR = (amount: number) => {
 };
 
 const BOTTOM_GAP = 24;
+/* Is width ke neeche (tablet/mobile) fixed height nahi lagti */
+const FIXED_HEIGHT_MIN_WIDTH = 1024;
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -149,10 +151,17 @@ const Dashboard: React.FC = () => {
     fetchStats();
   }, []);
 
-  /* ---------------- Page height ---------------- */
+  /* ---------------- Page height (sirf desktop pe) ---------------- */
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
+
+      // Tablet / mobile: fixed height nahi, page natural scroll kare
+      if (window.innerWidth <= FIXED_HEIGHT_MIN_WIDTH) {
+        setPageHeight(undefined);
+        return;
+      }
+
       const top = pageRef.current.getBoundingClientRect().top + window.scrollY;
       setPageHeight(Math.max(320, window.innerHeight - top - BOTTOM_GAP));
     };
@@ -398,7 +407,7 @@ const Dashboard: React.FC = () => {
 
       {/* Bottom Row */}
       <div className="db-bottom-row">
-        {/* Recent Members — AB DYNAMIC */}
+        {/* Recent Members */}
         <div className="db-panel db-table-panel">
           <div className="db-panel-header">
             <div className="db-panel-title-group">
@@ -417,53 +426,55 @@ const Dashboard: React.FC = () => {
               View All
             </button>
           </div>
-          <table className="db-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Package</th>
-                <th>Join Date</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.recentMembers.length === 0 ? (
+          <div className="db-table-scroll">
+            <table className="db-table">
+              <thead>
                 <tr>
-                  <td colSpan={5} className="db-empty-cell">
-                    No recent members.
-                  </td>
+                  <th>#</th>
+                  <th>Name</th>
+                  <th>Package</th>
+                  <th>Join Date</th>
+                  <th>Status</th>
                 </tr>
-              ) : (
-                stats.recentMembers.map((m, idx) => (
-                  <tr key={m.id}>
-                    <td>{idx + 1}</td>
-                    <td>
-                      <div className="db-member-cell">
-                        <span>{m.name}</span>
-                      </div>
-                    </td>
-                    <td>{m.package}</td>
-                    <td>{m.join_date}</td>
-                    <td>
-                      <span
-                        className={`db-badge ${
-                          m.status === "Active"
-                            ? "db-badge-green"
-                            : "db-badge-red"
-                        }`}
-                      >
-                        {m.status}
-                      </span>
+              </thead>
+              <tbody>
+                {stats.recentMembers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="db-empty-cell">
+                      No recent members.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  stats.recentMembers.map((m, idx) => (
+                    <tr key={m.id}>
+                      <td>{idx + 1}</td>
+                      <td>
+                        <div className="db-member-cell">
+                          <span>{m.name}</span>
+                        </div>
+                      </td>
+                      <td>{m.package}</td>
+                      <td>{m.join_date}</td>
+                      <td>
+                        <span
+                          className={`db-badge ${
+                            m.status === "Active"
+                              ? "db-badge-green"
+                              : "db-badge-red"
+                          }`}
+                        >
+                          {m.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Upcoming Fee Dues — DYNAMIC */}
+        {/* Upcoming Fee Dues */}
         <div className="db-panel db-table-panel">
           <div className="db-panel-header">
             <div className="db-panel-title-group">
@@ -484,48 +495,50 @@ const Dashboard: React.FC = () => {
               View All
             </button>
           </div>
-          <table className="db-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Member Name</th>
-                <th>Package</th>
-                <th>Due In</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.upcomingDues.length === 0 ? (
+          <div className="db-table-scroll">
+            <table className="db-table">
+              <thead>
                 <tr>
-                  <td colSpan={5} className="db-empty-cell">
-                    No upcoming dues in next 7 days.
-                  </td>
+                  <th>#</th>
+                  <th>Member Name</th>
+                  <th>Package</th>
+                  <th>Due In</th>
+                  <th>Amount</th>
                 </tr>
-              ) : (
-                stats.upcomingDues.map((d, idx) => (
-                  <tr key={d.id}>
-                    <td>{idx + 1}</td>
-                    <td>
-                      <div className="db-member-cell">
-                        <span>{d.name}</span>
-                      </div>
-                    </td>
-                    <td>{d.package}</td>
-                    <td>
-                      <span className="db-due-days">
-                        {d.days_left} day{d.days_left === 1 ? "" : "s"}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="db-badge db-badge-red">
-                        {formatPKR(Number(d.amount) || 0)}
-                      </span>
+              </thead>
+              <tbody>
+                {stats.upcomingDues.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="db-empty-cell">
+                      No upcoming dues in next 7 days.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  stats.upcomingDues.map((d, idx) => (
+                    <tr key={d.id}>
+                      <td>{idx + 1}</td>
+                      <td>
+                        <div className="db-member-cell">
+                          <span>{d.name}</span>
+                        </div>
+                      </td>
+                      <td>{d.package}</td>
+                      <td>
+                        <span className="db-due-days">
+                          {d.days_left} day{d.days_left === 1 ? "" : "s"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="db-badge db-badge-red">
+                          {formatPKR(Number(d.amount) || 0)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Fee Collection Summary */}

@@ -1,12 +1,73 @@
 .frontdesk-register-wrapper {
-  min-height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
+  align-items: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background: #000000;
   color-scheme: dark;
+  z-index: 50;
+}
+
+.frontdesk-register-wrapper *,
+.frontdesk-register-wrapper *::before,
+.frontdesk-register-wrapper *::after {
+  box-sizing: border-box;
+}
+
+/* Back button (top-left of the whole page) */
+.frontdesk-back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  background: rgba(10, 10, 10, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.frontdesk-back-btn:hover {
+  border-color: #ef233c;
+  color: #ef233c;
+  background: rgba(10, 10, 10, 0.9);
+}
+
+.frontdesk-back-btn:active {
+  transform: scale(0.97);
+}
+
+.frontdesk-back-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.frontdesk-back-btn:hover svg {
+  transform: translateX(-2px);
 }
 
 .frontdesk-register-banner {
   flex: 1;
+  height: 100vh;
+  height: 100dvh;
   background-size: cover;
   background-position: center;
   display: none;
@@ -14,6 +75,9 @@
 
 .frontdesk-register-formside {
   flex: 1;
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -39,6 +103,7 @@
 .frontdesk-register-logo img {
   height: 48px;
   width: auto;
+  max-width: 100%;
   object-fit: contain;
 }
 
@@ -123,6 +188,7 @@
 
 .frontdesk-input-box input {
   flex: 1;
+  min-width: 0;
   height: 100%;
   background: transparent;
   border: none;
@@ -163,6 +229,8 @@
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   padding: 0;
 }
 
@@ -175,6 +243,7 @@
   margin-top: 6px;
   font-size: 12px;
   color: #ef233c;
+  overflow-wrap: anywhere;
 }
 
 .frontdesk-register-btn {
@@ -225,8 +294,101 @@
   text-decoration: underline;
 }
 
+/* ============================================ */
+/*  RESPONSIVE                                  */
+/* ============================================ */
+
+/* Desktop: banner on the left */
 @media (min-width: 900px) {
   .frontdesk-register-banner {
     display: block;
+  }
+}
+
+/* Tablet and below: banner hidden, leave room for the Back button */
+@media (max-width: 899px) {
+  .frontdesk-register-formside {
+    align-items: flex-start;
+    padding: 76px 16px 40px;
+  }
+
+  .frontdesk-back-btn {
+    top: 16px;
+    left: 16px;
+  }
+}
+
+/* Phone */
+@media (max-width: 640px) {
+  .frontdesk-back-btn {
+    top: 12px;
+    left: 12px;
+    height: 40px;
+  }
+
+  .frontdesk-register-formside {
+    padding: 68px 12px 120px; /* neeche extra jagah taake Register button nav bar ke peeche na chhupe */
+  }
+
+  .frontdesk-register-card {
+    padding: 24px 18px;
+    border-radius: 14px;
+  }
+
+  .frontdesk-register-logo {
+    margin-bottom: 16px;
+  }
+
+  .frontdesk-register-logo img {
+    height: 42px;
+  }
+
+  .frontdesk-register-header {
+    margin-bottom: 22px;
+  }
+
+  .frontdesk-register-title {
+    font-size: 18px;
+  }
+
+  .frontdesk-register-subtitle {
+    font-size: 12.5px;
+  }
+
+  .frontdesk-form-group {
+    margin-bottom: 16px;
+  }
+
+  .frontdesk-input-box {
+    height: 48px;
+  }
+
+  .frontdesk-input-box input {
+    font-size: 16px; /* stops iOS zoom on focus */
+  }
+
+  .toggle-visibility {
+    width: 36px;
+    height: 36px;
+    margin-right: -8px;
+  }
+
+  .frontdesk-register-btn {
+    height: 50px;
+  }
+}
+
+/* Very narrow phones */
+@media (max-width: 360px) {
+  .frontdesk-register-formside {
+    padding: 68px 8px 120px;
+  }
+
+  .frontdesk-register-card {
+    padding: 20px 14px;
+  }
+
+  .frontdesk-register-title {
+    font-size: 17px;
   }
 }

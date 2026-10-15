@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Users,
   UserCheck,
@@ -11,16 +10,14 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Plus,
   Eye,
   X,
+  Coins,
+  TrendingUp,
+  Clock,
 } from "lucide-react";
 import { API_URL } from "../../../config";
 import "./Memberships.css";
-
-/* ----------------------------- Routes (apne routes ke hisaab se change kar lena) ----------------------------- */
-
-const ADD_MEMBER_ROUTE = "/admin/add-member";
 
 /* ----------------------------- Types ----------------------------- */
 
@@ -28,7 +25,18 @@ type MembershipType = "Normal" | "Normal + Trainer" | "Package Only" | "Package 
 type PaymentStatus = "Paid" | "Unpaid";
 type TabKey = "All" | MembershipType;
 
-// AttendanceController@index ka row (frontdesk attendance page wala hi)
+interface MonthlyFee {
+  id: number;
+  member_id: number;
+  month_number: number;
+  fee_amount: number;
+  valid_from: string;
+  valid_till: string;
+  status: "paid" | "pending";
+  paid_on?: string | null;
+  note?: string | null;
+}
+
 interface ApiRow {
   id: number;
   name: string;
@@ -44,6 +52,7 @@ interface ApiRow {
   email: string;
   cnic_front_url: string | null;
   cnic_back_url: string | null;
+  monthly_fees?: MonthlyFee[];
 }
 
 interface MembershipRecord {
@@ -57,11 +66,12 @@ interface MembershipRecord {
   trainer: string;
   membershipType: MembershipType;
   paymentStatus: PaymentStatus;
-  joinedOn: string; // ISO YYYY-MM-DD ya ""
-  feesPaidOn: string; // ISO YYYY-MM-DD ya ""
-  expiryDate: string; // ISO YYYY-MM-DD ya ""
+  joinedOn: string;
+  feesPaidOn: string;
+  expiryDate: string;
   cnicFrontUrl: string | null;
   cnicBackUrl: string | null;
+  monthlyFees: MonthlyFee[];
 }
 
 /* ----------------------------- Helpers ----------------------------- */
@@ -78,13 +88,11 @@ const fmtTime = (d: Date) => {
 };
 const localISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-// "2026-09-21T00:00:00.000000Z" -> "2026-09-21"
 const toISO = (v: unknown): string => {
   if (!v || v === "-") return "";
   return String(v).slice(0, 10);
 };
 
-// "2026-09-02" -> "02 Sep 2026"
 const fmtISO = (iso: string) => {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
@@ -94,12 +102,17 @@ const fmtISO = (iso: string) => {
 const dash = (v: unknown) =>
   v !== null && typeof v !== "undefined" && String(v).trim() !== "" ? String(v) : "—";
 
+const formatPrice = (n: number | string): string => {
+  const num = Number(n);
+  if (isNaN(num)) return "Rs 0";
+  return `Rs ${num.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
+};
+
 const daysBetween = (a: string, b: string) => {
   if (!a || !b) return 0;
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
 };
 
-// Join se expiry tak ke dinon se plan ka naam
 const planOf = (start: string, end: string): string => {
   const days = daysBetween(start, end);
   if (days <= 0) return "—";
@@ -109,7 +122,6 @@ const planOf = (start: string, end: string): string => {
   return `${Math.max(1, Math.round(days / 30))} Months`;
 };
 
-// Builds the page number list, e.g. [1, 2, 3, "...", 13]
 const getPages = (total: number, current: number): (number | "...")[] => {
   if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
   if (current <= 3) return [1, 2, 3, "...", total];
@@ -150,10 +162,85 @@ const mapRow = (m: ApiRow): MembershipRecord => {
     expiryDate,
     cnicFrontUrl: m.cnic_front_url ?? null,
     cnicBackUrl: m.cnic_back_url ?? null,
+    monthlyFees: Array.isArray(m.monthly_fees) ? m.monthly_fees : [],
   };
 };
 
-/* CNIC image: load na ho to link dikha deta hai */
+/* Helper: Naye monthlyFees ke hisaab se expiry date nikaalein */
+const computeExpiryFromMonthlyFees = (fees: MonthlyFee[], fallback: string): string => {
+  if (!fees || fees.length === 0) return fallback;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const mf of fees) {
+    if (!mf.valid_from || !mf.valid_till) continue;
+    if (today >= mf.valid_from && today <= mf.valid_till) {
+      return mf.valid_till;
+    }
+  }
+
+  const sorted = [...fees].sort((a, b) => a.month_number - b.month_number);
+  const nextPending = sorted.find((mf) => mf.status === "pending");
+  if (nextPending) return nextPending.valid_till;
+
+  return sorted[sorted.length - 1]?.valid_till ?? fallback;
+};
+
+/* Helper: Rolling window ke hisaab se payment status */
+const computePaymentStatusFromMonthlyFees = (
+  fees: MonthlyFee[],
+  fallback: PaymentStatus
+): PaymentStatus => {
+  if (!fees || fees.length === 0) return fallback;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const mf of fees) {
+    if (!mf.valid_from || !mf.valid_till) continue;
+    if (today >= mf.valid_from && today <= mf.valid_till) {
+      return mf.status === "paid" ? "Paid" : "Unpaid";
+    }
+  }
+
+  return "Unpaid";
+};
+
+/* Helper: Rolling window ke hisaab se feesPaidOn */
+const computeFeesPaidOnFromMonthlyFees = (
+  fees: MonthlyFee[],
+  fallback: string
+): string => {
+  if (!fees || fees.length === 0) return fallback;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const mf of fees) {
+    if (!mf.valid_from || !mf.valid_till) continue;
+    if (today >= mf.valid_from && today <= mf.valid_till) {
+      return mf.status === "paid" && mf.paid_on ? mf.paid_on : "";
+    }
+  }
+
+  return "";
+};
+
+/* Helper: Aaj ke date ke andar wali monthly fee dhundein */
+const findCurrentMonthFee = (fees: MonthlyFee[]): MonthlyFee | null => {
+  if (!fees || fees.length === 0) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const mf of fees) {
+    if (!mf.valid_from || !mf.valid_till) continue;
+    if (today >= mf.valid_from && today <= mf.valid_till) {
+      return mf;
+    }
+  }
+
+  return null;
+};
+
+/* CNIC image */
 const CnicImage = ({ url, label }: { url: string | null; label: string }) => {
   const [failed, setFailed] = useState(false);
 
@@ -185,7 +272,6 @@ const BOTTOM_GAP = 24;
 /* ----------------------------- Component ----------------------------- */
 
 const Memberships = () => {
-  const navigate = useNavigate();
   const pageRef = useRef<HTMLDivElement>(null);
   const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
 
@@ -201,7 +287,8 @@ const Memberships = () => {
   const [page, setPage] = useState(1);
   const [activeMember, setActiveMember] = useState<MembershipRecord | null>(null);
 
-  // Make the page its own scroll container regardless of the layout
+  const [togglingFeeId, setTogglingFeeId] = useState<number | null>(null);
+
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
@@ -214,13 +301,11 @@ const Memberships = () => {
     return () => window.removeEventListener("resize", updateHeight);
   }, []);
 
-  /* Live clock */
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
 
-  /* Escape se modal band */
   useEffect(() => {
     if (!activeMember) return;
     const onKey = (e: KeyboardEvent) => {
@@ -230,7 +315,6 @@ const Memberships = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, [activeMember]);
 
-  /* Members load karo (attendance wali hi API) */
   const loadMembers = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
     setError("");
@@ -264,17 +348,32 @@ const Memberships = () => {
     return () => controller.abort();
   }, [loadMembers, reloadKey]);
 
-  /* Back to page 1 whenever a filter changes */
   useEffect(() => {
     setPage(1);
   }, [tab, query, plan]);
 
-  /* ---- Stats (derived from data) ---- */
+  /* ---- Stats ---- */
   const todayISO = localISO(now);
 
   const stats = useMemo(() => {
     const expired = members.filter((m) => m.expiryDate && m.expiryDate < todayISO).length;
     const unpaid = members.filter((m) => m.paymentStatus === "Unpaid").length;
+
+    // Current month ki fees calculate karein
+    let totalMonthFees = 0;
+    let collectedMonthFees = 0;
+
+    members.forEach((m) => {
+      const currentFee = findCurrentMonthFee(m.monthlyFees);
+      if (currentFee) {
+        totalMonthFees += Number(currentFee.fee_amount);
+        if (currentFee.status === "paid") {
+          collectedMonthFees += Number(currentFee.fee_amount);
+        }
+      }
+    });
+
+    const remainingMonthFees = Math.max(0, totalMonthFees - collectedMonthFees);
 
     return [
       {
@@ -309,6 +408,30 @@ const Memberships = () => {
         variant: "orange",
         icon: <Wallet size={26} />,
       },
+      {
+        id: "total-month",
+        title: "This Month Fees",
+        period: "Total Expected",
+        value: formatPrice(totalMonthFees),
+        variant: "red",
+        icon: <Coins size={26} />,
+      },
+      {
+        id: "collected-month",
+        title: "Collected This Month",
+        period: "Received",
+        value: formatPrice(collectedMonthFees),
+        variant: "green",
+        icon: <TrendingUp size={26} />,
+      },
+      {
+        id: "remaining-month",
+        title: "Remaining This Month",
+        period: "Pending",
+        value: formatPrice(remainingMonthFees),
+        variant: "amber",
+        icon: <Clock size={26} />,
+      },
     ];
   }, [members, todayISO]);
 
@@ -317,7 +440,6 @@ const Memberships = () => {
     return ["All Plans", ...Array.from(set).sort()];
   }, [members]);
 
-  /* ---- Filtering + pagination ---- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const qDigits = q.replace(/[\s-]/g, "");
@@ -344,6 +466,73 @@ const Memberships = () => {
   const showingTo = startIdx + rows.length;
 
   const payClass = (s: PaymentStatus) => `ms-pay ${s.toLowerCase()}`;
+
+  /* ---------- Toggle Monthly Fee (Mark Paid / Unmark) ---------- */
+  const toggleMonthlyFee = async (feeId: number) => {
+    setTogglingFeeId(feeId);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/member-monthly-fees/${feeId}/toggle`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json.message ?? "Update nahi ho saka");
+        return;
+      }
+
+      if (activeMember) {
+        const updatedMonthlyFees = activeMember.monthlyFees.map((mf) =>
+          mf.id === feeId
+            ? {
+                ...mf,
+                status: mf.status === "paid" ? ("pending" as const) : ("paid" as const),
+                paid_on: mf.status === "paid" ? null : new Date().toISOString().slice(0, 10),
+              }
+            : mf
+        );
+
+        const newPaymentStatus = computePaymentStatusFromMonthlyFees(
+          updatedMonthlyFees,
+          activeMember.paymentStatus
+        );
+
+        const newFeesPaidOn = computeFeesPaidOnFromMonthlyFees(
+          updatedMonthlyFees,
+          activeMember.feesPaidOn
+        );
+
+        const newExpiry = computeExpiryFromMonthlyFees(
+          updatedMonthlyFees,
+          activeMember.expiryDate
+        );
+
+        const updatedMember: MembershipRecord = {
+          ...activeMember,
+          monthlyFees: updatedMonthlyFees,
+          paymentStatus: newPaymentStatus,
+          expiryDate: newExpiry,
+          feesPaidOn: newFeesPaidOn,
+        };
+
+        setActiveMember(updatedMember);
+
+        setMembers((prev) =>
+          prev.map((m) => (m.id === activeMember.id ? updatedMember : m))
+        );
+      }
+    } catch {
+      alert("Server se connect nahi ho saka.");
+    } finally {
+      setTogglingFeeId(null);
+    }
+  };
 
   return (
     <div
@@ -383,7 +572,6 @@ const Memberships = () => {
 
       {/* Table panel */}
       <div className="ms-panel">
-        {/* Toolbar */}
         <div className="ms-toolbar">
           <div className="ms-tabs">
             {TABS.map((t) => (
@@ -420,15 +608,9 @@ const Memberships = () => {
               </select>
               <ChevronDown size={14} className="ms-select-icon" />
             </div>
-
-            <button type="button" className="ms-add-btn" onClick={() => navigate(ADD_MEMBER_ROUTE)}>
-              <Plus size={16} />
-              Add Member
-            </button>
           </div>
         </div>
 
-        {/* Table */}
         <div className="ms-table-wrap">
           <table className="ms-table">
             <thead>
@@ -504,7 +686,6 @@ const Memberships = () => {
           </table>
         </div>
 
-        {/* Footer / pagination */}
         <div className="ms-footer">
           <span className="ms-showing">
             Showing {showingFrom} to {showingTo} of {filtered.length} results
@@ -620,6 +801,80 @@ const Memberships = () => {
                 <span className="ms-detail-value ms-detail-highlight">{fmtISO(activeMember.expiryDate)}</span>
               </div>
             </div>
+
+            {/* Monthly Fee Breakdown */}
+            {activeMember.monthlyFees && activeMember.monthlyFees.length > 0 && (
+              <div className="ms-monthly-breakdown">
+                <h4 className="ms-breakdown-title">
+                  Monthly Fee Breakdown
+                  <span className="ms-breakdown-sub">
+                    {activeMember.monthlyFees.length} month
+                    {activeMember.monthlyFees.length > 1 ? "s" : ""} ×{" "}
+                    {formatPrice(activeMember.monthlyFees[0]?.fee_amount ?? 0)} each
+                  </span>
+                </h4>
+                <div className="ms-breakdown-table-wrap">
+                  <table className="ms-breakdown-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Month</th>
+                        <th className="center">Fee</th>
+                        <th className="center">Valid From</th>
+                        <th className="center">Valid Till</th>
+                        <th className="center">Status</th>
+                        <th className="center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeMember.monthlyFees.map((mf) => {
+                        const isToggling = togglingFeeId === mf.id;
+                        const isPaid = mf.status === "paid";
+
+                        return (
+                          <tr key={mf.id}>
+                            <td className="muted">{mf.month_number}</td>
+                            <td className="member-name">Month {mf.month_number}</td>
+                            <td className="center salary-cell">{formatPrice(mf.fee_amount)}</td>
+                            <td className="center">{fmtISO(mf.valid_from)}</td>
+                            <td className="center">{fmtISO(mf.valid_till)}</td>
+                            <td className="center">
+                              <span className={`ms-pay ${isPaid ? "paid" : "unpaid"}`}>
+                                {isPaid ? "Paid" : "Pending"}
+                              </span>
+                            </td>
+                            <td className="center">
+                              <button
+                                type="button"
+                                className={`ms-toggle-fee-btn ${isPaid ? "paid" : "pending"}`}
+                                onClick={() => toggleMonthlyFee(mf.id)}
+                                disabled={isToggling}
+                                title={isPaid ? "Mark as Pending" : "Mark as Paid"}
+                              >
+                                {isToggling ? "..." : isPaid ? "Unmark" : "Mark Paid"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={2} className="ms-total-label">
+                          Grand Total
+                        </td>
+                        <td className="center ms-total-value">
+                          {formatPrice(
+                            activeMember.monthlyFees.reduce((s, mf) => s + Number(mf.fee_amount), 0)
+                          )}
+                        </td>
+                        <td colSpan={4}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <div className="ms-cnic-images">
               <div className="ms-cnic-block">

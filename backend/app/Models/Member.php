@@ -24,6 +24,7 @@ class Member extends Model
         'date_of_birth',
         'gender',
         'member_type',
+        'installment_months',   // <-- NAYA
         'package_id',
         'trainer_id',
         'start_date',
@@ -38,10 +39,11 @@ class Member extends Model
     protected $appends = ['cnic_front_url', 'cnic_back_url'];
 
     protected $casts = [
-        'date_of_birth' => 'date:Y-m-d',
-        'start_date' => 'date:Y-m-d',
-        'end_date' => 'date:Y-m-d',
-        'is_active' => 'boolean',
+        'date_of_birth'       => 'date:Y-m-d',
+        'start_date'          => 'date:Y-m-d',
+        'end_date'            => 'date:Y-m-d',
+        'installment_months'  => 'integer',   // <-- NAYA
+        'is_active'           => 'boolean',
     ];
 
     protected function cnicFrontUrl(): Attribute
@@ -76,5 +78,11 @@ class Member extends Model
     public function latestPayment(): HasOne
     {
         return $this->hasOne(Payment::class)->latestOfMany();
+    }
+
+    // <-- NAYA: Monthly fees relation
+    public function monthlyFees(): HasMany
+    {
+        return $this->hasMany(MemberMonthlyFee::class)->orderBy('month_number');
     }
 }

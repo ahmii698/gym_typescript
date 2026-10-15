@@ -11,6 +11,11 @@
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: #2a2a32 transparent;
+
+  /* Breakpoints follow the dashboard's own width, not the screen width */
+  container-type: inline-size;
+  container-name: dash;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dashboard-page::-webkit-scrollbar {
@@ -40,9 +45,10 @@
 
 .dash-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
   margin-bottom: 24px;
 }
 
@@ -76,18 +82,20 @@
 .dash-date {
   font-size: 13px;
   color: #d3d9e6;
+  white-space: nowrap;
 }
 
 .dash-time {
   font-size: 13px;
   color: #a7b0c3;
+  white-space: nowrap;
 }
 
 /* ---------------------------- Stat cards ---------------------------- */
 
 .dash-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -96,6 +104,7 @@
   display: flex;
   align-items: flex-start;
   gap: 18px;
+  min-width: 0;
   padding: 22px 20px;
   border: 1px solid rgba(239, 35, 60, 0.35);
   background: linear-gradient(135deg, rgba(239, 35, 60, 0.1), rgba(12, 12, 14, 0.9) 60%);
@@ -145,6 +154,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .dash-stat-title {
@@ -161,11 +171,13 @@
 }
 
 .dash-stat-value {
-  font-size: 24px;
+  font-size: clamp(18px, 2.4vw, 24px);
   font-weight: 700;
   color: #ffffff;
   margin-bottom: 8px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dash-stat-change {
@@ -193,13 +205,13 @@
 
 .dash-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
 /* Row 1: revenue chart 70% + last 5 inventory 30% */
 .dash-grid-70-30 {
-  grid-template-columns: 7fr 3fr;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
 }
 
 .dash-grid-row2 {
@@ -282,6 +294,9 @@
 
 .dash-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a32 transparent;
 }
 
 .dash-table {
@@ -393,6 +408,7 @@
 
 .dash-select-wrap {
   position: relative;
+  flex-shrink: 0;
 }
 
 .dash-select {
@@ -493,7 +509,7 @@
 }
 
 /* ============================================ */
-/*  MONTHLY REVENUE BAR CHART (NEW)             */
+/*  MONTHLY REVENUE BAR CHART                   */
 /* ============================================ */
 
 .dash-revenue-chart {
@@ -518,6 +534,7 @@
 
 .dash-revenue-bars {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: flex-end;
   justify-content: space-around;
@@ -544,6 +561,7 @@
 
 .dash-revenue-group {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -642,39 +660,173 @@
   cursor: pointer;
 }
 
-/* ---------------------------- Responsive ---------------------------- */
+/* ============================================ */
+/*  RESPONSIVE — based on dashboard width       */
+/*  (works even when the sidebar is open)       */
+/* ============================================ */
 
-@media (max-width: 1280px) {
+/* Medium: stat cards 2 per row */
+@container dash (max-width: 1000px) {
   .dash-stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 1100px) {
+/* Tablet: panels stack in one column */
+@container dash (max-width: 820px) {
   .dash-grid,
   .dash-grid-70-30 {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 640px) {
-  .dashboard-page {
-    padding: 20px 14px;
-  }
-
+/* Small: phone-like widths */
+@container dash (max-width: 560px) {
   .dash-header {
     flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 18px;
+  }
+
+  .dash-title {
+    font-size: 22px;
   }
 
   .dash-datetime-text {
     align-items: flex-start;
   }
 
-  .dash-stats {
-    grid-template-columns: 1fr;
+  .dash-datetime {
+    flex-direction: row-reverse;
   }
 
-  .dash-title {
-    font-size: 22px;
+  .dash-stats {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .dash-stat-card {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .dash-stat-icon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .dash-grid,
+  .dash-grid-row2,
+  .dash-panel-full {
+    gap: 12px;
+  }
+
+  .dash-grid-row2,
+  .dash-panel-full {
+    margin-top: 12px;
+  }
+
+  .dash-panel {
+    padding: 14px;
+  }
+
+  .dash-panel-head {
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    margin-bottom: 14px;
+  }
+
+  .dash-panel-heading {
+    flex: 1 1 140px;
+  }
+
+  .dash-select-wrap,
+  .dash-pill-btn {
+    margin-left: auto;
+  }
+
+  .dash-table th,
+  .dash-table td {
+    padding: 10px 10px;
+  }
+
+  /* ---- Charts: horizontally scrollable, all 12 months reachable ---- */
+  .dash-revenue-chart {
+    height: 240px;
+    gap: 0;
+    padding: 30px 0 0 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #2a2a32 transparent;
+  }
+
+  .dash-growth-chart {
+    height: 260px;
+  }
+
+  .dash-revenue-chart::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .dash-revenue-chart::-webkit-scrollbar-thumb {
+    background: #2a2a32;
+    border-radius: 999px;
+  }
+
+  /* Y-axis stays fixed on the left while bars scroll */
+  .dash-revenue-yaxis {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    flex-shrink: 0;
+    min-width: 54px;
+    padding-right: 8px;
+    font-size: 10px;
+    background: #0c0c0e;
+  }
+
+  /* 12 months x 46px = fixed width, so the container scrolls */
+  .dash-revenue-bars {
+    flex: 0 0 auto;
+    min-width: 552px;
+    gap: 0;
+    justify-content: flex-start;
+  }
+
+  .dash-revenue-group {
+    flex: 0 0 46px;
+    width: 46px;
+    min-width: 46px;
+    gap: 4px;
+  }
+
+  .dash-revenue-bar {
+    width: 26px;
+    max-width: 26px;
+    border-radius: 4px 4px 0 0;
+  }
+
+  .dash-revenue-value {
+    display: block;
+    font-size: 10px;
+  }
+
+  .dash-revenue-label {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .dash-revenue-empty {
+    min-width: 200px;
+  }
+}
+
+/* Page padding (needs viewport media query: the container can't style itself) */
+@media (max-width: 640px) {
+  .dashboard-page {
+    padding: 18px 12px;
   }
 }

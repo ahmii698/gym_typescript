@@ -22,12 +22,22 @@ class AttendanceController extends Controller
     {
         $date = $request->filled('date') ? $request->date : Carbon::today()->toDateString();
 
-        $members = Member::with(['package', 'trainer', 'latestPayment'])->get();
+        // monthlyFees bhi load karein
+        $members = Member::with(['package', 'trainer', 'latestPayment', 'monthlyFees'])->get();
 
         $data = $members->map(function ($member) use ($date) {
             $attendance = Attendance::where('member_id', $member->id)
                 ->where('date', $date)
                 ->first();
+
+            // Rolling window: current month ka status
+            $paymentStatus = $this->resolvePaymentStatus($member);
+
+            // Fees expiry: current month ki valid_till
+            $expiryDate = $this->resolveFeesExpiry($member);
+
+            // Fees paid on: current month ki paid date
+            $feesPaidOn = $this->resolveFeesPaidOn($member);
 
             return [
                 'id'             => $member->id,
@@ -39,26 +49,150 @@ class AttendanceController extends Controller
                 'trainer'        => $member->trainer->name ?? null,
                 'status'         => $attendance->status ?? 'Absent',
                 'check_in'       => $attendance->check_in ?? null,
-                'payment_status' => $member->latestPayment && $member->latestPayment->status === 'paid'
-                    ? 'Paid'
-                    : 'Unpaid',
-                'fees_paid_on'   => $member->latestPayment->paid_on ?? $member->start_date,
-                'fees_expiry_on' => $member->end_date,
+                'payment_status' => $paymentStatus,
+                'fees_paid_on'   => $feesPaidOn,
+                'fees_expiry_on' => $expiryDate,
                 'joined_on'      => $member->start_date,
                 'email'          => $member->email,
                 'avatar'         => null,
 
-                // CNIC Images — full URL banake bhej rahe hain
+                // CNIC Images — full URL
                 'cnic_front_url' => $member->cnic_front_path
                     ? Storage::disk('public')->url($member->cnic_front_path)
                     : null,
                 'cnic_back_url'  => $member->cnic_back_path
                     ? Storage::disk('public')->url($member->cnic_back_path)
                     : null,
+
+                // Monthly fees list
+                'monthly_fees' => $member->monthlyFees->map(fn ($mf) => [
+                    'id'           => $mf->id,
+                    'member_id'    => $mf->member_id,
+                    'month_number' => $mf->month_number,
+                    'fee_amount'   => (float) $mf->fee_amount,
+                    'valid_from'   => $mf->valid_from?->format('Y-m-d'),
+                    'valid_till'   => $mf->valid_till?->format('Y-m-d'),
+                    'status'       => $mf->status,
+                    'paid_on'      => $mf->paid_on?->format('Y-m-d'),
+                    'note'         => $mf->note,
+                ])->toArray(),
             ];
         });
 
         return response()->json($data);
+    }
+
+    /**
+     * Payment status — Rolling window logic:
+     * - Aaj ki date ke andar wala month dhundein
+     * - Agar woh month paid hai → "Paid"
+     * - Agar woh month pending hai → "Unpaid"
+     * - Agar aaj kisi bhi month ke andar nahi → "Unpaid"
+     * - Agar monthly fees nahi hain → latestPayment se check karein
+     */
+    private function resolvePaymentStatus(Member $member): string
+    {
+        $fees = $member->monthlyFees;
+
+        if ($fees->isEmpty()) {
+            // Monthly fees nahi hain → latestPayment fallback
+            return $member->latestPayment && $member->latestPayment->status === 'paid'
+                ? 'Paid'
+                : 'Unpaid';
+        }
+
+        $today = Carbon::today();
+
+        // Aaj ki date ke andar wala month dhundein
+        foreach ($fees as $mf) {
+            if (!$mf->valid_from || !$mf->valid_till) continue;
+
+            $from = Carbon::parse($mf->valid_from);
+            $till = Carbon::parse($mf->valid_till);
+
+            if ($today->between($from, $till)) {
+                return $mf->status === 'paid' ? 'Paid' : 'Unpaid';
+            }
+        }
+
+        // Aaj kisi bhi month ke andar nahi → Unpaid
+        return 'Unpaid';
+    }
+
+    /**
+     * Fees paid on — Rolling window logic:
+     * - Aaj ki date ke andar wala month dhundein
+     * - Agar woh month paid hai → uska paid_on
+     * - Warna → null
+     */
+    private function resolveFeesPaidOn(Member $member): ?string
+    {
+        $fees = $member->monthlyFees;
+
+        if ($fees->isEmpty()) {
+            return ($member->latestPayment && $member->latestPayment->paid_on)
+                ? Carbon::parse($member->latestPayment->paid_on)->format('Y-m-d')
+                : null;
+        }
+
+        $today = Carbon::today();
+
+        // Aaj ke date ke andar wala month
+        foreach ($fees as $mf) {
+            if (!$mf->valid_from || !$mf->valid_till) continue;
+
+            $from = Carbon::parse($mf->valid_from);
+            $till = Carbon::parse($mf->valid_till);
+
+            if ($today->between($from, $till)) {
+                return $mf->paid_on ? $mf->paid_on->format('Y-m-d') : null;
+            }
+        }
+
+        // Aaj kisi bhi month ke andar nahi → null
+        return null;
+    }
+
+    /**
+     * Fees expiry nikaalein:
+     * - Agar monthly fees hain: aaj ki date ke andar wale month ki valid_till
+     * - Agar aaj kisi month ke andar nahi: pehle pending month ki valid_till
+     * - Agar sab paid: last month ki valid_till
+     * - Agar monthly fees nahi: end_date
+     */
+    private function resolveFeesExpiry(Member $member): ?string
+    {
+        $fees = $member->monthlyFees->sortBy('month_number')->values();
+
+        if ($fees->isEmpty()) {
+            return $member->end_date
+                ? Carbon::parse($member->end_date)->format('Y-m-d')
+                : null;
+        }
+
+        $today = Carbon::today();
+
+        // 1. Aaj ki date ke andar wala month dhundein
+        foreach ($fees as $mf) {
+            if (!$mf->valid_from || !$mf->valid_till) continue;
+            $from = Carbon::parse($mf->valid_from);
+            $till = Carbon::parse($mf->valid_till);
+            if ($today->between($from, $till)) {
+                return $till->format('Y-m-d');
+            }
+        }
+
+        // 2. Agar aaj kisi month ke andar nahi — pehla pending month
+        $nextPending = $fees->firstWhere('status', 'pending');
+        if ($nextPending) {
+            return $nextPending->valid_till?->format('Y-m-d')
+                ?? ($member->end_date ? Carbon::parse($member->end_date)->format('Y-m-d') : null);
+        }
+
+        // 3. Sab paid hain — last month ki valid_till
+        $lastMonth = $fees->last();
+        return $lastMonth?->valid_till?->format('Y-m-d')
+            ?? ($member->end_date ? Carbon::parse($member->end_date)->format('Y-m-d') : null);
     }
 
     // POST /api/attendance/{member}/toggle   { date }
@@ -87,7 +221,6 @@ class AttendanceController extends Controller
     }
 
     // GET /api/attendance/{member}/history?month=2026-09
-    // Member ka poora record: registration date se aaj tak, month-wise
     public function history(Request $request, Member $member)
     {
         $request->validate([
@@ -95,17 +228,13 @@ class AttendanceController extends Controller
         ]);
 
         $today = Carbon::today();
-
-        // Record kab se shuru: start_date (na ho to created_at)
         $joined = Carbon::parse($member->start_date ?: $member->created_at)->startOfDay();
 
-        // Agar is se pehle ka koi attendance record maujood ho to wahan se shuru karo
         $firstRecord = Attendance::where('member_id', $member->id)->min('date');
         if ($firstRecord && Carbon::parse($firstRecord)->startOfDay()->lt($joined)) {
             $joined = Carbon::parse($firstRecord)->startOfDay();
         }
 
-        // Future start date ho to aaj se shuru maano
         if ($joined->gt($today)) {
             $joined = $today->copy();
         }
@@ -124,7 +253,6 @@ class AttendanceController extends Controller
         $firstMonth = $joined->copy()->startOfMonth();
         $lastMonth  = $today->copy()->startOfMonth();
 
-        // Selected month (joined month se pehle ya aaj ke mahine se aage nahi ja sakta)
         $selected = $request->filled('month')
             ? Carbon::createFromFormat('Y-m-d', $request->month . '-01')->startOfDay()
             : $lastMonth->copy();
@@ -136,7 +264,6 @@ class AttendanceController extends Controller
             $selected = $lastMonth->copy();
         }
 
-        // Har month ki summary + overall
         $months = [];
         $overallPresent = 0;
         $overallTotal   = 0;
@@ -165,7 +292,6 @@ class AttendanceController extends Controller
             $cursor->addMonthNoOverflow();
         }
 
-        // Selected month ke daily records (jin din record nahi = Absent)
         $dayStart = $selected->copy()->max($joined);
         $dayEnd   = $selected->copy()->endOfMonth()->startOfDay()->min($today);
 
@@ -234,7 +360,6 @@ class AttendanceController extends Controller
     }
 
     // GET /api/attendance/checkins?from=2026-09-01&to=2026-09-24&search=Ali&page=1
-    // Admin panel ke liye: date-range ke andar sab members ke real check-ins (Present + check_in wala) list
     public function checkins(Request $request)
     {
         $request->validate([
@@ -286,7 +411,6 @@ class AttendanceController extends Controller
     }
 
     // GET /api/attendance/checkin-stats
-    // Admin panel ke stat cards ke liye: total present check-ins today/week/month/all-time
     public function checkinStats()
     {
         $today      = Carbon::today();

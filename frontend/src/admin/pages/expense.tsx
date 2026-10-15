@@ -22,6 +22,24 @@ interface SalaryPayment {
   note?: string;
 }
 
+interface MonthlyFee {
+  id: number;
+  member_id: number;
+  month_number: number;
+  fee_amount: number;
+  valid_from: string;
+  valid_till: string;
+  status: "paid" | "pending";
+  paid_on?: string | null;
+  note?: string | null;
+}
+
+interface AttendanceRow {
+  id: number;
+  name: string;
+  monthly_fees?: MonthlyFee[];
+}
+
 type Source = "fixed" | "extra" | "salary";
 
 interface CombinedExpense extends Expense {
@@ -62,6 +80,22 @@ const extractList = (json: any): any[] => {
   if (Array.isArray(json?.data?.data)) return json.data.data;
   if (Array.isArray(json?.trainers)) return json.trainers;
   return [];
+};
+
+/* Helper: Aaj ki date ke andar wali monthly fee dhundein */
+const findCurrentMonthFee = (fees: MonthlyFee[]): MonthlyFee | null => {
+  if (!fees || fees.length === 0) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const mf of fees) {
+    if (!mf.valid_from || !mf.valid_till) continue;
+    if (today >= mf.valid_from && today <= mf.valid_till) {
+      return mf;
+    }
+  }
+
+  return null;
 };
 
 /* ---------- Small icons ---------- */
@@ -129,6 +163,27 @@ const ChevronRightIcon = () => (
   </Icon>
 );
 
+/* Naye icons for Fees cards */
+const TrendingUpIcon = () => (
+  <Icon>
+    <path d="M3 17l6-6 4 4 8-8" />
+    <path d="M14 7h7v7" />
+  </Icon>
+);
+const ClockIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3.5 2" />
+  </Icon>
+);
+const WalletIcon = () => (
+  <Icon>
+    <path d="M3 7h15a3 3 0 013 3v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+    <path d="M3 7l12-3 1 3" />
+    <circle cx="16.5" cy="13" r="1.2" />
+  </Icon>
+);
+
 /* ---------- Config ---------- */
 const PAGE_SIZE = 10;
 
@@ -151,8 +206,9 @@ export default function ExpenseOverview() {
   const [extra, setExtra] = useState<Expense[]>([]);
   const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
-  // Active staff ki base salary (key: trainer-1 / frontdesk-2)
   const [staffSalaries, setStaffSalaries] = useState<Record<string, number>>({});
+  // Memberships ka data (fees cards ke liye)
+  const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -235,9 +291,30 @@ export default function ExpenseOverview() {
     }
   };
 
+  /* ---------- Memberships / monthly fees load (Fees cards ke liye) ---------- */
+  const loadFees = async () => {
+    try {
+      const res = await fetch(
+        `${API_URL}/attendance?date=${new Date().toISOString().slice(0, 10)}`,
+        { headers: authHeaders() }
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      const list = extractList(json).map((m: any) => ({
+        id: m.id,
+        name: m.name ?? "",
+        monthly_fees: Array.isArray(m.monthly_fees) ? m.monthly_fees : [],
+      })) as AttendanceRow[];
+      setAttendanceRows(list);
+    } catch {
+      /* fees load na ho to baaki page chalta rahe */
+    }
+  };
+
   useEffect(() => {
     loadAll();
     loadSalary();
+    loadFees();
   }, []);
 
   /* ---------- Salary rows (sirf paid) ---------- */
@@ -251,7 +328,6 @@ export default function ExpenseOverview() {
       paidSalaries.map((p) => {
         const name = staffNames[`${p.staff_type}-${p.staff_id}`] || "Staff";
         return {
-          // id collision se bachne ke liye alag range (key mein source bhi hai)
           id: p.id,
           title: `Salary — ${name} (${MONTH_NAMES[p.month - 1]} ${p.year})`,
           amount: Number(p.amount),
@@ -286,7 +362,7 @@ export default function ExpenseOverview() {
   const curMonth = now.getMonth() + 1;
   const curYear = now.getFullYear();
 
-  // Is month ki salary: us month ke liye jitni paid payments hui (month/year ke hisaab se)
+  /* ---------- Salary calculations (is month ki) ---------- */
   const salaryThisMonth = useMemo(
     () =>
       paidSalaries
@@ -295,13 +371,11 @@ export default function ExpenseOverview() {
     [paidSalaries, curMonth, curYear]
   );
 
-  // Is month ki total salary deni hai (active staff ki base salary ka total)
   const salaryDueThisMonth = useMemo(
     () => Object.values(staffSalaries).reduce((sum, v) => sum + v, 0),
     [staffSalaries]
   );
 
-  // Is month ki salary kitni baqi hai (har staff ka alag hisaab, overpay doosre ka remaining nahi chhupata)
   const salaryRemainingThisMonth = useMemo(() => {
     const paidByStaff: Record<string, number> = {};
     paidSalaries
@@ -317,6 +391,31 @@ export default function ExpenseOverview() {
     );
   }, [staffSalaries, paidSalaries, curMonth, curYear]);
 
+  /* ---------- Fees calculations (is month ki) ---------- */
+  const feesThisMonth = useMemo(() => {
+    let total = 0;
+    attendanceRows.forEach((m) => {
+      const current = findCurrentMonthFee(m.monthly_fees ?? []);
+      if (current) total += Number(current.fee_amount);
+    });
+    return total;
+  }, [attendanceRows]);
+
+  const collectedFeesThisMonth = useMemo(() => {
+    let total = 0;
+    attendanceRows.forEach((m) => {
+      const current = findCurrentMonthFee(m.monthly_fees ?? []);
+      if (current && current.status === "paid") {
+        total += Number(current.fee_amount);
+      }
+    });
+    return total;
+  }, [attendanceRows]);
+
+  const remainingFeesThisMonth = useMemo(
+    () => Math.max(0, feesThisMonth - collectedFeesThisMonth),
+    [feesThisMonth, collectedFeesThisMonth]
+  );
 
   /* ---------- Filtering ---------- */
   const filtered = useMemo(() => {
@@ -428,6 +527,47 @@ export default function ExpenseOverview() {
           </div>
         </div>
 
+        {/* NAYA: This Month Fees (Total Expected) */}
+        <div className="exp-stat-card">
+          <div className="exp-stat-icon red">
+            <WalletIcon />
+          </div>
+          <div className="exp-stat-info">
+            <span className="exp-stat-title">This Month Fees</span>
+            <span className="exp-stat-period">
+              {MONTH_NAMES[curMonth - 1]} {curYear} — Total
+            </span>
+            <span className="exp-stat-value">{formatPrice(feesThisMonth)}</span>
+          </div>
+        </div>
+
+        {/* NAYA: Collected Fees (Received) */}
+        <div className="exp-stat-card">
+          <div className="exp-stat-icon green">
+            <TrendingUpIcon />
+          </div>
+          <div className="exp-stat-info">
+            <span className="exp-stat-title">Collected Fees</span>
+            <span className="exp-stat-period">
+              {MONTH_NAMES[curMonth - 1]} {curYear} — Received
+            </span>
+            <span className="exp-stat-value">{formatPrice(collectedFeesThisMonth)}</span>
+          </div>
+        </div>
+
+        {/* NAYA: Remaining Fees (Pending) */}
+        <div className="exp-stat-card">
+          <div className="exp-stat-icon amber">
+            <ClockIcon />
+          </div>
+          <div className="exp-stat-info">
+            <span className="exp-stat-title">Remaining Fees</span>
+            <span className="exp-stat-period">
+              {MONTH_NAMES[curMonth - 1]} {curYear} — Pending
+            </span>
+            <span className="exp-stat-value">{formatPrice(remainingFeesThisMonth)}</span>
+          </div>
+        </div>
       </section>
 
       {/* Table panel */}

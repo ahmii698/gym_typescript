@@ -40,6 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/members/{member}', [MemberController::class, 'show']);
     Route::get('/members/{member}/payments', [PaymentController::class, 'history']);
 
+    // Monthly Fee Toggle (Mark paid / unmark)   <-- NAYA
+    Route::post('/member-monthly-fees/{id}/toggle', [MemberController::class, 'toggleMonthlyFee']);
+
     // Payments (fee collection)
     Route::post('/payments', [PaymentController::class, 'store']);
 
@@ -78,8 +81,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/drinks/{drink}/history', [DrinkController::class, 'history']);
 
     // Accessories / Inventory (view + add + edit + delete + restock + history — admin aur frontdesk dono)
-    // NOTE: spend-summary route {accessory} wale routes se pehle honi chahiye,
-    // warna Laravel "spend-summary" ko ek {accessory} ID samajh kar match karega.
     Route::get('/accessories/spend-summary', [AccessoryController::class, 'spendSummary']);
     Route::get('/accessories', [AccessoryController::class, 'index']);
     Route::post('/accessories', [AccessoryController::class, 'store']);
@@ -89,8 +90,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/accessories/{accessory}/history', [AccessoryController::class, 'history']);
 
     // ---------- Fixed Expenses ----------
-    // NOTE: koi custom GET route (jaise /fixed-expenses/summary) ho to
-    // usay {fixed_expense} wale routes se PEHLE rakhna.
     Route::get('/fixed-expenses', [FixedExpenseController::class, 'index']);
     Route::post('/fixed-expenses', [FixedExpenseController::class, 'store']);
     Route::put('/fixed-expenses/{id}', [FixedExpenseController::class, 'update']);
@@ -106,7 +105,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // NOTE: /salary-summary, /staff-stats aur /salary-refresh ko /salary-payments/{id} se
     // PEHLE rakhna zaroori hai, warna Laravel "summary" ya "refresh" ko
     // {id} samajh kar match karega.
-    Route::get('/staff-stats', [SalaryController::class, 'staffStats']);   // <-- NAYA (date/month filter cards)
+    Route::get('/staff-stats', [SalaryController::class, 'staffStats']);
     Route::get('/salary-summary', [SalaryController::class, 'summary']);
     Route::post('/salary-base/update', [SalaryController::class, 'updateBaseSalary']);
     Route::post('/salary-refresh', [SalaryController::class, 'refresh']);
@@ -123,9 +122,5 @@ Route::middleware('auth:sanctum')->group(function () {
         // Drinks — edit/delete sirf admin karega
         Route::put('/drinks/{drink}', [DrinkController::class, 'update']);
         Route::delete('/drinks/{drink}', [DrinkController::class, 'destroy']);
-
-        // Agar chahein to Fixed / Extra Expense ki edit/delete bhi
-        // sirf admin tak mehdood kar sakte hain. Filhaal sab logged-in
-        // users (admin + frontdesk) use kar sakte hain.
     });
 });

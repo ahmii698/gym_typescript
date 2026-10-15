@@ -18,6 +18,7 @@
   font-family: inherit;
   scrollbar-width: thin;
   scrollbar-color: #2a2a2a transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 .drk-page::-webkit-scrollbar {
@@ -98,6 +99,7 @@
 .drk-btn-primary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   height: 40px;
   padding: 0 18px;
@@ -138,6 +140,7 @@
   display: flex;
   align-items: flex-start;
   gap: 18px;
+  min-width: 0;
   padding: 22px 20px;
   border: 1px solid rgba(239, 35, 60, 0.35);
   background: linear-gradient(135deg, rgba(239, 35, 60, 0.1), rgba(12, 12, 12, 0.9) 60%);
@@ -185,6 +188,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .drk-stat-title {
@@ -206,6 +210,8 @@
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drk-stat-change {
@@ -240,6 +246,7 @@
 /* ------------------------------- Panel ------------------------------- */
 
 .drk-panel {
+  min-width: 0;
   padding: 20px;
   background: rgba(12, 12, 12, 0.95);
   border: 1px solid #1f1f1f;
@@ -393,8 +400,11 @@
 
 .drk-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #1a1a1a;
   border-radius: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
 }
 
 .drk-table {
@@ -552,6 +562,7 @@
 .drk-pagination {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -602,44 +613,6 @@
   outline-offset: 2px;
 }
 
-/* ---------------------------- Responsive ---------------------------- */
-
-@media (max-width: 640px) {
-  .drk-page {
-    padding: 20px 14px;
-  }
-
-  .drk-header {
-    flex-wrap: wrap;
-  }
-
-  .drk-stats {
-    grid-template-columns: 1fr;
-  }
-
-  .drk-title {
-    font-size: 22px;
-  }
-}
-
-@media (max-width: 900px) {
-  .drk-toolbar {
-    flex-wrap: wrap;
-  }
-
-  .drk-search {
-    flex-basis: 100%;
-  }
-
-  .drk-select-wrap {
-    flex: 1;
-  }
-
-  .drk-select {
-    width: 100%;
-  }
-}
-
 /* ---------------------------- Add Drink / Restock Modal ---------------------------- */
 
 .drk-modal-overlay {
@@ -650,7 +623,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1200;
   padding: 16px;
 }
 
@@ -661,7 +634,9 @@
   width: 100%;
   max-width: 460px;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 20px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
@@ -672,7 +647,8 @@
 
 .drk-history-body {
   max-height: 60vh;
-  overflow-y: auto;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .drk-history-tag {
@@ -710,14 +686,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 18px;
 }
 
 .drk-modal-header h2 {
   margin: 0;
+  min-width: 0;
   font-size: 16px;
   font-weight: 700;
   color: #ffffff;
+  overflow-wrap: anywhere;
 }
 
 .drk-modal-close {
@@ -726,6 +705,7 @@
   border-radius: 8px;
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -746,7 +726,7 @@
 
 .drk-form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -754,6 +734,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .drk-form-group label {
@@ -763,6 +744,7 @@
 
 .drk-form-group input,
 .drk-form-group select {
+  width: 100%;
   height: 38px;
   padding: 0 12px;
   background: #0f0f0f;
@@ -802,6 +784,7 @@
 .drk-btn-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   height: 40px;
   padding: 0 18px;
@@ -823,8 +806,203 @@
   cursor: not-allowed;
 }
 
-@media (max-width: 480px) {
+/* ============================================ */
+/*  RESPONSIVE                                  */
+/* ============================================ */
+
+/* Medium: stat cards 3 per row */
+@media (max-width: 1280px) {
+  .drk-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Tablet / sidebar becomes a drawer */
+@media (max-width: 900px) {
+  .drk-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .drk-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .drk-search {
+    flex-basis: 100%;
+  }
+
+  .drk-select-wrap {
+    flex: 1;
+  }
+
+  .drk-select {
+    width: 100%;
+  }
+
+  /* Table keeps its width and swipes sideways instead of squeezing */
+  .drk-table-wrap .drk-table {
+    min-width: 860px;
+  }
+}
+
+/* Phone */
+@media (max-width: 640px) {
+  .drk-page {
+    padding: 18px 12px;
+  }
+
+  /* Header */
+  .drk-header {
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .drk-header-left {
+    flex: 1 1 100%;
+  }
+
+  .drk-header-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
+  }
+
+  .drk-title {
+    font-size: 22px;
+  }
+
+  .drk-subtitle {
+    font-size: 13px;
+  }
+
+  .drk-header > .drk-btn-primary {
+    width: 100%;
+  }
+
+  /* Stat cards: 2 per row, icon on top */
+  .drk-stats {
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .drk-stat-card {
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .drk-stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    border-radius: 10px;
+  }
+
+  .drk-stat-info {
+    width: 100%;
+    flex: none;
+  }
+
+  .drk-stat-title {
+    font-size: 13px;
+  }
+
+  .drk-stat-period {
+    margin: 2px 0 6px;
+    font-size: 10px;
+  }
+
+  .drk-stat-value {
+    margin-bottom: 0;
+    font-size: 18px;
+  }
+
+  /* Panel / toolbar */
+  .drk-panel {
+    padding: 14px;
+  }
+
+  .drk-toolbar {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .drk-search input {
+    font-size: 16px; /* stops iOS zoom on focus */
+  }
+
+  /* Table */
+  .drk-table th {
+    padding: 12px;
+  }
+
+  .drk-table td {
+    padding: 10px 12px;
+  }
+
+  /* Footer */
+  .drk-footer {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .drk-pagination {
+    justify-content: center;
+  }
+
+  /* Modals */
+  .drk-modal-overlay {
+    padding: 12px;
+  }
+
+  .drk-modal-card {
+    padding: 16px;
+    max-height: 92vh;
+    max-height: 92dvh;
+  }
+
+  .drk-history-body {
+    max-height: 65vh;
+  }
+
+  .drk-history-body .drk-table {
+    min-width: 560px;
+  }
+
   .drk-form-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .drk-form-group input,
+  .drk-form-group select {
+    font-size: 16px; /* stops iOS zoom on focus */
+  }
+
+  .drk-modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .drk-modal-footer .drk-btn-secondary,
+  .drk-modal-footer .drk-btn-primary {
+    width: 100%;
+  }
+}
+
+/* Very narrow phones: one stat card per row */
+@media (max-width: 380px) {
+  .drk-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .drk-stat-card {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .drk-stat-info {
+    flex: 1;
   }
 }

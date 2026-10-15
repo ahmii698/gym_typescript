@@ -5,6 +5,7 @@
 
 .exp-page {
   height: calc(100vh - 130px);
+  height: calc(100dvh - 130px);
   overflow-x: hidden;
   overflow-y: auto;
   padding: 28px 24px;
@@ -16,6 +17,7 @@
   font-family: inherit;
   scrollbar-width: thin;
   scrollbar-color: #2a2a2a transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 .exp-page::-webkit-scrollbar { width: 8px; }
@@ -80,10 +82,11 @@
 }
 
 /* ---------------------------- Stat cards ---------------------------- */
-/* 3 cards ek row mein, baqi neeche wali row mein */
+/* 8 cards: 4 columns mein 4+4 baith jayenge */
+
 .exp-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -91,8 +94,8 @@
 .exp-stat-card {
   display: flex;
   align-items: flex-start;
-  gap: 18px;
-  padding: 22px 20px;
+  gap: 14px;
+  padding: 18px 16px;
   border: 1px solid rgba(239, 35, 60, 0.35);
   background: linear-gradient(
     135deg,
@@ -101,19 +104,20 @@
   );
   border-radius: 14px;
   transition: transform 0.2s ease;
+  min-width: 0;
 }
 
 .exp-stat-card:hover { transform: translateY(-2px); }
 
 .exp-stat-icon {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  font-size: 26px;
+  border-radius: 10px;
+  font-size: 22px;
 }
 
 .exp-stat-icon.red {
@@ -137,26 +141,29 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .exp-stat-title {
-  font-size: 14px;
+  font-size: 13px;
   color: #d4d4d8;
 }
 
 .exp-stat-period {
-  margin: 2px 0 8px;
-  font-size: 11px;
+  margin: 2px 0 6px;
+  font-size: 10.5px;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   color: #71717a;
 }
 
 .exp-stat-value {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .exp-stat-value.pos { color: #22c55e; }
@@ -175,6 +182,7 @@
 
 /* ------------------------------- Panel ------------------------------- */
 .exp-panel {
+  min-width: 0;
   padding: 20px;
   background: rgba(12, 12, 12, 0.95);
   border: 1px solid #1f1f1f;
@@ -279,12 +287,16 @@
 /* ------------------------------- Table ------------------------------- */
 .exp-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #1a1a1a;
   border-radius: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
 }
 
 .exp-table {
   width: 100%;
+  min-width: 620px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -368,6 +380,7 @@
 .exp-pagination {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -414,15 +427,106 @@
   margin-bottom: 16px;
 }
 
-/* ---------------------------- Responsive ---------------------------- */
-@media (max-width: 800px) {
+/* ============================================ */
+/*  RESPONSIVE                                  */
+/* ============================================ */
+
+@media (max-width: 1400px) {
+  .exp-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1000px) {
   .exp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* Phone */
 @media (max-width: 640px) {
-  .exp-page { padding: 20px 14px; }
-  .exp-stats { grid-template-columns: minmax(0, 1fr); }
+  .exp-page { padding: 18px 12px; }
+
+  /* Header */
+  .exp-header {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .exp-header-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
+  }
+
   .exp-title { font-size: 22px; }
-  .exp-toolbar { flex-wrap: wrap; }
+  .exp-subtitle { font-size: 13px; }
+
+  /* Stat cards: 2 per row, icon on top */
+  .exp-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .exp-stat-card {
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .exp-stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .exp-stat-info {
+    width: 100%;
+    flex: none;
+  }
+
+  .exp-stat-period {
+    margin: 2px 0 6px;
+    font-size: 10px;
+  }
+
+  .exp-stat-value { font-size: 17px; }
+
+  /* Panel / toolbar */
+  .exp-panel { padding: 14px; }
+
+  .exp-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
   .exp-search { flex-basis: 100%; }
+
+  .exp-search input {
+    font-size: 16px; /* stops iOS zoom on focus */
+  }
+
+  /* Table */
+  .exp-table th { padding: 12px; }
+  .exp-table td { padding: 10px 12px; }
+
+  /* Footer */
+  .exp-footer {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .exp-pagination { justify-content: center; }
+}
+
+/* Very narrow phones: one stat card per row */
+@media (max-width: 380px) {
+  .exp-stats { grid-template-columns: minmax(0, 1fr); }
+
+  .exp-stat-card {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .exp-stat-info { flex: 1; }
 }

@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { UserPlus, User, Mail, Phone, Lock, Eye, EyeOff } from "lucide-react";
+import {
+  UserPlus,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+} from "lucide-react";
 import bannerImg from "../../assets/gym-banner1.png";
 import logoImg from "../../assets/logo.png";
 import { API_URL } from "../../../config";
@@ -120,6 +129,16 @@ const FrontdeskRegister = () => {
 
   return (
     <div className="frontdesk-register-wrapper">
+      <button
+        type="button"
+        className="frontdesk-back-btn"
+        onClick={() => navigate("/admin/dashboard")}
+        aria-label="Back to dashboard"
+      >
+        <ArrowLeft size={16} />
+        <span>Back</span>
+      </button>
+
       <div
         className="frontdesk-register-banner"
         style={{ backgroundImage: `url(${bannerImg})` }}

@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Calendar,
   Search,
@@ -12,6 +13,7 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   History as HistoryIcon,
 } from "lucide-react";
 import { API_URL } from "../../../config";
@@ -199,18 +201,110 @@ async function apiFetchHistory(memberId: number, month?: string): Promise<ApiHis
 /* ------------------------------------------------------------------ */
 /* Small presentational helpers                                        */
 /* ------------------------------------------------------------------ */
-const StatusBadge: React.FC<{
+
+/**
+ * Status badge — click karne par dropdown khulta hai.
+ * Agar status "Absent" hai to dropdown mein sirf "Present" aata hai,
+ * aur agar "Present" hai to sirf "Absent" aata hai.
+ * Dropdown body par portal se render hota hai taake table ke scroll
+ * (overflow) mein cut na ho.
+ */
+const StatusDropdown: React.FC<{
   status: AttendanceStatus;
-  onDoubleClick?: () => void;
-}> = ({ status, onDoubleClick }) => (
-  <span
-    className={`badge badge-${status.toLowerCase()} badge-toggle`}
-    onDoubleClick={onDoubleClick}
-    title="Double-click to toggle Present/Absent"
-  >
-    {status}
-  </span>
-);
+  onChange: (next: AttendanceStatus) => void;
+}> = ({ status, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const nextStatus: AttendanceStatus = status === "Present" ? "Absent" : "Present";
+
+  const openMenu = () => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 6, left: r.left, width: r.width });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    const close = () => setOpen(false);
+
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || btnRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={btnRef}
+        className={`badge badge-${status.toLowerCase()} status-dropdown-btn ${
+          open ? "is-open" : ""
+        }`}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Click to change status"
+      >
+        {status}
+        <ChevronDown size={12} />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="status-menu"
+            role="menu"
+            style={{
+              top: pos.top,
+              left: pos.left,
+              minWidth: Math.max(pos.width, 110),
+            }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className={`status-menu-item item-${nextStatus.toLowerCase()}`}
+              onClick={() => {
+                setOpen(false);
+                onChange(nextStatus);
+              }}
+            >
+              {nextStatus}
+            </button>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+};
 
 const PaymentBadge: React.FC<{ status: PaymentStatus }> = ({ status }) => (
   <span className={`badge badge-${status.toLowerCase()}`}>{status}</span>
@@ -333,7 +427,7 @@ const AttendancePage: React.FC = () => {
     return cells;
   }, [history]);
 
-  // Toggle Present <-> Absent for a given member (used on badge double-click)
+  // Toggle Present <-> Absent for a given member (dropdown se select karne par chalta hai)
   const toggleStatus = async (id: number) => {
     // optimistic UI update — turant dikhta hai, table refresh nahi hota
     setMembers((prev) =>
@@ -653,9 +747,9 @@ const AttendancePage: React.FC = () => {
                   <td>{m.type}</td>
                   <td>{m.trainer ?? "-"}</td>
                   <td>
-                    <StatusBadge
+                    <StatusDropdown
                       status={m.status}
-                      onDoubleClick={() => toggleStatus(m.id)}
+                      onChange={() => toggleStatus(m.id)}
                     />
                   </td>
                   <td>{m.checkIn ?? "-"}</td>
@@ -735,9 +829,9 @@ const AttendancePage: React.FC = () => {
                 <p>{activeMember.email}</p>
               </div>
               <div className="modal-profile-badges">
-                <StatusBadge
+                <StatusDropdown
                   status={activeMember.status}
-                  onDoubleClick={() => toggleStatus(activeMember.id)}
+                  onChange={() => toggleStatus(activeMember.id)}
                 />
                 <PaymentBadge status={activeMember.paymentStatus} />
               </div>

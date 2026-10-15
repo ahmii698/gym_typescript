@@ -15,44 +15,40 @@ class StoreMemberRequest extends FormRequest
 
     public function rules(): array
     {
-        $needsTrainer = in_array($this->input('member_type'), Member::TRAINER_TYPES, true);
-
         return [
-            // Personal information
-            'full_name'      => ['required', 'string', 'max:255'],
-            'cnic'           => ['required', 'regex:/^\d{5}-\d{7}-\d$/', 'unique:members,cnic'],
-            'cnic_front'     => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
-            'cnic_back'      => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
-            'contact_number' => ['required', 'regex:/^03\d{2}-?\d{7}$/'],
-            'email'          => ['nullable', 'email', 'max:255'],
-            'date_of_birth'  => ['nullable', 'date', 'before:today'],
-            'gender'         => ['nullable', Rule::in(['male', 'female', 'other'])],
+            'full_name'          => ['required', 'string', 'max:255'],
+            'cnic'               => ['required', 'string', 'max:15'],
 
-            // Membership details
-            'package_id'     => ['required', 'exists:packages,id'],
-            'start_date'     => ['required', 'date'],
-            'end_date'       => ['nullable', 'date', 'after_or_equal:start_date'],
-            'notes'          => ['nullable', 'string', 'max:1000'],
+            // CNIC images optional
+            'cnic_front'         => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+            'cnic_back'          => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
 
-            // Member type + trainer
-            'member_type'    => ['required', Rule::in(Member::TYPES)],
-            'trainer_id'     => [$needsTrainer ? 'required' : 'nullable', 'exists:trainers,id'],
+            'contact_number'     => ['required', 'string', 'max:20'],
+            'email'              => ['nullable', 'email', 'max:255'],
+            'date_of_birth'      => ['nullable', 'date'],
+            'gender'             => ['nullable', Rule::in(['male', 'female', 'other'])],
 
-            // Payment
-            'fee_amount'     => ['nullable', 'numeric', 'min:0'],
-            'payment_status' => ['nullable', Rule::in(['paid', 'pending', 'partial'])],
-        ];
-    }
+            'member_type'        => ['required', Rule::in([
+                'normal_user',
+                'normal_trainer',
+                'package_trainer',
+                'package_only',
+            ])],
+            'package_id'         => ['required', 'integer', 'exists:packages,id'],
+            'trainer_id'         => [
+                Rule::requiredIf(fn () => in_array($this->input('member_type'), Member::TRAINER_TYPES, true)),
+                'nullable',
+                'integer',
+                'exists:trainers,id',
+            ],
 
-    public function messages(): array
-    {
-        return [
-            'cnic.regex'           => 'CNIC format XXXXX-XXXXXXX-X hona chahiye.',
-            'cnic.unique'          => 'Is CNIC ka member pehle se registered hai.',
-            'contact_number.regex' => 'Contact number format 03XX-XXXXXXX hona chahiye.',
-            'cnic_front.max'       => 'CNIC front image 2MB se zyada nahi honi chahiye.',
-            'cnic_back.max'        => 'CNIC back image 2MB se zyada nahi honi chahiye.',
-            'trainer_id.required'  => 'Is member type ke liye trainer select karna zaroori hai.',
+            'start_date'         => ['required', 'date'],
+            'end_date'           => ['nullable', 'date', 'after_or_equal:start_date'],
+            'notes'              => ['nullable', 'string'],
+
+            'fee_amount'         => ['nullable', 'numeric', 'min:0'],
+            'payment_status'     => ['nullable', Rule::in(['paid', 'pending', 'partial'])],
+            'installment_months' => ['nullable', 'integer', 'min:1', 'max:60'],
         ];
     }
 }

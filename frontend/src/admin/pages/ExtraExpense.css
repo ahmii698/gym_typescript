@@ -2,6 +2,7 @@
 
 .extra-expense-container {
   height: calc(100vh - 130px);
+  height: calc(100dvh - 130px);
   overflow-x: hidden;
   overflow-y: auto;
   padding: 28px 24px;
@@ -13,6 +14,7 @@
   font-family: inherit;
   scrollbar-width: thin;
   scrollbar-color: #2a2a2a transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 .extra-expense-container::-webkit-scrollbar {
@@ -57,8 +59,19 @@
   color: #a1a1aa;
 }
 
+/* Alert banner (JSX uses the acc-alert class) */
+.extra-expense-container .acc-alert {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(239, 35, 60, 0.12);
+  border: 1px solid rgba(239, 35, 60, 0.4);
+  color: #ff8a97;
+  font-size: 13px;
+}
+
 /* Form Card */
 .form-card {
+  min-width: 0;
   padding: 20px;
   background: rgba(12, 12, 12, 0.95);
   border: 1px solid #1f1f1f;
@@ -95,6 +108,7 @@
 
 .input-group input {
   width: 100%;
+  min-width: 0;
   padding: 10px 12px;
   border-radius: 8px;
   background: #0f0f0f;
@@ -137,12 +151,32 @@
   transform: translateY(1px);
 }
 
+.btn-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Table Card */
 .table-card {
+  min-width: 0;
   padding: 20px;
   background: rgba(12, 12, 12, 0.95);
   border: 1px solid #1f1f1f;
   border-radius: 14px;
+  /* The table is a direct child, so the card itself scrolls sideways */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.table-card::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-card::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 999px;
 }
 
 .table-card h3 {
@@ -150,10 +184,13 @@
   margin: 0 0 16px;
   font-size: 16px;
   font-weight: 600;
+  position: sticky;
+  left: 0;
 }
 
 .expense-table {
   width: 100%;
+  min-width: 520px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -216,19 +253,74 @@
   color: #fff;
 }
 
-/* Responsive */
+/* ---------------------------- Responsive ---------------------------- */
+
+/* Tablet: form fields 2 per row */
+@media (max-width: 900px) {
+  .input-group {
+    flex: 1 1 calc(50% - 14px);
+  }
+
+  .btn-add {
+    flex: 1 1 100%;
+    margin-top: 0;
+  }
+}
+
+/* Phone */
 @media (max-width: 640px) {
   .extra-expense-container {
-    padding: 20px 14px;
+    padding: 18px 12px;
+  }
+
+  .page-header {
+    margin-bottom: 18px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .page-header p {
+    font-size: 13px;
+  }
+
+  .form-card,
+  .table-card {
+    padding: 14px;
+  }
+
+  .form-card {
+    margin-bottom: 18px;
   }
 
   .expense-form {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
+  }
+
+  .input-group {
+    flex: none;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .input-group input {
+    font-size: 16px; /* stops iOS zoom on focus */
   }
 
   .btn-add {
+    flex: none;
     margin-top: 0;
     width: 100%;
+  }
+
+  .expense-table th {
+    padding: 12px;
+  }
+
+  .expense-table td {
+    padding: 10px 12px;
   }
 }
