@@ -82,7 +82,7 @@ const extractList = (json: any): any[] => {
   return [];
 };
 
-/* Helper: Aaj ki date ke andar wali monthly fee dhundein */
+/* Helper: find the monthly fee that covers today's date */
 const findCurrentMonthFee = (fees: MonthlyFee[]): MonthlyFee | null => {
   if (!fees || fees.length === 0) return null;
 
@@ -97,6 +97,42 @@ const findCurrentMonthFee = (fees: MonthlyFee[]): MonthlyFee | null => {
 
   return null;
 };
+
+// Local date (YYYY-MM-DD) used for export file names
+const todayISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// Escape text before putting it into export HTML
+const escapeHtml = (v: string | number): string =>
+  String(v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ---------- Header action buttons (inline styles) ---------- */
+const actionBtnBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const refreshBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#3b82f6" };
+const excelBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#22c55e" };
+const pdfBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#ef4444" };
 
 /* ---------- Small icons ---------- */
 const Icon = ({ children }: { children: React.ReactNode }) => (
@@ -162,8 +198,25 @@ const ChevronRightIcon = () => (
     <path d="M9 6l6 6-6 6" />
   </Icon>
 );
+const RefreshIcon = () => (
+  <Icon>
+    <path d="M20 11a8 8 0 0 0-14.9-3M4 5v4h4" />
+    <path d="M4 13a8 8 0 0 0 14.9 3M20 19v-4h-4" />
+  </Icon>
+);
+const SheetIcon = () => (
+  <Icon>
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M4 9h16M4 15h16M10 3v18" />
+  </Icon>
+);
+const DownloadIcon = () => (
+  <Icon>
+    <path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 20h14" />
+  </Icon>
+);
 
-/* Naye icons for Fees cards */
+/* New icons for the Fees cards */
 const TrendingUpIcon = () => (
   <Icon>
     <path d="M3 17l6-6 4 4 8-8" />
@@ -207,10 +260,11 @@ export default function ExpenseOverview() {
   const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
   const [staffSalaries, setStaffSalaries] = useState<Record<string, number>>({});
-  // Memberships ka data (fees cards ke liye)
+  // Memberships data (for the fees cards)
   const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | Source>("all");
@@ -228,7 +282,7 @@ export default function ExpenseOverview() {
       ]);
 
       if (fixedRes.status === 401 || extraRes.status === 401) {
-        setError("Session expire ho gaya hai, dobara login karo.");
+        setError("Your session has expired. Please log in again.");
         return;
       }
       if (!fixedRes.ok || !extraRes.ok) throw new Error();
@@ -239,7 +293,7 @@ export default function ExpenseOverview() {
       setFixed(fixedJson.data ?? []);
       setExtra(extraJson.data ?? []);
     } catch {
-      setError("Expenses load nahi ho sake. Backend chal raha hai?");
+      setError("Could not load expenses. Is the backend running?");
     } finally {
       setLoading(false);
     }
@@ -287,11 +341,11 @@ export default function ExpenseOverview() {
       setStaffNames(names);
       setStaffSalaries(salaries);
     } catch {
-      /* salary load na ho to baaki page chalta rahe */
+      /* if salary fails to load, the rest of the page keeps working */
     }
   };
 
-  /* ---------- Memberships / monthly fees load (Fees cards ke liye) ---------- */
+  /* ---------- Memberships / monthly fees load (for the Fees cards) ---------- */
   const loadFees = async () => {
     try {
       const res = await fetch(
@@ -307,7 +361,7 @@ export default function ExpenseOverview() {
       })) as AttendanceRow[];
       setAttendanceRows(list);
     } catch {
-      /* fees load na ho to baaki page chalta rahe */
+      /* if fees fail to load, the rest of the page keeps working */
     }
   };
 
@@ -317,7 +371,17 @@ export default function ExpenseOverview() {
     loadFees();
   }, []);
 
-  /* ---------- Salary rows (sirf paid) ---------- */
+  /* ---------- Header: Refresh ---------- */
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadAll(), loadSalary(), loadFees()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  /* ---------- Salary rows (paid only) ---------- */
   const paidSalaries = useMemo(
     () => salaryPayments.filter((p) => p.status === "paid"),
     [salaryPayments]
@@ -362,7 +426,7 @@ export default function ExpenseOverview() {
   const curMonth = now.getMonth() + 1;
   const curYear = now.getFullYear();
 
-  /* ---------- Salary calculations (is month ki) ---------- */
+  /* ---------- Salary calculations (this month) ---------- */
   const salaryThisMonth = useMemo(
     () =>
       paidSalaries
@@ -391,7 +455,7 @@ export default function ExpenseOverview() {
     );
   }, [staffSalaries, paidSalaries, curMonth, curYear]);
 
-  /* ---------- Fees calculations (is month ki) ---------- */
+  /* ---------- Fees calculations (this month) ---------- */
   const feesThisMonth = useMemo(() => {
     let total = 0;
     attendanceRows.forEach((m) => {
@@ -440,6 +504,105 @@ export default function ExpenseOverview() {
   const showingFrom = filtered.length === 0 ? 0 : startIndex + 1;
   const showingTo = startIndex + pageItems.length;
 
+  /* ---------- Header: Excel / PDF export ---------- */
+
+  // Excel export (no extra library): downloads an .xls file built from an HTML table
+  const handleExportExcel = () => {
+    const body = filtered
+      .map(
+        (item, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(item.title)}</td><td>${escapeHtml(
+            SOURCE_LABEL[item.source]
+          )}</td><td>${escapeHtml(formatDate(item.date))}</td><td>${Number(item.amount) || 0}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8" /></head>
+<body>
+<table border="1">
+<thead><tr><th>#</th><th>Title</th><th>Source</th><th>Date</th><th>Amount (Rs)</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body></html>`;
+
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `expense-overview-${todayISO()}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // PDF export (no extra library): opens the print dialog, choose "Save as PDF"
+  const handleExportPdf = () => {
+    const total = filtered.reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+
+    const body = filtered
+      .map(
+        (item, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(item.title)}</td><td>${escapeHtml(
+            SOURCE_LABEL[item.source]
+          )}</td><td>${escapeHtml(formatDate(item.date))}</td><td style="text-align:right">${escapeHtml(
+            formatPrice(item.amount)
+          )}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html>
+<head>
+<meta charset="UTF-8" />
+<title>Expense Overview</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 7px 9px; text-align: left; }
+  th { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Expense Overview</h1>
+<p>Generated on ${escapeHtml(todayISO())} &middot; ${filtered.length} entries &middot; Total: ${escapeHtml(
+      formatPrice(total)
+    )}</p>
+<table>
+<thead><tr><th>#</th><th>Title</th><th>Source</th><th>Date</th><th style="text-align:right">Amount</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      }, 1000);
+    }, 300);
+  };
+
   return (
     <div className="exp-page">
       {/* Header */}
@@ -451,9 +614,41 @@ export default function ExpenseOverview() {
           <div>
             <h1 className="exp-title">Expense Overview</h1>
             <p className="exp-subtitle">
-              Poora kharcha aik jagah — Fixed, Extra aur is month ki Salary.
+              All expenses in one place — Fixed, Extra, and this month's Salary.
             </p>
           </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+            marginLeft: "auto",
+          }}
+        >
+          <button
+            type="button"
+            style={{
+              ...refreshBtnStyle,
+              opacity: refreshing ? 0.7 : 1,
+              cursor: refreshing ? "not-allowed" : "pointer",
+            }}
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshIcon />
+            <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+          </button>
+          <button type="button" style={excelBtnStyle} onClick={handleExportExcel}>
+            <SheetIcon />
+            <span>Excel</span>
+          </button>
+          <button type="button" style={pdfBtnStyle} onClick={handleExportPdf}>
+            <DownloadIcon />
+            <span>PDF</span>
+          </button>
         </div>
       </header>
 
@@ -485,7 +680,7 @@ export default function ExpenseOverview() {
           </div>
         </div>
 
-        {/* Is month ki total salary deni hai */}
+        {/* Total salary due this month */}
         <div className="exp-stat-card">
           <div className="exp-stat-icon amber">
             <UsersIcon />
@@ -499,7 +694,7 @@ export default function ExpenseOverview() {
           </div>
         </div>
 
-        {/* Is month ki salary dedi */}
+        {/* Salary paid this month */}
         <div className="exp-stat-card">
           <div className="exp-stat-icon green">
             <CashIcon />
@@ -513,7 +708,7 @@ export default function ExpenseOverview() {
           </div>
         </div>
 
-        {/* Is month ki salary baqi */}
+        {/* Salary remaining this month */}
         <div className="exp-stat-card">
           <div className="exp-stat-icon red">
             <CoinIcon />
@@ -521,13 +716,13 @@ export default function ExpenseOverview() {
           <div className="exp-stat-info">
             <span className="exp-stat-title">Salary Remaining</span>
             <span className="exp-stat-period">
-              {MONTH_NAMES[curMonth - 1]} {curYear} — Baqi
+              {MONTH_NAMES[curMonth - 1]} {curYear} — Remaining
             </span>
             <span className="exp-stat-value">{formatPrice(salaryRemainingThisMonth)}</span>
           </div>
         </div>
 
-        {/* NAYA: This Month Fees (Total Expected) */}
+        {/* NEW: This Month Fees (Total Expected) */}
         <div className="exp-stat-card">
           <div className="exp-stat-icon red">
             <WalletIcon />
@@ -541,7 +736,7 @@ export default function ExpenseOverview() {
           </div>
         </div>
 
-        {/* NAYA: Collected Fees (Received) */}
+        {/* NEW: Collected Fees (Received) */}
         <div className="exp-stat-card">
           <div className="exp-stat-icon green">
             <TrendingUpIcon />
@@ -555,7 +750,7 @@ export default function ExpenseOverview() {
           </div>
         </div>
 
-        {/* NAYA: Remaining Fees (Pending) */}
+        {/* NEW: Remaining Fees (Pending) */}
         <div className="exp-stat-card">
           <div className="exp-stat-icon amber">
             <ClockIcon />
@@ -645,7 +840,7 @@ export default function ExpenseOverview() {
               {!loading && pageItems.length === 0 && (
                 <tr>
                   <td colSpan={5} className="exp-empty">
-                    Koi expense nahi mila. Filter change karke dekhein.
+                    No expenses found. Try changing the filter.
                   </td>
                 </tr>
               )}

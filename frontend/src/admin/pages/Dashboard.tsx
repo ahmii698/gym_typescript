@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users,
@@ -21,6 +22,9 @@ import {
   ChevronDown,
   Wallet,
   PiggyBank,
+  RefreshCw,
+  FileText,
+  Download,
 } from "lucide-react";
 import { API_URL } from "../../../config";
 import "./dashboard.css";
@@ -95,6 +99,12 @@ interface OwnerStats {
   availableYears: number[];
 }
 
+interface ReportSection {
+  title: string;
+  headers: string[];
+  rows: (string | number)[][];
+}
+
 type Period = "today" | "week" | "month" | "year" | "custom";
 type ChartType = "bar" | "hbar" | "line" | "area" | "pie" | "donut";
 
@@ -134,6 +144,46 @@ const PALETTE = [
   "#8b5cf6",
   "#eab308",
 ];
+
+const actionsWrapStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  marginLeft: "auto",
+};
+
+const actionBtnStyle = (bg: string, disabled: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+  padding: "9px 16px",
+  border: "none",
+  borderRadius: 10,
+  background: bg,
+  color: "#ffffff",
+  fontSize: 13,
+  fontWeight: 600,
+  fontFamily: "inherit",
+  lineHeight: 1,
+  cursor: disabled ? "not-allowed" : "pointer",
+  opacity: disabled ? 0.6 : 1,
+  appearance: "none",
+  WebkitAppearance: "none",
+  transition: "filter 0.15s ease, transform 0.15s ease",
+});
+
+const ACTION_CSS = `
+.dash-action-btn:hover:not(:disabled) {
+  filter: brightness(1.1) !important;
+  transform: translateY(-1px);
+}
+.dash-spin {
+  animation: dash-spin 0.8s linear infinite;
+}
+@keyframes dash-spin {
+  to { transform: rotate(360deg); }
+}
+`;
 
 const authHeaders = (): Record<string, string> => {
   const token = localStorage.getItem("token");
@@ -187,6 +237,25 @@ const arcPath = (
   const [ix1, iy1] = polar(cx, cy, r0, end);
   const [ix0, iy0] = polar(cx, cy, r0, a0);
   return `M ${ox0} ${oy0} A ${r1} ${r1} 0 ${large} 1 ${ox1} ${oy1} L ${ix1} ${iy1} A ${r0} ${r0} 0 ${large} 0 ${ix0} ${iy0} Z`;
+};
+
+const escapeCsv = (v: string | number) => {
+  const s = String(v ?? "");
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const escapeHtml = (v: string | number) =>
+  String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const todayStamp = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 };
 
 interface ChartViewProps {
@@ -437,6 +506,7 @@ const Dashboard = () => {
   const [toDate, setToDate] = useState("");
   const [revenueChartType, setRevenueChartType] = useState<ChartType>("bar");
   const [growthChartType, setGrowthChartType] = useState<ChartType>("bar");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [ownerStats, setOwnerStats] = useState<OwnerStats>({
     activeMembers: 0,
@@ -516,13 +586,13 @@ const Dashboard = () => {
           });
         }
       } catch (err) {
-        console.error("Owner stats load nahi ho sake", err);
+        console.error("Failed to load owner stats", err);
       } finally {
         setLoadingStats(false);
       }
     };
     fetchOwnerStats();
-  }, [selectedYear, period, fromDate, toDate]);
+  }, [selectedYear, period, fromDate, toDate, refreshKey]);
 
   useLayoutEffect(() => {
     const updateHeight = () => {
@@ -665,12 +735,152 @@ const Dashboard = () => {
       ? ownerStats.availableYears
       : [new Date().getFullYear()];
 
+  const trendText = (v: number) => `${v >= 0 ? "+" : "-"}${Math.abs(v)}%`;
+
+  const buildSections = (): ReportSection[] => [
+    {
+      title: `Summary (${periodLabel})`,
+      headers: ["Metric", "Value", `Change ${compareLabel}`],
+      rows: [
+        ["Active Members", ownerStats.activeMembers, trendText(ownerStats.activeTrend)],
+        ["New Members", ownerStats.newMembers, trendText(ownerStats.newMembersTrend)],
+        ["Overdue Payments (PKR)", ownerStats.overdueAmount, trendText(ownerStats.overdueTrend)],
+        ["Revenue Collected (PKR)", ownerStats.revenue, trendText(ownerStats.revenueTrend)],
+        ["Total Expense (PKR)", ownerStats.totalExpense, trendText(ownerStats.expenseTrend)],
+        ["Profit (PKR)", ownerStats.profit, trendText(ownerStats.profitTrend)],
+      ],
+    },
+    {
+      title: `Monthly Revenue Trend (${selectedYear})`,
+      headers: ["Month", "Revenue (PKR)"],
+      rows: revenueData.map((d) => [d.label, d.value]),
+    },
+    {
+      title: `Member Growth Trend (${selectedYear})`,
+      headers: ["Month", "Total Members"],
+      rows: growthData.map((d) => [d.label, d.value]),
+    },
+    {
+      title: "Inventory",
+      headers: ["Item Name", "Category", "Quantity"],
+      rows: ownerStats.recentAccessories.map((a) => [a.name, a.category, a.quantity]),
+    },
+    {
+      title: "Memberships Expiring Soon (Next 7 Days)",
+      headers: ["Member Name", "Membership Type", "Expiry Date", "Days Left"],
+      rows: ownerStats.expiringMembers.map((m) => [m.name, m.plan, m.expiry, m.days_left]),
+    },
+    {
+      title: "Staff",
+      headers: ["Name", "Role", "Specialization", "Experience", "Status"],
+      rows: ownerStats.recentStaff.map((s) => [
+        s.name,
+        s.role,
+        s.specialization,
+        s.experience,
+        s.status,
+      ]),
+    },
+  ];
+
+  const handleRefresh = () => {
+    if (loadingStats) return;
+    setRefreshKey((k) => k + 1);
+  };
+
+  const handleExportExcel = () => {
+    const lines: string[] = [
+      escapeCsv("Gym Dashboard Report"),
+      escapeCsv(`Generated: ${formatDate(new Date())} ${formatTime(new Date())}`),
+      "",
+    ];
+    buildSections().forEach((section) => {
+      lines.push(escapeCsv(section.title));
+      lines.push(section.headers.map(escapeCsv).join(","));
+      if (section.rows.length === 0) {
+        lines.push(escapeCsv("No data available"));
+      } else {
+        section.rows.forEach((row) => lines.push(row.map(escapeCsv).join(",")));
+      }
+      lines.push("");
+    });
+
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dashboard-report-${todayStamp()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportPdf = () => {
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Please allow pop-ups to export the PDF.");
+      return;
+    }
+
+    const body = buildSections()
+      .map((section) => {
+        const head = section.headers
+          .map((h) => `<th>${escapeHtml(h)}</th>`)
+          .join("");
+        const rows =
+          section.rows.length === 0
+            ? `<tr><td colspan="${section.headers.length}" class="empty">No data available</td></tr>`
+            : section.rows
+                .map(
+                  (r) =>
+                    `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`
+                )
+                .join("");
+        return `<h2>${escapeHtml(section.title)}</h2><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+      })
+      .join("");
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Dashboard Report ${todayStamp()}</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
+  h2 { font-size: 15px; margin: 22px 0 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  th { background: #f0f0f0; }
+  .empty { text-align: center; color: #777; }
+  tr { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+  <h1>Gym Dashboard Report</h1>
+  <div class="meta">Period: ${escapeHtml(periodLabel)} &middot; Generated: ${escapeHtml(
+      formatDate(new Date())
+    )} ${escapeHtml(formatTime(new Date()))}</div>
+  ${body}
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  };
+
   return (
     <div
       className="dashboard-page"
       ref={pageRef}
       style={pageHeight ? { height: pageHeight } : undefined}
     >
+      <style>{ACTION_CSS}</style>
+
       <div className="dash-header">
         <div>
           <h1 className="dash-title">Welcome back, Owner!</h1>
@@ -723,6 +933,42 @@ const Dashboard = () => {
             />
           </div>
         )}
+
+        <div style={actionsWrapStyle}>
+          <button
+            type="button"
+            className="dash-action-btn"
+            style={actionBtnStyle("#3b82f6", loadingStats)}
+            onClick={handleRefresh}
+            disabled={loadingStats}
+          >
+            <RefreshCw
+              size={15}
+              className={loadingStats ? "dash-spin" : undefined}
+            />
+            Refresh
+          </button>
+          <button
+            type="button"
+            className="dash-action-btn"
+            style={actionBtnStyle("#22c55e", loadingStats)}
+            onClick={handleExportExcel}
+            disabled={loadingStats}
+          >
+            <FileText size={15} />
+            Excel
+          </button>
+          <button
+            type="button"
+            className="dash-action-btn"
+            style={actionBtnStyle("#ef4444", loadingStats)}
+            onClick={handleExportPdf}
+            disabled={loadingStats}
+          >
+            <Download size={15} />
+            PDF
+          </button>
+        </div>
       </div>
 
       <div className="dash-stats dash-stats-6">
@@ -917,7 +1163,7 @@ const Dashboard = () => {
                 {ownerStats.expiringMembers.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="dash-empty-cell">
-                      No memberships expiring in next 7 days.
+                      No memberships expiring in the next 7 days.
                     </td>
                   </tr>
                 ) : (
@@ -943,7 +1189,7 @@ const Dashboard = () => {
               <Receipt size={22} />
             </div>
             <div className="dash-panel-heading">
-              <h2>Members</h2>
+              <h2>Staff</h2>
               <p>Recent trainers & front desk</p>
             </div>
             <button

@@ -15,6 +15,8 @@ import {
   RefreshCw,
   Receipt,
   X,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
 import { API_URL } from "../../../config";
 import "./Members.css";
@@ -65,7 +67,7 @@ interface Summary {
   year: number;
 }
 
-// Cards ka data (date / month filter ke hisaab se)
+// Card data (based on the date / month filter)
 interface PeriodStats {
   total_staff: number;
   trainers: number;
@@ -142,15 +144,42 @@ const authHeaders = (): Record<string, string> => {
   };
 };
 
-// Reset (settled) hui payment ya nahi
+// Escape text before putting it into export HTML
+const escapeHtml = (v: string | number): string =>
+  String(v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ---------- Header action buttons (inline styles) ---------- */
+const actionBtnBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const refreshBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#3b82f6" };
+const excelBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#22c55e" };
+const pdfBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#ef4444" };
+
+// Whether the payment has been reset (settled)
 const isSettled = (p: SalaryPayment): boolean => Boolean(Number(p.is_settled));
 
-// Pay Salary ke liye default month/year:
-// Agar is staff ka koi month closed (refresh) ho chuka hai aur wo current month
-// ya us se aage ka hai, to automatically uske agle month pe set hoga.
+// Default month/year for Pay Salary:
+// If a month has already been closed (refreshed) for this staff member and it is the
+// current month or later, the default automatically moves to the following month.
 const getDefaultPeriod = (staffPayments: SalaryPayment[]): { month: number; year: number } => {
   const now = new Date();
-  let idx = now.getFullYear() * 12 + now.getMonth(); // month 0-based
+  let idx = now.getFullYear() * 12 + now.getMonth(); // month is 0-based
 
   let latestSettled = -1;
   staffPayments.forEach((p) => {
@@ -230,6 +259,7 @@ const Members = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [now, setNow] = useState(new Date());
   const [tab, setTab] = useState<Tab>("All");
@@ -237,7 +267,7 @@ const Members = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All Status");
   const [page, setPage] = useState(1);
 
-  // Cards ka date / month filter
+  // Date / month filter for the cards
   const [filterMode, setFilterMode] = useState<FilterMode>("month");
   const [filterDate, setFilterDate] = useState(toDateInput(new Date()));
   const [filterMonth, setFilterMonth] = useState(toMonthInput(new Date()));
@@ -280,10 +310,10 @@ const Members = () => {
       ]);
 
       if (trainersRes.status === 401 || frontdeskRes.status === 401) {
-        throw new Error("Session expire ho gaya, dobara login karo.");
+        throw new Error("Your session has expired. Please log in again.");
       }
-      if (!trainersRes.ok) throw new Error(`Trainers load nahi huay (${trainersRes.status}).`);
-      if (!frontdeskRes.ok) throw new Error(`Front desk load nahi hua (${frontdeskRes.status}).`);
+      if (!trainersRes.ok) throw new Error(`Could not load trainers (${trainersRes.status}).`);
+      if (!frontdeskRes.ok) throw new Error(`Could not load front desk staff (${frontdeskRes.status}).`);
 
       const trainers = extractList(await trainersRes.json()).map(normalizeTrainer);
       const frontdesk = extractList(await frontdeskRes.json()).map(normalizeFrontdesk);
@@ -294,7 +324,7 @@ const Members = () => {
       setStaff(all);
     } catch (e: any) {
       if (e?.name === "AbortError") return;
-      setError(e?.message || "Kuch ghalat ho gaya.");
+      setError(e?.message || "Something went wrong.");
     } finally {
       if (!signal.aborted) setLoading(false);
     }
@@ -348,6 +378,11 @@ const Members = () => {
   useEffect(() => {
     setPage(1);
   }, [tab, query, statusFilter]);
+
+  // Stop the header Refresh button's "Refreshing..." state once loading finishes
+  useEffect(() => {
+    if (!loading) setRefreshing(false);
+  }, [loading]);
 
   /* ---------- Stats Cards ---------- */
   const stats = useMemo(() => {
@@ -408,7 +443,7 @@ const Members = () => {
     ];
   }, [periodStats, filterMode, filterDate, filterMonth]);
 
-  /* ---------- Helper: is month ki paid salary (settled + unsettled, sab) ---------- */
+  /* ---------- Helper: total salary paid this month (settled + unsettled, all) ---------- */
   const getPaidThisMonth = useCallback(
     (staffId: number, staffType: "trainer" | "frontdesk") => {
       const currentMonth = summary?.month ?? new Date().getMonth() + 1;
@@ -460,7 +495,7 @@ const Members = () => {
       body: JSON.stringify({ staff_id: staffId, staff_type: type, base_salary: amount }),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.message ?? "Salary update nahi ho saki");
+    if (!res.ok) throw new Error(json.message ?? "Could not update the salary");
     setReloadKey((k) => k + 1);
   };
 
@@ -481,25 +516,25 @@ const Members = () => {
       body: JSON.stringify(payload),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.message ?? "Payment record nahi ho saki");
+    if (!res.ok) throw new Error(json.message ?? "Could not record the payment");
     await Promise.all([loadPayments(), loadSummary(), loadStats()]);
   };
 
   /* ---------- Delete Payment ---------- */
   const deletePayment = async (id: number) => {
-    if (!window.confirm("Yeh payment delete karni hai?")) return;
+    if (!window.confirm("Delete this payment?")) return;
     const res = await fetch(`${API_URL}/salary-payments/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
-    if (!res.ok) return alert("Delete nahi ho saki");
+    if (!res.ok) return alert("Could not delete the payment");
     await Promise.all([loadPayments(), loadSummary(), loadStats()]);
   };
 
-  /* ---------- Refresh Salary (current month reset — record safe rehta hai) ---------- */
+  /* ---------- Refresh Salary (resets the current month — the record stays safe) ---------- */
   const refreshSalary = async (s: Staff) => {
     const confirmed = window.confirm(
-      `${s.name} ki is month ki salary reset karni hai? (Purana record Total Record mein safe rahega)`
+      `Reset ${s.name}'s salary for this month? (The old record will stay safe in Total Record)`
     );
     if (!confirmed) return;
 
@@ -511,14 +546,122 @@ const Members = () => {
         body: JSON.stringify({ staff_id: s.id, staff_type: s.staff_type }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.message ?? "Refresh nahi ho saka");
+      if (!res.ok) throw new Error(json.message ?? "Could not refresh");
 
       await Promise.all([loadPayments(), loadSummary(), loadStats()]);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Refresh nahi ho saka");
+      alert(err instanceof Error ? err.message : "Could not refresh");
     } finally {
       setRefreshingKey(null);
     }
+  };
+
+  /* ---------- Header actions (Refresh / Excel / PDF) ---------- */
+  const handleRefreshAll = () => {
+    setRefreshing(true);
+    setReloadKey((k) => k + 1);
+  };
+
+  // Excel export (no extra library): downloads an .xls file built from an HTML table
+  const handleExportExcel = () => {
+    const body = filtered
+      .map((s, i) => {
+        const paid = getPaidThisMonth(s.id, s.staff_type);
+        const remaining = Math.max(0, s.base_salary - paid);
+        return `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td><td>${escapeHtml(
+          s.phone || "—"
+        )}</td><td>${escapeHtml(s.email || "—")}</td><td>${escapeHtml(s.role)}</td><td>${escapeHtml(
+          s.specialization
+        )}</td><td>${s.base_salary}</td><td>${remaining}</td><td>${escapeHtml(s.status)}</td></tr>`;
+      })
+      .join("");
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8" /></head>
+<body>
+<table border="1">
+<thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Email</th><th>Role</th><th>Specialization</th><th>Salary (Rs)</th><th>Remaining (Rs)</th><th>Status</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body></html>`;
+
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `staff-${toDateInput(new Date())}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // PDF export (no extra library): opens the print dialog, choose "Save as PDF"
+  const handleExportPdf = () => {
+    const body = filtered
+      .map((s, i) => {
+        const paid = getPaidThisMonth(s.id, s.staff_type);
+        const remaining = Math.max(0, s.base_salary - paid);
+        const isFullyPaid = s.base_salary > 0 && remaining === 0;
+        return `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td><td>${escapeHtml(
+          s.phone || "—"
+        )}</td><td>${escapeHtml(s.email || "—")}</td><td>${escapeHtml(s.role)}</td><td>${escapeHtml(
+          s.specialization
+        )}</td><td style="text-align:center">${escapeHtml(
+          formatPrice(s.base_salary)
+        )}</td><td style="text-align:center">${escapeHtml(
+          isFullyPaid ? "Fully Paid" : formatPrice(remaining)
+        )}</td><td style="text-align:center">${escapeHtml(s.status)}</td></tr>`;
+      })
+      .join("");
+
+    const html = `<html>
+<head>
+<meta charset="UTF-8" />
+<title>Staff</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  th { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Staff</h1>
+<p>Generated on ${escapeHtml(toDateInput(new Date()))} &middot; ${filtered.length} staff members</p>
+<table>
+<thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Email</th><th>Role</th><th>Specialization</th><th style="text-align:center">Salary</th><th style="text-align:center">Remaining</th><th style="text-align:center">Status</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      }, 1000);
+    }, 300);
   };
 
   return (
@@ -534,16 +677,42 @@ const Members = () => {
           <p className="mem-subtitle">View all trainers and front desk staff with salary management.</p>
         </div>
 
-        <div className="mem-datetime">
-          <div className="mem-datetime-text">
-            <span className="mem-date">{formatDate(now)}</span>
-            <span className="mem-time">{formatTime(now)}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={{
+                ...refreshBtnStyle,
+                opacity: refreshing ? 0.7 : 1,
+                cursor: refreshing ? "not-allowed" : "pointer",
+              }}
+              onClick={handleRefreshAll}
+              disabled={refreshing}
+            >
+              <RefreshCw size={16} />
+              <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+            </button>
+            <button type="button" style={excelBtnStyle} onClick={handleExportExcel}>
+              <FileSpreadsheet size={16} />
+              <span>Excel</span>
+            </button>
+            <button type="button" style={pdfBtnStyle} onClick={handleExportPdf}>
+              <Download size={16} />
+              <span>PDF</span>
+            </button>
           </div>
-          <Calendar size={22} strokeWidth={1.8} />
+
+          <div className="mem-datetime">
+            <div className="mem-datetime-text">
+              <span className="mem-date">{formatDate(now)}</span>
+              <span className="mem-time">{formatTime(now)}</span>
+            </div>
+            <Calendar size={22} strokeWidth={1.8} />
+          </div>
         </div>
       </div>
 
-      {/* Date / Month filter (cards ke liye) */}
+      {/* Date / Month filter (for the cards) */}
       <div className="mem-filter-bar">
         <div className="mem-filter-toggle">
           <button
@@ -837,7 +1006,7 @@ const Members = () => {
         />
       )}
 
-      {/* History Modal — Monthly (sirf current/unsettled payments) */}
+      {/* History Modal — Monthly (current/unsettled payments only) */}
       {historyFor && (
         <HistoryModal
           staff={historyFor}
@@ -852,7 +1021,7 @@ const Members = () => {
         />
       )}
 
-      {/* Total Record Modal — Lifetime (settled + unsettled, sab kuch) */}
+      {/* Total Record Modal — Lifetime (settled + unsettled, everything) */}
       {totalRecordFor && (
         <TotalRecordModal
           staff={totalRecordFor}
@@ -891,7 +1060,7 @@ function EditSalaryModal({
     e.preventDefault();
     const value = Number(amount);
     if (isNaN(value) || value < 0) {
-      setError("Valid amount likhein.");
+      setError("Please enter a valid amount.");
       return;
     }
     setSaving(true);
@@ -900,7 +1069,7 @@ function EditSalaryModal({
       await onSave(staff.id, staff.staff_type, value);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save nahi ho saka");
+      setError(err instanceof Error ? err.message : "Could not save");
     } finally {
       setSaving(false);
     }
@@ -963,7 +1132,7 @@ function PaySalaryModal({
   }) => Promise<void>;
 }) {
   const today = new Date();
-  // Closed (refresh) month ke baad automatically agla month default hoga
+  // After a month is closed (refreshed), the next month becomes the default automatically
   const defaultPeriod = getDefaultPeriod(payments);
 
   const [amount, setAmount] = useState(String(staff.base_salary));
@@ -979,7 +1148,7 @@ function PaySalaryModal({
     e.preventDefault();
     const value = Number(amount);
     if (isNaN(value) || value < 0) {
-      setError("Valid amount likhein.");
+      setError("Please enter a valid amount.");
       return;
     }
     setSaving(true);
@@ -997,13 +1166,13 @@ function PaySalaryModal({
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Record nahi ho saka");
+      setError(err instanceof Error ? err.message : "Could not record the payment");
     } finally {
       setSaving(false);
     }
   };
 
-  // Pichle 4 saal + agla saal (Dec ke baad Jan ke liye)
+  // Past 4 years + next year (for January after December)
   const years = Array.from({ length: 6 }, (_, i) => today.getFullYear() + 1 - i);
   if (!years.includes(defaultPeriod.year)) years.unshift(defaultPeriod.year);
 
@@ -1127,7 +1296,7 @@ function HistoryModal({
         <div className="mem-modal-body">
           {sorted.length === 0 ? (
             <p className="mem-empty" style={{ padding: "20px 0" }}>
-              Abhi tak koi salary record nahi hai.
+              No salary records yet.
             </p>
           ) : (
             <div className="mem-history-wrap">
@@ -1180,7 +1349,7 @@ function HistoryModal({
   );
 }
 
-/* ---------- Total Record Modal (Lifetime — reset wali payments bhi) ---------- */
+/* ---------- Total Record Modal (Lifetime — including reset payments) ---------- */
 function TotalRecordModal({
   staff,
   payments,
@@ -1208,7 +1377,7 @@ function TotalRecordModal({
 
   const grandTotal = totalPaid + totalPending;
 
-  // Month-wise totals calculate karein
+  // Calculate month-wise totals
   const monthTotals: Record<string, { month: number; year: number; paid: number; pending: number }> = {};
   sorted.forEach((p) => {
     const key = `${p.year}-${p.month}`;
@@ -1254,7 +1423,7 @@ function TotalRecordModal({
 
           {sorted.length === 0 ? (
             <p className="mem-empty" style={{ padding: "20px 0" }}>
-              Abhi tak koi salary record nahi hai.
+              No salary records yet.
             </p>
           ) : (
             <>

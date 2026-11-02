@@ -6,9 +6,11 @@ import {
   CalendarRange,
   Calendar,
   Search,
- 
   ChevronLeft,
   ChevronRight,
+  RefreshCw,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
 import { API_URL } from "../../../config";
 import "./CheckIns.css";
@@ -108,7 +110,7 @@ async function apiFetchCheckIns(params: {
       Authorization: `Bearer ${getToken()}`,
     },
   });
-  if (!res.ok) throw new Error("Check-ins load nahi ho sakay.");
+  if (!res.ok) throw new Error("Could not load check-ins.");
   return res.json();
 }
 
@@ -119,9 +121,36 @@ async function apiFetchStats(): Promise<Stats> {
       Authorization: `Bearer ${getToken()}`,
     },
   });
-  if (!res.ok) throw new Error("Stats load nahi ho sakay.");
+  if (!res.ok) throw new Error("Could not load stats.");
   return res.json();
 }
+
+// Escape text before putting it into export HTML
+const escapeHtml = (v: string | number): string =>
+  String(v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ---------- Header action buttons (inline styles) ---------- */
+const actionBtnBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const refreshBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#3b82f6" };
+const excelBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#22c55e" };
+const pdfBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#ef4444" };
 
 const TABS: { key: RangeKey; label: string }[] = [
   { key: "today", label: "Today" },
@@ -155,6 +184,10 @@ const CheckIns = () => {
 
   const [stats, setStats] = useState<Stats | null>(null);
 
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
@@ -186,7 +219,7 @@ const CheckIns = () => {
     setPage(1);
   }, [from, to, query]);
 
-  // Fetch check-ins whenever filters/page change
+  // Fetch check-ins whenever filters/page change (or on manual refresh)
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -211,7 +244,7 @@ const CheckIns = () => {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Check-ins load nahi ho sakay.");
+        setError(err instanceof Error ? err.message : "Could not load check-ins.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -220,14 +253,19 @@ const CheckIns = () => {
     return () => {
       cancelled = true;
     };
-  }, [from, to, query, page]);
+  }, [from, to, query, page, refreshKey]);
 
-  // Fetch stat cards once
+  // Fetch stat cards (on first load and on manual refresh)
   useEffect(() => {
     apiFetchStats()
       .then(setStats)
       .catch(() => setStats(null));
-  }, []);
+  }, [refreshKey]);
+
+  // Stop the header Refresh button's "Refreshing..." state once loading finishes
+  useEffect(() => {
+    if (!loading) setRefreshing(false);
+  }, [loading]);
 
   const applyPreset = (key: RangeKey) => {
     setRange(key);
@@ -269,6 +307,149 @@ const CheckIns = () => {
   const showingTo = (page - 1) * 10 + records.length;
   const rangeLabel = `${fmtDate(fromInput(from))} - ${fmtDate(fromInput(to))}`;
 
+  /* ---------- Header actions (Refresh / Excel / PDF) ---------- */
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setRefreshKey((k) => k + 1);
+  };
+
+  // Loads every page for the current filters, so the export is not limited to the visible 10 rows
+  const fetchAllRecords = async (): Promise<CheckInRecord[]> => {
+    const all: CheckInRecord[] = [];
+    let current = 1;
+    let last = 1;
+    do {
+      const res = await apiFetchCheckIns({ from, to, search: query, page: current });
+      res.data.forEach((r) =>
+        all.push({
+          id: r.id,
+          name: r.name,
+          phone: r.phone,
+          cnic: r.cnic,
+          pkg: r.package,
+          date: r.date,
+          checkIn: r.check_in,
+        })
+      );
+      last = Math.max(1, res.last_page);
+      current += 1;
+    } while (current <= last);
+    return all;
+  };
+
+  // Excel export (no extra library): downloads an .xls file built from an HTML table
+  const handleExportExcel = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const all = await fetchAllRecords();
+      const body = all
+        .map(
+          (r, i) =>
+            `<tr><td>${i + 1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(
+              r.phone
+            )}</td><td>${escapeHtml(r.pkg)}</td><td>${escapeHtml(
+              fmtRecordDateTime(r.date, r.checkIn)
+            )}</td></tr>`
+        )
+        .join("");
+
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8" /></head>
+<body>
+<table border="1">
+<thead><tr><th>#</th><th>Member Name</th><th>Phone</th><th>Package</th><th>Check-in Time</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body></html>`;
+
+      const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `check-ins-${from}_to_${to}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Could not export check-ins.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // PDF export (no extra library): opens the print dialog, choose "Save as PDF"
+  const handleExportPdf = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const all = await fetchAllRecords();
+      const body = all
+        .map(
+          (r, i) =>
+            `<tr><td>${i + 1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(
+              r.phone
+            )}</td><td>${escapeHtml(r.pkg)}</td><td>${escapeHtml(
+              fmtRecordDateTime(r.date, r.checkIn)
+            )}</td></tr>`
+        )
+        .join("");
+
+      const html = `<html>
+<head>
+<meta charset="UTF-8" />
+<title>Check-ins</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 7px 9px; text-align: left; }
+  th { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Check-ins</h1>
+<p>${escapeHtml(rangeLabel)} &middot; ${all.length} records</p>
+<table>
+<thead><tr><th>#</th><th>Member Name</th><th>Phone</th><th>Package</th><th>Check-in Time</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body></html>`;
+
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document;
+      if (!doc || !iframe.contentWindow) {
+        document.body.removeChild(iframe);
+        return;
+      }
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          if (document.body.contains(iframe)) document.body.removeChild(iframe);
+        }, 1000);
+      }, 300);
+    } catch {
+      setError("Could not export check-ins.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const STATS_CARDS = [
     { id: "today", title: "Today's Check-ins", period: "Today", value: stats?.today ?? "-", variant: "red", icon: <CalendarCheck size={26} /> },
     { id: "week", title: "Weekly Check-ins", period: "This Week", value: stats?.week ?? "-", variant: "green", icon: <CalendarDays size={26} /> },
@@ -285,12 +466,56 @@ const CheckIns = () => {
           <p className="ci-subtitle">View and manage all member check-in records.</p>
         </div>
 
-        <div className="ci-datetime">
-          <div className="ci-datetime-text">
-            <span className="ci-date">{fmtDateLong(now)}</span>
-            <span className="ci-time">{fmtTime(now)}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={{
+                ...refreshBtnStyle,
+                opacity: refreshing ? 0.7 : 1,
+                cursor: refreshing ? "not-allowed" : "pointer",
+              }}
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw size={16} />
+              <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+            </button>
+            <button
+              type="button"
+              style={{
+                ...excelBtnStyle,
+                opacity: exporting ? 0.7 : 1,
+                cursor: exporting ? "not-allowed" : "pointer",
+              }}
+              onClick={handleExportExcel}
+              disabled={exporting}
+            >
+              <FileSpreadsheet size={16} />
+              <span>Excel</span>
+            </button>
+            <button
+              type="button"
+              style={{
+                ...pdfBtnStyle,
+                opacity: exporting ? 0.7 : 1,
+                cursor: exporting ? "not-allowed" : "pointer",
+              }}
+              onClick={handleExportPdf}
+              disabled={exporting}
+            >
+              <Download size={16} />
+              <span>PDF</span>
+            </button>
           </div>
-          <Calendar size={22} strokeWidth={1.8} />
+
+          <div className="ci-datetime">
+            <div className="ci-datetime-text">
+              <span className="ci-date">{fmtDateLong(now)}</span>
+              <span className="ci-time">{fmtTime(now)}</span>
+            </div>
+            <Calendar size={22} strokeWidth={1.8} />
+          </div>
         </div>
       </div>
 

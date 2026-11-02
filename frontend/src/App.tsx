@@ -26,6 +26,9 @@ import DrinksBeverages from "./admin/pages/drinks&beverages";
 // --- Cash in Hand Page Import ---
 import CashInHand from "./admin/pages/CashInHand";
 
+// --- Credit Management Page Import ---
+import CreditManagement from "./admin/pages/CreditManagement";
+
 // --- Expense Pages Import ---
 import ExpenseOverview from "./admin/pages/expense";
 import FixedExpense from "./admin/pages/FixedExpense";
@@ -81,6 +84,9 @@ function App() {
 
         {/* --- Cash in Hand --- */}
         <Route path="cash-in-hand" element={<CashInHand />} />
+
+        {/* --- Credit Management --- */}
+        <Route path="credit" element={<CreditManagement />} />
 
         <Route path="reports" element={<AdminReports />} />
         <Route path="settings" element={<AdminSettings />} />

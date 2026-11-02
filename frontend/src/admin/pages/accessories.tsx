@@ -4,7 +4,7 @@ import "./accessories.css";
 
 /* ---------- Types ---------- */
 type LogType = "initial" | "restock" | "removed";
-// "custom" = ek single specific date (backend ko from = to bhej rahe hain)
+// "custom" = a single specific date (we send from = to to the backend)
 type SpendFilterType = "month" | "week" | "custom";
 
 interface AccessoryItem {
@@ -45,7 +45,14 @@ interface SpendSummary {
   filtered: SpendFiltered;
 }
 
-interface SavePayload {
+// Optional vendor credit fields (sent only when "Purchased from a vendor" is checked)
+interface VendorCreditPayload {
+  vendor_name?: string;
+  invoice_no?: string;
+  paid_now?: number;
+}
+
+interface SavePayload extends VendorCreditPayload {
   name: string;
   category: string;
   quantity: number;
@@ -53,16 +60,16 @@ interface SavePayload {
   unit_price: number | null;
 }
 
-interface RestockPayload {
+interface RestockPayload extends VendorCreditPayload {
   quantity: number;
   unit_price: number;
   note: string | null;
 }
 
 /* ---------- Helpers ---------- */
-// UI se category hata di gayi hai. Backend abhi category maangta hai,
-// is liye har naye item ke saath yeh default bhej rahe hain.
-// (Backend mein category nullable kar do to yeh bhi hata sakte ho.)
+// The category was removed from the UI. The backend still requires it,
+// so we send this default with every new item.
+// (If you make category nullable in the backend, you can remove this too.)
 const DEFAULT_CATEGORY = "Accessories";
 
 const LOG_LABEL: Record<LogType, string> = {
@@ -82,8 +89,8 @@ const YEAR_OPTIONS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR - i);
 const PAGE_SIZE = 15;
 const BOTTOM_GAP = 24;
 
-// Local date (YYYY-MM-DD). toISOString() UTC deta hai, jis se Pakistan mein
-// raat 12 se subah 5 baje tak pichli date aa jati thi.
+// Local date (YYYY-MM-DD). toISOString() returns UTC, which in Pakistan
+// gave the previous date between 12 AM and 5 AM.
 const todayISO = () => {
   const d = new Date();
   const y = d.getFullYear();
@@ -135,7 +142,7 @@ const formatDate = (iso: string): string =>
     minute: "2-digit",
   });
 
-// "05" -> "5", "007" -> "7", "0.5" waise hi rehta hai
+// "05" -> "5", "007" -> "7", "0.5" stays as is
 const stripLeadingZeros = (v: string) => v.replace(/^0+(?=\d)/, "");
 
 // Laravel validation errors come as { message, errors: { field: [msg] } }
@@ -143,6 +150,33 @@ const extractError = (json: any, fallback: string): string => {
   const first = json?.errors ? (Object.values(json.errors).flat()[0] as string | undefined) : undefined;
   return first ?? json?.message ?? fallback;
 };
+
+// Escape text before putting it into export HTML
+const escapeHtml = (v: string | number): string =>
+  String(v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ---------- Header action buttons (inline styles) ---------- */
+const actionBtnBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const refreshBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#3b82f6" };
+const excelBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#22c55e" };
+const pdfBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#ef4444" };
 
 /* ---------- Small icon components ---------- */
 const Icon = ({
@@ -244,6 +278,23 @@ const CloseIcon = () => (
     <path d="M6 6l12 12M18 6L6 18" />
   </Icon>
 );
+const RefreshIcon = () => (
+  <Icon>
+    <path d="M20 11a8 8 0 0 0-14.9-3M4 5v4h4" />
+    <path d="M4 13a8 8 0 0 0 14.9 3M20 19v-4h-4" />
+  </Icon>
+);
+const SheetIcon = () => (
+  <Icon>
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M4 9h16M4 15h16M10 3v18" />
+  </Icon>
+);
+const DownloadIcon = () => (
+  <Icon>
+    <path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 20h14" />
+  </Icon>
+);
 
 /* ---------- Page ---------- */
 export default function Accessories() {
@@ -253,6 +304,7 @@ export default function Accessories() {
   const [items, setItems] = useState<AccessoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Spend cards (Total spent / filterable / this week / today)
   const [spend, setSpend] = useState<SpendSummary | null>(null);
@@ -301,21 +353,21 @@ export default function Accessories() {
     try {
       const res = await fetch(`${API_URL}/accessories`, { headers: authHeaders() });
       if (res.status === 401) {
-        setError("Session expire ho gaya hai, dobara login karo.");
+        setError("Your session has expired. Please log in again.");
         return;
       }
       if (!res.ok) throw new Error();
       const json = await res.json();
       setItems(json.data ?? []);
     } catch {
-      setError("Accessories load nahi ho sake. Backend chal raha hai?");
+      setError("Could not load accessories. Is the backend running?");
     } finally {
       setLoading(false);
     }
   };
 
   const loadSpend = async () => {
-    // Date khali kar di ho to request na bhejein
+    // Don't send a request if the date was cleared
     if (filterType === "custom" && !filterDate) {
       setSpendLoading(false);
       return;
@@ -330,7 +382,7 @@ export default function Accessories() {
       } else if (filterType === "week") {
         params.set("week_date", filterWeekDate);
       } else {
-        // Single date: from aur to dono same date => sirf usi din ka record
+        // Single date: from and to are the same date => only that day's records
         params.set("from", filterDate);
         params.set("to", filterDate);
       }
@@ -342,7 +394,7 @@ export default function Accessories() {
       const json = await res.json();
       setSpend(json);
     } catch {
-      // stat cards ke liye chup chaap fail ho jaane dein, table pe error already dikh raha hoga
+      // Let the stat cards fail silently; the table already shows an error
     } finally {
       setSpendLoading(false);
     }
@@ -380,7 +432,7 @@ export default function Accessories() {
         setHistory(json.data ?? []);
         setSummary(json.summary ?? null);
       } catch {
-        if (!cancelled) setHistoryError("History load nahi ho saki.");
+        if (!cancelled) setHistoryError("Could not load history.");
       } finally {
         if (!cancelled) setHistoryLoading(false);
       }
@@ -406,13 +458,113 @@ export default function Accessories() {
   const showingFrom = filtered.length === 0 ? 0 : startIndex + 1;
   const showingTo = startIndex + pageItems.length;
 
-  // Spent card ka period label: single date ho to sirf ek date dikhayen
+  // Period label for the Spent card: show just one date for a single date
   const spentPeriodLabel =
     filterType === "custom" ? formatDay(filterDate) : spend?.filtered.label ?? "This month";
 
   /* ---------- Actions ---------- */
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadItems(), loadSpend()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Excel export (no extra library): downloads an .xls file built from an HTML table
+  const handleExportExcel = () => {
+    const rows = filtered
+      .map(
+        (item, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(item.name)}</td><td>${item.quantity}</td><td>${
+            item.unit_price !== null && item.unit_price !== undefined ? Number(item.unit_price) : ""
+          }</td></tr>`
+      )
+      .join("");
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8" /></head>
+<body>
+<table border="1">
+<thead><tr><th>#</th><th>Item Name</th><th>Quantity</th><th>Per unit price (Rs)</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `accessories-${todayISO()}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // PDF export (no extra library): opens the print dialog, choose "Save as PDF"
+  const handleExportPdf = () => {
+    const rows = filtered
+      .map(
+        (item, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(item.name)}</td><td style="text-align:center">${
+            item.quantity
+          }</td><td style="text-align:center">${escapeHtml(formatPrice(item.unit_price))}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html>
+<head>
+<meta charset="UTF-8" />
+<title>Accessories</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+  th { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Accessories</h1>
+<p>Generated on ${escapeHtml(formatDay(todayISO()))} &middot; ${filtered.length} items</p>
+<table>
+<thead><tr><th>#</th><th>Item Name</th><th style="text-align:center">Quantity</th><th style="text-align:center">Per unit price</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      }, 1000);
+    }, 300);
+  };
+
   const handleDelete = async (item: AccessoryItem) => {
-    if (!window.confirm(`"${item.name}" ko delete kar dein? Iski history bhi delete ho jaegi.`)) return;
+    if (!window.confirm(`Delete "${item.name}"? Its history will be deleted as well.`)) return;
     try {
       const res = await fetch(`${API_URL}/accessories/${item.id}`, {
         method: "DELETE",
@@ -421,7 +573,7 @@ export default function Accessories() {
       if (!res.ok) throw new Error();
       await Promise.all([loadItems(), loadSpend()]);
     } catch {
-      alert("Item delete nahi ho saka.");
+      alert("Could not delete the item.");
     }
   };
 
@@ -433,7 +585,7 @@ export default function Accessories() {
     });
 
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(extractError(json, "Save nahi ho saka."));
+    if (!res.ok) throw new Error(extractError(json, "Could not save."));
     await Promise.all([loadItems(), loadSpend()]);
   };
 
@@ -445,7 +597,7 @@ export default function Accessories() {
     });
 
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(extractError(json, "Stock add nahi ho saka."));
+    if (!res.ok) throw new Error(extractError(json, "Could not add stock."));
     await Promise.all([loadItems(), loadSpend()]);
   };
 
@@ -466,10 +618,34 @@ export default function Accessories() {
             <p className="acc-subtitle">Manage gym accessories, equipment and their stock.</p>
           </div>
         </div>
-        <button type="button" className="acc-btn-primary" onClick={() => setModalOpen(true)}>
-          <PlusIcon />
-          <span>Add Item</span>
-        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            style={{
+              ...refreshBtnStyle,
+              opacity: refreshing ? 0.7 : 1,
+              cursor: refreshing ? "not-allowed" : "pointer",
+            }}
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshIcon />
+            <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+          </button>
+          <button type="button" style={excelBtnStyle} onClick={handleExportExcel}>
+            <SheetIcon />
+            <span>Excel</span>
+          </button>
+          <button type="button" style={pdfBtnStyle} onClick={handleExportPdf}>
+            <DownloadIcon />
+            <span>PDF</span>
+          </button>
+          <button type="button" className="acc-btn-primary" onClick={() => setModalOpen(true)}>
+            <PlusIcon />
+            <span>Add Item</span>
+          </button>
+        </div>
       </header>
 
       {error && (
@@ -626,7 +802,7 @@ export default function Accessories() {
 
       {/* Table panel */}
       <section className="acc-panel">
-        {/* Toolbar (sirf search, category filter hata diya) */}
+        {/* Toolbar (search only, category filter removed) */}
         <div className="acc-toolbar">
           <label className="acc-search">
             <SearchIcon />
@@ -796,7 +972,7 @@ export default function Accessories() {
                 </div>
               )}
 
-              {/* Summary: dono card poori width mein barabar */}
+              {/* Summary: both cards equal width, full row */}
               {summary && (
                 <div
                   style={{
@@ -844,7 +1020,7 @@ export default function Accessories() {
               {historyLoading && <p className="acc-history-empty">Loading history...</p>}
               {historyError && <p className="acc-modal-error">{historyError}</p>}
               {!historyLoading && !historyError && history.length === 0 && (
-                <p className="acc-history-empty">Abhi tak koi history nahi hai.</p>
+                <p className="acc-history-empty">No history yet.</p>
               )}
 
               {!historyLoading && history.length > 0 && (
@@ -899,6 +1075,114 @@ export default function Accessories() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Vendor credit fields (shared by Add + Restock modals)              */
+/* ------------------------------------------------------------------ */
+
+interface VendorCreditFieldsProps {
+  enabled: boolean;
+  onToggle: (value: boolean) => void;
+  vendorName: string;
+  onVendorName: (value: string) => void;
+  invoiceNo: string;
+  onInvoiceNo: (value: string) => void;
+  paidNow: string;
+  onPaidNow: (value: string) => void;
+  totalBill: number | null;
+}
+
+const VendorCreditFields: React.FC<VendorCreditFieldsProps> = ({
+  enabled,
+  onToggle,
+  vendorName,
+  onVendorName,
+  invoiceNo,
+  onInvoiceNo,
+  paidNow,
+  onPaidNow,
+  totalBill,
+}) => {
+  const paid = Number(paidNow) || 0;
+  const remaining = totalBill !== null ? totalBill - paid : null;
+
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(148, 163, 184, 0.25)",
+        borderRadius: 10,
+        padding: 14,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+        <span>Purchased from a vendor? (Credit Purchase)</span>
+      </label>
+
+      {enabled && (
+        <>
+          <div className="acc-form-row">
+            <div className="acc-form-field">
+              <label>Vendor Name *</label>
+              <input
+                type="text"
+                value={vendorName}
+                onChange={(e) => onVendorName(e.target.value)}
+                placeholder="e.g. Ahmed Malik"
+              />
+            </div>
+
+            <div className="acc-form-field">
+              <label>Invoice Number *</label>
+              <input
+                type="text"
+                value={invoiceNo}
+                onChange={(e) => onInvoiceNo(e.target.value)}
+                placeholder="Unique invoice #"
+              />
+            </div>
+          </div>
+
+          <div className="acc-form-field">
+            <label>Paid Now (Rs)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={paidNow}
+              onChange={(e) => onPaidNow(stripLeadingZeros(e.target.value))}
+              placeholder="0 = full credit"
+            />
+          </div>
+
+          <small className="acc-hint">
+            {totalBill !== null
+              ? `Total bill: ${formatPrice(totalBill)} • Remaining credit: ${formatPrice(
+                  Math.max(remaining ?? 0, 0)
+                )}`
+              : "Enter quantity and price to see the total bill."}
+            {" "}Pay the remaining amount later from the Credit page.
+          </small>
+        </>
+      )}
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
 /*  Add Modal                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -910,10 +1194,17 @@ interface AddAccessoryModalProps {
 const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }) => {
   const [form, setForm] = useState({
     name: "",
-    quantity: "", // string rakha hai taake 0 aasani se hat jaye
+    quantity: "", // kept as a string so a leading 0 is easy to remove
     unitPrice: "",
     notes: "",
   });
+
+  // Vendor credit
+  const [credit, setCredit] = useState(false);
+  const [vendorName, setVendorName] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [paidNow, setPaidNow] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -925,7 +1216,7 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
     e.preventDefault();
 
     if (!form.name.trim()) {
-      setError("Item ka naam likhein.");
+      setError("Please enter the item name.");
       return;
     }
 
@@ -935,10 +1226,41 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
     let unitPrice: number | null = null;
     if (quantity > 0) {
       if (form.unitPrice.trim() === "" || Number(form.unitPrice) < 0 || Number.isNaN(Number(form.unitPrice))) {
-        setError("Har piece ki price likhein (kitne ka liya).");
+        setError("Please enter the price per piece (what you paid).");
         return;
       }
       unitPrice = Number(form.unitPrice);
+    }
+
+    // Vendor credit checks
+    let creditPayload: VendorCreditPayload = {};
+    if (credit) {
+      if (quantity < 1 || unitPrice === null) {
+        setError("For a vendor purchase, enter the quantity and the price per piece.");
+        return;
+      }
+      if (!vendorName.trim()) {
+        setError("Please enter the vendor name.");
+        return;
+      }
+      if (!invoiceNo.trim()) {
+        setError("Please enter the invoice number.");
+        return;
+      }
+      const paid = paidNow.trim() === "" ? 0 : Number(paidNow);
+      if (Number.isNaN(paid) || paid < 0) {
+        setError("Paid Now must be 0 or more.");
+        return;
+      }
+      if (paid > quantity * unitPrice) {
+        setError("Paid Now cannot be more than the total bill.");
+        return;
+      }
+      creditPayload = {
+        vendor_name: vendorName.trim(),
+        invoice_no: invoiceNo.trim(),
+        paid_now: paid,
+      };
     }
 
     setSaving(true);
@@ -950,10 +1272,11 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
         quantity,
         notes: form.notes.trim() || null,
         unit_price: unitPrice,
+        ...creditPayload,
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Kuch ghalat ho gaya.");
+      setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setSaving(false);
     }
@@ -1028,6 +1351,18 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
             />
           </div>
 
+          <VendorCreditFields
+            enabled={credit}
+            onToggle={setCredit}
+            vendorName={vendorName}
+            onVendorName={setVendorName}
+            invoiceNo={invoiceNo}
+            onInvoiceNo={setInvoiceNo}
+            paidNow={paidNow}
+            onPaidNow={setPaidNow}
+            totalBill={totalCost !== null && !Number.isNaN(totalCost) ? totalCost : null}
+          />
+
           <div className="acc-modal-foot">
             <button type="button" className="acc-btn-ghost" onClick={onClose} disabled={saving}>
               Cancel
@@ -1058,6 +1393,13 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
     item.unit_price !== null && item.unit_price !== undefined ? String(item.unit_price) : ""
   );
   const [note, setNote] = useState("");
+
+  // Vendor credit
+  const [credit, setCredit] = useState(false);
+  const [vendorName, setVendorName] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [paidNow, setPaidNow] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1069,12 +1411,39 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
     e.preventDefault();
 
     if (!Number.isInteger(qty) || qty < 1) {
-      setError("Kitne piece add kiye? (kam az kam 1)");
+      setError("How many pieces did you add? (at least 1)");
       return;
     }
     if (!hasPrice) {
-      setError("Har piece ki price likhein (kitne ka liya).");
+      setError("Please enter the price per piece (what you paid).");
       return;
+    }
+
+    // Vendor credit checks
+    let creditPayload: VendorCreditPayload = {};
+    if (credit) {
+      if (!vendorName.trim()) {
+        setError("Please enter the vendor name.");
+        return;
+      }
+      if (!invoiceNo.trim()) {
+        setError("Please enter the invoice number.");
+        return;
+      }
+      const paid = paidNow.trim() === "" ? 0 : Number(paidNow);
+      if (Number.isNaN(paid) || paid < 0) {
+        setError("Paid Now must be 0 or more.");
+        return;
+      }
+      if (paid > qty * price) {
+        setError("Paid Now cannot be more than the total bill.");
+        return;
+      }
+      creditPayload = {
+        vendor_name: vendorName.trim(),
+        invoice_no: invoiceNo.trim(),
+        paid_now: paid,
+      };
     }
 
     setSaving(true);
@@ -1084,10 +1453,11 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
         quantity: qty,
         unit_price: price,
         note: note.trim() || null,
+        ...creditPayload,
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Kuch ghalat ho gaya.");
+      setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setSaving(false);
     }
@@ -1153,6 +1523,18 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
               placeholder="e.g. Bought from Saddar market"
             />
           </div>
+
+          <VendorCreditFields
+            enabled={credit}
+            onToggle={setCredit}
+            vendorName={vendorName}
+            onVendorName={setVendorName}
+            invoiceNo={invoiceNo}
+            onInvoiceNo={setInvoiceNo}
+            paidNow={paidNow}
+            onPaidNow={setPaidNow}
+            totalBill={qty > 0 && hasPrice ? qty * price : null}
+          />
 
           <div className="acc-modal-foot">
             <button type="button" className="acc-btn-ghost" onClick={onClose} disabled={saving}>

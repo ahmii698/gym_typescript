@@ -4,6 +4,7 @@ use App\Http\Controllers\AccessoryController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CashInHandController;
+use App\Http\Controllers\CreditController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DrinkController;
 use App\Http\Controllers\MemberController;
@@ -89,6 +90,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/accessories/{accessory}', [AccessoryController::class, 'destroy']);
     Route::post('/accessories/{accessory}/restock', [AccessoryController::class, 'restock']);
     Route::get('/accessories/{accessory}/history', [AccessoryController::class, 'history']);
+
+    // ---------- Credit Management (vendors ka udhaar hisaab — admin aur frontdesk dono) ----------
+    Route::get('/credit/vendors', [CreditController::class, 'index']);
+    Route::get('/credit/vendors/{vendor}/history', [CreditController::class, 'history']);
+    Route::post('/credit/vendors/{vendor}/pay', [CreditController::class, 'pay']);
 
     // ---------- Cash in Hand (balance + history dekhna sab logged-in users; update sirf admin, neeche) ----------
     Route::get('/cash-in-hand', [CashInHandController::class, 'index']);

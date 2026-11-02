@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   Search,
   Users,
@@ -7,6 +8,9 @@ import {
   Clock,
   UserX,
   RotateCcw,
+  RefreshCw,
+  FileText,
+  Download,
   ChevronLeft,
   ChevronRight,
   Wallet,
@@ -35,7 +39,7 @@ interface Member {
   lastPayment: string | null;
   feeExpire: string | null;
   daysToExpire: number | null;
-  // NAYE FIELDS 👇
+  // NEW FIELDS 👇
   cnicFrontUrl: string | null;
   cnicBackUrl: string | null;
 }
@@ -86,11 +90,80 @@ function mapMember(raw: any): Member {
     lastPayment: raw.last_payment,
     feeExpire: raw.fee_expire,
     daysToExpire: raw.days_to_expire,
-    // NAYE FIELDS 👇
+    // NEW FIELDS 👇
     cnicFrontUrl: raw.cnic_front_url ?? null,
     cnicBackUrl: raw.cnic_back_url ?? null,
   };
 }
+
+/* Plain-text status label (used by the Excel and PDF exports) */
+function statusLabel(m: Member): string {
+  if (m.paymentStatus === "Unpaid") return "Unpaid";
+  if (m.daysToExpire !== null && m.daysToExpire >= 0 && m.daysToExpire <= 3) {
+    return "Expiring Soon";
+  }
+  return "Paid";
+}
+
+/* Escapes a value for safe use inside a CSV cell */
+function csvCell(value: string | number): string {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+/* Escapes a value for safe use inside HTML (PDF report) */
+function escapeHtml(value: string | number): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Inline styles for the action buttons (no external CSS)             */
+/* ------------------------------------------------------------------ */
+
+const actionsRowStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 12,
+  marginBottom: 14,
+  flexShrink: 0,
+};
+
+const baseActionBtnStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "9px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#ffffff",
+  fontSize: 14,
+  fontWeight: 700,
+  fontFamily: "inherit",
+  lineHeight: 1,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const refreshBtnStyle: CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#3b82f6",
+};
+
+const excelBtnStyle: CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#22c55e",
+};
+
+const pdfBtnStyle: CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#ef4444",
+};
 
 /* ------------------------------------------------------------------ */
 /*  Filter option constants                                            */
@@ -134,6 +207,7 @@ function FeeCollection() {
   };
 
   const loadMembers = async () => {
+    setLoading(true);
     try {
       const [mRes, pRes] = await Promise.all([
         fetch(`${API_URL}/members/fee-overview`, { headers: authHeaders() }),
@@ -143,11 +217,11 @@ function FeeCollection() {
         const raw = await mRes.json();
         setMembers(raw.map(mapMember));
       } else if (mRes.status === 401) {
-        showAlert("error", "Session expire ho gaya hai, dobara login karo.");
+        showAlert("error", "Your session has expired. Please log in again.");
       }
       if (pRes.ok) setPackages(await pRes.json());
     } catch {
-      showAlert("error", "Members load nahi ho sake. Backend chal raha hai?");
+      showAlert("error", "Failed to load members. Is the backend running?");
     } finally {
       setLoading(false);
     }
@@ -256,6 +330,104 @@ function FeeCollection() {
     return <span className="fc-badge fc-badge--paid">Paid</span>;
   }
 
+  /* ---------------- Export: Excel (CSV, opens in Excel) ---------------- */
+
+  const handleExportExcel = () => {
+    const header = [
+      "Name",
+      "Phone",
+      "Package",
+      "Type",
+      "Status",
+      "Member State",
+      "Last Payment",
+      "Fee Expire",
+    ];
+    const rows = filteredMembers.map((m) => [
+      m.name,
+      m.phone,
+      m.package,
+      m.type,
+      statusLabel(m),
+      m.memberState,
+      m.lastPayment ?? "-",
+      m.feeExpire ?? "-",
+    ]);
+    const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    // BOM so Excel reads UTF-8 correctly
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `fee-collection-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /* ---------------- Export: PDF (print dialog > Save as PDF) ---------------- */
+
+  const handleExportPdf = () => {
+    const win = window.open("", "_blank");
+    if (!win) {
+      window.alert("Please allow pop-ups for this site to export the PDF.");
+      return;
+    }
+
+    const bodyRows = filteredMembers
+      .map(
+        (m, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.phone)}</td><td>${escapeHtml(m.package)}</td><td>${escapeHtml(m.type)}</td><td>${escapeHtml(statusLabel(m))}</td><td>${escapeHtml(m.lastPayment ?? "-")}</td><td>${escapeHtml(m.feeExpire ?? "-")}</td></tr>`
+      )
+      .join("");
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Fee Collection Report</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  p.meta { margin: 0 0 16px; color: #666; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f3f4f6; }
+  .grid { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .card { flex: 1; min-width: 130px; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; }
+  .card span { display: block; font-size: 11px; color: #666; }
+  .card strong { font-size: 18px; }
+</style>
+</head>
+<body>
+  <h1>Fee Collection Report</h1>
+  <p class="meta">Generated ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
+
+  <div class="grid">
+    <div class="card"><span>Total Members</span><strong>${stats.total}</strong></div>
+    <div class="card"><span>Paid Members</span><strong>${stats.paid}</strong></div>
+    <div class="card"><span>Unpaid Members</span><strong>${stats.unpaid}</strong></div>
+    <div class="card"><span>Expiring Soon (3 Days)</span><strong>${stats.expiringSoon}</strong></div>
+    <div class="card"><span>Inactive Members</span><strong>${stats.inactive}</strong></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Member Name</th><th>Phone</th><th>Package</th><th>Type</th><th>Status</th><th>Last Payment</th><th>Fee Expire</th></tr>
+    </thead>
+    <tbody>${bodyRows || '<tr><td colspan="8">No members match the current filters.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    // Give the new window a moment to render before opening the print dialog
+    setTimeout(() => {
+      win.print();
+    }, 300);
+  };
+
   /* ---------------- pagination number list ---------------- */
 
   const pageNumbers = useMemo(() => {
@@ -296,7 +468,7 @@ function FeeCollection() {
   const handleFeeCollected = async () => {
     setCollectFor(null);
     setSelectedMember(null);
-    showAlert("success", "Fee collect ho gayi.");
+    showAlert("success", "Fee collected successfully.");
     await loadMembers();
   };
 
@@ -314,6 +486,31 @@ function FeeCollection() {
           </button>
         </div>
       )}
+
+      {/* Action Buttons: Refresh / Excel / PDF */}
+      <div style={actionsRowStyle}>
+        <button
+          type="button"
+          onClick={loadMembers}
+          disabled={loading}
+          style={{
+            ...refreshBtnStyle,
+            opacity: loading ? 0.7 : 1,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+        <button type="button" onClick={handleExportExcel} style={excelBtnStyle}>
+          <FileText size={16} />
+          Excel
+        </button>
+        <button type="button" onClick={handleExportPdf} style={pdfBtnStyle}>
+          <Download size={16} />
+          PDF
+        </button>
+      </div>
 
       {/* Header */}
       <div className="fc-header">
@@ -692,7 +889,7 @@ function FeeCollection() {
                 </div>
               )}
 
-              {/* CNIC IMAGES — NAYA SECTION 👇 */}
+              {/* CNIC IMAGES — NEW SECTION 👇 */}
               <div className="fc-cnic-images">
                 <div className="fc-cnic-block">
                   <span className="fc-cnic-label">CNIC Front</span>
@@ -739,7 +936,7 @@ function FeeCollection() {
                 <span className="fc-history__title">Payment History</span>
                 {historyLoading && <span className="fc-muted">Loading...</span>}
                 {!historyLoading && history.length === 0 && (
-                  <span className="fc-muted">Koi payment record nahi mila.</span>
+                  <span className="fc-muted">No payment records found.</span>
                 )}
                 {!historyLoading &&
                   history.map((h) => (
@@ -841,7 +1038,7 @@ function CollectFeeModal({
 
   const save = async () => {
     if (!form.amount || Number(form.amount) <= 0) {
-      setError("Sahi amount likho.");
+      setError("Please enter a valid amount.");
       return;
     }
 
@@ -863,12 +1060,12 @@ function CollectFeeModal({
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(json?.message ?? "Fee collect nahi ho saki.");
+        setError(json?.message ?? "Failed to collect fee.");
         return;
       }
       onCollected();
     } catch {
-      setError("Server se connect nahi ho saka.");
+      setError("Could not connect to the server.");
     } finally {
       setSaving(false);
     }

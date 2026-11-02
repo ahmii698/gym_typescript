@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Accessory;
 use App\Models\AccessoryStockLog;
+use App\Models\Vendor;
+use App\Models\VendorPayment;
+use App\Models\VendorPurchase;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -112,6 +115,7 @@ class AccessoryController extends Controller
     }
 
     // POST /api/accessories
+    // Optional credit purchase: vendor_name + invoice_no + paid_now
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -127,10 +131,42 @@ class AccessoryController extends Controller
             ],
             'image'      => 'nullable|string',
             'notes'      => 'nullable|string',
+
+            // ---- Vendor credit (optional) ----
+            'vendor_name' => 'nullable|string|max:255',
+            'invoice_no'  => [
+                Rule::requiredIf(filled($request->input('vendor_name'))),
+                'nullable',
+                'string',
+                'max:100',
+                'unique:vendor_purchases,invoice_no',
+            ],
+            'paid_now'    => 'nullable|numeric|min:0',
         ]);
 
-        $accessory = DB::transaction(function () use ($data) {
-            $accessory = new Accessory($data);
+        $isCredit = filled($data['vendor_name'] ?? null);
+
+        if ($isCredit) {
+            if ((int) $data['quantity'] < 1) {
+                return response()->json([
+                    'message' => 'Vendor se maal lene ke liye quantity kam az kam 1 honi chahiye.',
+                ], 422);
+            }
+
+            $total = round($data['quantity'] * $data['unit_price'], 2);
+            $paid  = round((float) ($data['paid_now'] ?? 0), 2);
+
+            if ($paid > $total) {
+                return response()->json([
+                    'message' => 'Paid Now total bill (Rs ' . number_format($total, 2) . ') se zyada nahi ho sakta.',
+                ], 422);
+            }
+        }
+
+        $accessory = DB::transaction(function () use ($data, $isCredit) {
+            $accessory = new Accessory(
+                Arr::only($data, ['name', 'category', 'quantity', 'unit_price', 'image', 'notes'])
+            );
             $accessory->updateStatusFromQuantity();
             $accessory->save();
 
@@ -140,8 +176,21 @@ class AccessoryController extends Controller
                     'quantity_change' => $accessory->quantity,
                     'quantity_after'  => $accessory->quantity,
                     'unit_price'      => $data['unit_price'] ?? null,
-                    'note'            => 'New item added',
+                    'note'            => $isCredit
+                        ? 'New item added (Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no']) . ')'
+                        : 'New item added',
                 ]);
+            }
+
+            if ($isCredit) {
+                $this->recordCredit(
+                    $accessory,
+                    (int) $data['quantity'],
+                    (float) $data['unit_price'],
+                    $data['vendor_name'],
+                    $data['invoice_no'],
+                    (float) ($data['paid_now'] ?? 0)
+                );
             }
 
             return $accessory;
@@ -200,27 +249,69 @@ class AccessoryController extends Controller
     }
 
     // POST /api/accessories/{accessory}/restock
+    // Optional credit purchase: vendor_name + invoice_no + paid_now
     public function restock(Request $request, Accessory $accessory)
     {
         $data = $request->validate([
             'quantity'   => 'required|integer|min:1',
             'unit_price' => 'required|numeric|min:0',
             'note'       => 'nullable|string|max:255',
+
+            // ---- Vendor credit (optional) ----
+            'vendor_name' => 'nullable|string|max:255',
+            'invoice_no'  => [
+                Rule::requiredIf(filled($request->input('vendor_name'))),
+                'nullable',
+                'string',
+                'max:100',
+                'unique:vendor_purchases,invoice_no',
+            ],
+            'paid_now'    => 'nullable|numeric|min:0',
         ]);
 
-        DB::transaction(function () use ($accessory, $data) {
+        $isCredit = filled($data['vendor_name'] ?? null);
+
+        if ($isCredit) {
+            $total = round($data['quantity'] * $data['unit_price'], 2);
+            $paid  = round((float) ($data['paid_now'] ?? 0), 2);
+
+            if ($paid > $total) {
+                return response()->json([
+                    'message' => 'Paid Now total bill (Rs ' . number_format($total, 2) . ') se zyada nahi ho sakta.',
+                ], 422);
+            }
+        }
+
+        DB::transaction(function () use ($accessory, $data, $isCredit) {
             $accessory->quantity   = $accessory->quantity + $data['quantity'];
             $accessory->unit_price = $data['unit_price']; // latest purchase price
             $accessory->updateStatusFromQuantity();
             $accessory->save();
+
+            $note = $data['note'] ?? null;
+            if ($isCredit) {
+                $creditNote = 'Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no']);
+                $note = $note ? $note . ' | ' . $creditNote : $creditNote;
+            }
 
             $accessory->stockLogs()->create([
                 'type'            => 'restock',
                 'quantity_change' => $data['quantity'],
                 'quantity_after'  => $accessory->quantity,
                 'unit_price'      => $data['unit_price'],
-                'note'            => $data['note'] ?? null,
+                'note'            => $note,
             ]);
+
+            if ($isCredit) {
+                $this->recordCredit(
+                    $accessory,
+                    (int) $data['quantity'],
+                    (float) $data['unit_price'],
+                    $data['vendor_name'],
+                    $data['invoice_no'],
+                    (float) ($data['paid_now'] ?? 0)
+                );
+            }
         });
 
         return response()->json([
@@ -260,5 +351,49 @@ class AccessoryController extends Controller
         $accessory->delete(); // history is removed automatically (cascade)
 
         return response()->json(['message' => 'Item deleted successfully']);
+    }
+
+    /**
+     * Vendor credit record banata hai: vendor (naya ya purana) + invoice + item + paid payment.
+     * Hamesha DB::transaction ke andar se call karein.
+     */
+    private function recordCredit(
+        Accessory $accessory,
+        int $quantity,
+        float $unitPrice,
+        string $vendorName,
+        string $invoiceNo,
+        float $paidNow
+    ): void {
+        $vendor = Vendor::firstOrCreate(['name' => trim($vendorName)]);
+
+        $total = round($quantity * $unitPrice, 2);
+        $paid  = round($paidNow, 2);
+
+        $purchase = VendorPurchase::create([
+            'vendor_id'    => $vendor->id,
+            'invoice_no'   => trim($invoiceNo),
+            'source_type'  => 'accessory',
+            'total_amount' => $total,
+            'paid_amount'  => $paid,
+        ]);
+
+        $purchase->items()->create([
+            'item_type'  => 'accessory',
+            'item_id'    => $accessory->id,
+            'item_name'  => $accessory->name,
+            'quantity'   => $quantity,
+            'unit_price' => $unitPrice,
+        ]);
+
+        // Agar usi waqt kuch paise diye to wo bhi payment history mein dikhein
+        if ($paid > 0) {
+            VendorPayment::create([
+                'vendor_id'   => $vendor->id,
+                'purchase_id' => $purchase->id,
+                'amount'      => $paid,
+                'note'        => 'Paid at purchase',
+            ]);
+        }
     }
 }

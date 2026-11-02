@@ -92,7 +92,66 @@ class ApiValidationError extends Error {
 }
 
 const firstApiError = (json: any): string =>
-  json?.message ?? "Kuch ghalat ho gaya. Dobara koshish karein.";
+  json?.message ?? "Something went wrong. Please try again.";
+
+/* Escapes a value for safe use inside a CSV cell */
+const csvCell = (value: string | number): string => {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
+/* Escapes a value for safe use inside HTML (PDF report) */
+const escapeHtml = (value: string | number): string =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ------------------------------------------------------------------ */
+/* Inline styles for the action buttons (no external CSS)              */
+/* ------------------------------------------------------------------ */
+
+const actionsRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 12,
+  marginBottom: 14,
+  flexShrink: 0,
+};
+
+const baseActionBtnStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "9px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#ffffff",
+  fontSize: 14,
+  fontWeight: 700,
+  fontFamily: "inherit",
+  lineHeight: 1,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const refreshBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#3b82f6",
+};
+
+const excelBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#22c55e",
+};
+
+const pdfBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#ef4444",
+};
 
 /* ------------------------------------------------------------------ */
 /* Inline icons                                                        */
@@ -120,6 +179,25 @@ const Icon = {
     <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M3 12a9 9 0 1 0 3-6.7" strokeLinecap="round" />
       <path d="M3 4v5h5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Refresh: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 12a9 9 0 0 0-15.5-6.3L3 8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 12a9 9 0 0 0 15.5 6.3L21 16" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M21 21v-5h-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  File: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" strokeLinejoin="round" />
+      <path d="M14 3v5h5M9 13h6M9 17h6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Download: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3v12M7 10l5 5 5-5M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   Phone: () => (
@@ -273,24 +351,24 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
 
   const validate = () => {
     const next: Partial<Record<keyof FormState, string>> = {};
-    if (!form.name.trim()) next.name = "Trainer ka naam likhein.";
+    if (!form.name.trim()) next.name = "Please enter the trainer's name.";
 
     if (form.phone.trim()) {
       const phoneDigits = form.phone.replace(/\D/g, "");
-      if (phoneDigits.length < 11) next.phone = "11 digit ka phone number likhein.";
+      if (phoneDigits.length < 11) next.phone = "Enter an 11-digit phone number.";
     }
 
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
-      next.email = "Sahi email address likhein.";
+      next.email = "Enter a valid email address.";
 
     if (form.cnic.trim()) {
       const cnicDigits = form.cnic.replace(/\D/g, "");
-      if (cnicDigits.length !== 13) next.cnic = "CNIC 13 digits ka hota hai.";
+      if (cnicDigits.length !== 13) next.cnic = "CNIC must be 13 digits.";
     }
 
     if (form.experienceYears.trim() !== "") {
       const exp = Number(form.experienceYears);
-      if (Number.isNaN(exp) || exp < 0) next.experienceYears = "Experience saalon mein likhein.";
+      if (Number.isNaN(exp) || exp < 0) next.experienceYears = "Enter experience in years.";
     }
 
     setErrors(next);
@@ -322,7 +400,7 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
         setErrors((prev) => ({ ...prev, ...err.fieldErrors }));
         setFormError(err.message);
       } else {
-        setFormError(err instanceof Error ? err.message : "Kuch ghalat ho gaya.");
+        setFormError(err instanceof Error ? err.message : "Something went wrong.");
       }
     } finally {
       setSubmitting(false);
@@ -341,7 +419,7 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
         <header className="trn-modal__head">
           <div>
             <h2 id="trn-modal-title">{editing ? "Edit trainer" : "Add new trainer"}</h2>
-            <p>Trainer ki details bharein aur save karein.</p>
+            <p>Fill in the trainer details and save.</p>
           </div>
           <button type="button" className="trn-modal__close" onClick={onClose} aria-label="Close">
             <Icon.Close />
@@ -496,7 +574,7 @@ const ViewModal: React.FC<{ trainer: Trainer | null; onClose: () => void }> = ({
       <div className="trn-modal trn-modal--view" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <header className="trn-modal__head">
           <div className="trn-view__id">
-            {/* Circle/Initials hata diye gaye hain */}
+            {/* Circle/initials removed */}
             <div>
               <h2>{trainer.name || DISPLAY_FALLBACK}</h2>
               <p>{show(trainer.role)}</p>
@@ -568,14 +646,14 @@ const Trainers: React.FC = () => {
     try {
       const res = await fetch(`${API_URL}/trainers`, { headers: authHeaders() });
       if (res.status === 401) {
-        setPageError("Session expire ho gaya hai, dobara login karo.");
+        setPageError("Your session has expired. Please log in again.");
         return;
       }
       if (!res.ok) throw new Error();
       const json: ApiTrainer[] = await res.json();
       setTrainers(json.map(mapTrainer));
     } catch {
-      setPageError("Trainers load nahi ho sake. Backend chal raha hai?");
+      setPageError("Failed to load trainers. Is the backend running?");
     } finally {
       setLoading(false);
     }
@@ -628,6 +706,103 @@ const Trainers: React.FC = () => {
     setStatusFilter("all");
   };
 
+  /* ---------------- Export: Excel (CSV, opens in Excel) ---------------- */
+  const handleExportExcel = () => {
+    const header = [
+      "Name",
+      "Role",
+      "Status",
+      "Phone",
+      "Email",
+      "CNIC",
+      "Specialization",
+      "Experience (Years)",
+    ];
+    const rows = filtered.map((t) => [
+      t.name,
+      t.role,
+      t.status,
+      t.phone || "-",
+      t.email || "-",
+      t.cnic || "-",
+      t.specialization || "-",
+      t.experienceYears ?? "-",
+    ]);
+    const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    // BOM so Excel reads UTF-8 correctly
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `trainers-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /* ---------------- Export: PDF (print dialog > Save as PDF) ---------------- */
+  const handleExportPdf = () => {
+    const win = window.open("", "_blank");
+    if (!win) {
+      window.alert("Please allow pop-ups for this site to export the PDF.");
+      return;
+    }
+
+    const count = (s: TrainerStatus) => trainers.filter((t) => t.status === s).length;
+
+    const bodyRows = filtered
+      .map(
+        (t, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.role)}</td><td>${escapeHtml(t.status)}</td><td>${escapeHtml(t.phone || "-")}</td><td>${escapeHtml(t.email || "-")}</td><td>${escapeHtml(t.cnic || "-")}</td><td>${escapeHtml(t.specialization || "-")}</td><td>${escapeHtml(t.experienceYears ?? "-")}</td></tr>`
+      )
+      .join("");
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Trainers Report</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  p.meta { margin: 0 0 16px; color: #666; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f3f4f6; }
+  .grid { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .card { flex: 1; min-width: 130px; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; }
+  .card span { display: block; font-size: 11px; color: #666; }
+  .card strong { font-size: 18px; }
+</style>
+</head>
+<body>
+  <h1>Trainers Report</h1>
+  <p class="meta">Generated ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
+
+  <div class="grid">
+    <div class="card"><span>Total Trainers</span><strong>${trainers.length}</strong></div>
+    <div class="card"><span>Active</span><strong>${count("Active")}</strong></div>
+    <div class="card"><span>On Leave</span><strong>${count("On Leave")}</strong></div>
+    <div class="card"><span>Inactive</span><strong>${count("Inactive")}</strong></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Name</th><th>Role</th><th>Status</th><th>Phone</th><th>Email</th><th>CNIC</th><th>Specialization</th><th>Experience (Years)</th></tr>
+    </thead>
+    <tbody>${bodyRows || '<tr><td colspan="9">No trainers found.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    // Give the new window a moment to render before opening the print dialog
+    setTimeout(() => {
+      win.print();
+    }, 300);
+  };
+
   const openAdd = () => {
     setEditing(null);
     setModalOpen(true);
@@ -670,7 +845,7 @@ const Trainers: React.FC = () => {
     }
 
     if (res.status === 401) {
-      throw new Error("Session expire ho gaya hai, dobara login karo.");
+      throw new Error("Your session has expired. Please log in again.");
     }
 
     if (!res.ok) {
@@ -684,7 +859,7 @@ const Trainers: React.FC = () => {
   };
 
   const handleDelete = async (t: Trainer) => {
-    if (!window.confirm(`"${t.name}" ko delete kar dein?`)) return;
+    if (!window.confirm(`Delete "${t.name}"?`)) return;
     try {
       const res = await fetch(`${API_URL}/trainers/${t.id}`, {
         method: "DELETE",
@@ -693,7 +868,7 @@ const Trainers: React.FC = () => {
       if (!res.ok) throw new Error();
       setTrainers((list) => list.filter((x) => x.id !== t.id));
     } catch {
-      alert("Trainer delete nahi ho saka. Backend chal raha hai?");
+      alert("Failed to delete trainer. Is the backend running?");
     }
   };
 
@@ -725,6 +900,31 @@ const Trainers: React.FC = () => {
       ref={pageRef}
       style={pageHeight ? { height: pageHeight } : undefined}
     >
+      {/* Action Buttons: Refresh / Excel / PDF */}
+      <div style={actionsRowStyle}>
+        <button
+          type="button"
+          onClick={loadTrainers}
+          disabled={loading}
+          style={{
+            ...refreshBtnStyle,
+            opacity: loading ? 0.7 : 1,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          <Icon.Refresh />
+          Refresh
+        </button>
+        <button type="button" onClick={handleExportExcel} style={excelBtnStyle}>
+          <Icon.File />
+          Excel
+        </button>
+        <button type="button" onClick={handleExportPdf} style={pdfBtnStyle}>
+          <Icon.Download />
+          PDF
+        </button>
+      </div>
+
       <header className="trn-header">
         <div className="trn-header__left">
           <span className="trn-header__icon">
@@ -792,12 +992,12 @@ const Trainers: React.FC = () => {
       {loading ? (
         <div className="trn-empty">
           <h3>Loading trainers...</h3>
-          <p>Zara sabar karein, data load ho raha hai.</p>
+          <p>Please wait while the data loads.</p>
         </div>
       ) : visible.length === 0 ? (
         <div className="trn-empty">
-          <h3>Koi trainer nahi mila</h3>
-          <p>Filters reset karein ya naya trainer add karein.</p>
+          <h3>No trainers found</h3>
+          <p>Reset the filters or add a new trainer.</p>
           <button type="button" className="btn btn--primary" onClick={openAdd}>
             <Icon.Plus />
             Add New Trainer
@@ -808,7 +1008,7 @@ const Trainers: React.FC = () => {
           {visible.map((t) => (
             <article key={t.id} className="trn-card">
               <div className="trn-card__top">
-                {/* Circle/Initials yahan se hata diya gaya hai */}
+                {/* Circle/initials removed from here */}
                 <div className="trn-card__id">
                   <h3>{t.name || DISPLAY_FALLBACK}</h3>
                   <p>{show(t.role)}</p>
@@ -818,7 +1018,7 @@ const Trainers: React.FC = () => {
                   type="button"
                   className={`status-pill status-pill--${statusClass(t.status)}`}
                   onClick={() => cycleStatus(t)}
-                  title="Status badalne ke liye click karein"
+                  title="Click to change status"
                 >
                   {t.status}
                 </button>

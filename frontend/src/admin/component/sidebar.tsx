@@ -14,6 +14,7 @@ import {
   Receipt,          // Fixed Expense
   CircleDollarSign, // Extra Expense
   Banknote,         // Cash in Hand
+  CreditCard,       // Credit Management
   ShieldCheck,      // Create > Admin
   Headset,          // Create > Front Desk
   Menu,
@@ -37,6 +38,13 @@ const cashItem = {
   to: "/admin/cash-in-hand",
   label: "Cash in Hand",
   icon: Banknote,
+};
+
+// --- Credit Management (Cash in Hand ke neeche) ---
+const creditItem = {
+  to: "/admin/credit",
+  label: "Credit Management",
+  icon: CreditCard,
 };
 
 // --- Expense Menu Items ---
@@ -205,6 +213,9 @@ const Sidebar = () => {
 
           {/* --- Cash in Hand (Inventory ke neeche) --- */}
           {renderLink(cashItem)}
+
+          {/* --- Credit Management (Cash in Hand ke neeche) --- */}
+          {renderLink(creditItem)}
 
           {/* --- Expense Group --- */}
           <button

@@ -41,6 +41,13 @@ interface HistoryRow {
   created_at: string;
 }
 
+// Optional vendor credit fields (sent only when "Purchased from a vendor" is checked)
+interface VendorCreditPayload {
+  vendor_name?: string;
+  invoice_no?: string;
+  paid_now?: number;
+}
+
 const CATEGORY_STYLE: Record<string, { pack: Pack; color: string }> = {
   "Energy Drink": { pack: "can", color: "#3ddc4a" },
   "Sports Drink": { pack: "bottle", color: "#ff9a1f" },
@@ -73,7 +80,7 @@ const mapApiDrink = (d: ApiDrink): DrinkItem => {
 const ALL_CATEGORIES = "All Categories";
 const NEW_CATEGORY = "__new__";
 
-// Default categories — nayi categories items se automatically add hongi
+// Default categories — new categories from items are added automatically
 const BASE_CATEGORIES = [
   "Energy Drink",
   "Sports Drink",
@@ -99,6 +106,48 @@ const getPages = (total: number, current: number): (number | "...")[] => {
   if (current >= total - 2) return [1, "...", total - 2, total - 1, total];
   return [1, "...", current, "...", total];
 };
+
+// Laravel validation errors come as { message, errors: { field: [msg] } }
+const extractError = (json: any, fallback: string): string => {
+  const first = json?.errors ? (Object.values(json.errors).flat()[0] as string | undefined) : undefined;
+  return first ?? json?.message ?? fallback;
+};
+
+/* ---------- Header action buttons (inline styles) ---------- */
+const actionBtnBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const refreshBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#3b82f6" };
+const excelBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#22c55e" };
+const pdfBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#ef4444" };
+
+// Local date (YYYY-MM-DD) used for export file names
+const todayISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// Escape text before putting it into export HTML
+const escapeHtml = (v: string | number): string =>
+  String(v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 /* ---------- Icons ---------- */
 const Icon = ({
@@ -204,12 +253,29 @@ const EditIcon = () => (
     <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
   </Icon>
 );
+const RefreshIcon = () => (
+  <Icon>
+    <path d="M20 11a8 8 0 0 0-14.9-3M4 5v4h4" />
+    <path d="M4 13a8 8 0 0 0 14.9 3M20 19v-4h-4" />
+  </Icon>
+);
+const SheetIcon = () => (
+  <Icon>
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M4 9h16M4 15h16M10 3v18" />
+  </Icon>
+);
+const DownloadIcon = () => (
+  <Icon>
+    <path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 20h14" />
+  </Icon>
+);
 
 /* ---------- Add Drink form state ---------- */
 interface DrinkFormState {
   name: string;
   category: string;
-  unit: string; // UI mein "Size" (ml) — backend field ka naam unit hi hai
+  unit: string; // shown as "Size" (ml) in the UI — the backend field is still called unit
   quantity: string;
   low_stock_threshold: string;
   cost_price: string;
@@ -228,16 +294,114 @@ const EMPTY_FORM: DrinkFormState = {
 
 const money = (n: number) => `Rs ${n.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
 
-// "05" -> "5", "007" -> "7", "0.5" waise hi rehta hai
+// "05" -> "5", "007" -> "7", "0.5" stays as is
 const stripLeadingZeros = (v: string) => v.replace(/^0+(?=\d)/, "");
 
-// Stat card value ka font amount ki lambai ke hisaab se chhota hota hai taake poori amount nazar aaye
+// The stat card value font shrinks with the length of the amount so the full amount stays visible
 const statValueFontSize = (v: string | number) => {
   const len = String(v).length;
   if (len <= 6) return undefined;
   if (len <= 9) return "1.4rem";
   if (len <= 12) return "1.15rem";
   return "1rem";
+};
+
+/* ---------- Vendor credit fields (shared by Add + Restock modals) ---------- */
+interface VendorCreditFieldsProps {
+  enabled: boolean;
+  onToggle: (value: boolean) => void;
+  vendorName: string;
+  onVendorName: (value: string) => void;
+  invoiceNo: string;
+  onInvoiceNo: (value: string) => void;
+  paidNow: string;
+  onPaidNow: (value: string) => void;
+  totalBill: number | null;
+}
+
+const VendorCreditFields: React.FC<VendorCreditFieldsProps> = ({
+  enabled,
+  onToggle,
+  vendorName,
+  onVendorName,
+  invoiceNo,
+  onInvoiceNo,
+  paidNow,
+  onPaidNow,
+  totalBill,
+}) => {
+  const paid = Number(paidNow) || 0;
+  const remaining = totalBill !== null ? Math.max(totalBill - paid, 0) : null;
+
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(148, 163, 184, 0.25)",
+        borderRadius: 10,
+        padding: 14,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.target.checked)} />
+        <span>Purchased from a vendor? (Credit Purchase)</span>
+      </label>
+
+      {enabled && (
+        <>
+          <div className="drk-form-row">
+            <div className="drk-form-group">
+              <label>Vendor Name *</label>
+              <input
+                type="text"
+                placeholder="e.g. Ahmed Malik"
+                value={vendorName}
+                onChange={(e) => onVendorName(e.target.value)}
+              />
+            </div>
+            <div className="drk-form-group">
+              <label>Invoice Number *</label>
+              <input
+                type="text"
+                placeholder="Unique invoice #"
+                value={invoiceNo}
+                onChange={(e) => onInvoiceNo(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="drk-form-group">
+            <label>Paid Now (Rs)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="0 = full credit"
+              value={paidNow}
+              onChange={(e) => onPaidNow(stripLeadingZeros(e.target.value))}
+            />
+          </div>
+
+          <small style={{ opacity: 0.75, fontSize: 12 }}>
+            {totalBill !== null
+              ? `Total bill: ${money(totalBill)} • Remaining credit: ${money(remaining ?? 0)}`
+              : "Enter quantity and cost price to see the total bill."}{" "}
+            Pay the remaining amount later from the Credit page.
+          </small>
+        </>
+      )}
+    </div>
+  );
 };
 
 /* ---------- Page ---------- */
@@ -248,6 +412,7 @@ export default function DrinksBeverages() {
   const [items, setItems] = useState<DrinkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
@@ -261,6 +426,11 @@ export default function DrinksBeverages() {
   const [customCategory, setCustomCategory] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Add modal: vendor credit
+  const [addCredit, setAddCredit] = useState(false);
+  const [addVendorName, setAddVendorName] = useState("");
+  const [addInvoiceNo, setAddInvoiceNo] = useState("");
+  const [addPaidNow, setAddPaidNow] = useState("");
 
   // History modal
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -275,8 +445,13 @@ export default function DrinksBeverages() {
   const [restockCost, setRestockCost] = useState("");
   const [restockError, setRestockError] = useState<string | null>(null);
   const [restockSubmitting, setRestockSubmitting] = useState(false);
+  // Restock modal: vendor credit
+  const [restockCredit, setRestockCredit] = useState(false);
+  const [restockVendorName, setRestockVendorName] = useState("");
+  const [restockInvoiceNo, setRestockInvoiceNo] = useState("");
+  const [restockPaidNow, setRestockPaidNow] = useState("");
 
-  // Edit price modal (cost_price / price, bina stock chede)
+  // Edit price modal (cost_price / price, without touching stock)
   const [showEditModal, setShowEditModal] = useState(false);
   const [editItem, setEditItem] = useState<DrinkItem | null>(null);
   const [editCostPrice, setEditCostPrice] = useState("");
@@ -288,7 +463,7 @@ export default function DrinksBeverages() {
   const token = localStorage.getItem("token");
 
   const canManageDrinks = role === "admin" || role === "frontdesk";
-  const canEditDrink = role === "admin"; // PUT /drinks/{drink} route admin-only hai
+  const canEditDrink = role === "admin"; // the PUT /drinks/{drink} route is admin-only
 
   useLayoutEffect(() => {
     const updateHeight = () => {
@@ -317,7 +492,7 @@ export default function DrinksBeverages() {
       setItems(data.map(mapApiDrink));
     } catch (err) {
       console.error(err);
-      setError("Drinks load nahi ho sakay. Dobara try karein.");
+      setError("Could not load drinks. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -332,7 +507,7 @@ export default function DrinksBeverages() {
     setPage(1);
   }, [search, category, statusFilter]);
 
-  // Default + DB mein maujood saari categories (duplicates ke baghair)
+  // Default categories + all categories in the DB (without duplicates)
   const formCategories = useMemo(() => {
     const list = [...BASE_CATEGORIES];
     items.forEach((i) => {
@@ -364,7 +539,7 @@ export default function DrinksBeverages() {
 
   const countBy = (s: Status) => items.filter((i) => i.status === s).length;
 
-  // Agar poora current stock bik jaye to kitna profit banega (selling - cost) * qty
+  // Profit if all current stock is sold: (selling price - cost price) * quantity
   const totalProfit = useMemo(
     () => items.reduce((sum, i) => sum + (i.price - i.cost_price) * i.quantity, 0),
     [items]
@@ -385,10 +560,123 @@ export default function DrinksBeverages() {
     },
   ] as const;
 
+  /* ---------- Header actions ---------- */
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchDrinks();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Excel export (no extra library): downloads an .xls file built from an HTML table
+  const handleExportExcel = () => {
+    const rows = filtered
+      .map(
+        (item, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
+            item.category
+          )}</td><td>${escapeHtml(item.unit)}</td><td>${item.quantity}</td><td>${item.cost_price}</td><td>${
+            item.price
+          }</td><td>${escapeHtml(STATUS_LABEL[item.status])}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8" /></head>
+<body>
+<table border="1">
+<thead><tr><th>#</th><th>Item Name</th><th>Category</th><th>Size</th><th>Quantity</th><th>Cost (Rs)</th><th>Price (Rs)</th><th>Status</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `drinks-${todayISO()}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // PDF export (no extra library): opens the print dialog, choose "Save as PDF"
+  const handleExportPdf = () => {
+    const rows = filtered
+      .map(
+        (item, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
+            item.category
+          )}</td><td>${escapeHtml(item.unit)}</td><td style="text-align:center">${
+            item.quantity
+          }</td><td style="text-align:center">${escapeHtml(
+            money(item.cost_price)
+          )}</td><td style="text-align:center">${escapeHtml(
+            money(item.price)
+          )}</td><td style="text-align:center">${escapeHtml(STATUS_LABEL[item.status])}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html>
+<head>
+<meta charset="UTF-8" />
+<title>Drinks &amp; Beverages</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 7px 9px; text-align: left; }
+  th { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Drinks &amp; Beverages</h1>
+<p>Generated on ${escapeHtml(todayISO())} &middot; ${filtered.length} items</p>
+<table>
+<thead><tr><th>#</th><th>Item Name</th><th>Category</th><th>Size</th><th style="text-align:center">Quantity</th><th style="text-align:center">Cost</th><th style="text-align:center">Price</th><th style="text-align:center">Status</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      }, 1000);
+    }, 300);
+  };
+
   const openAddModal = () => {
     setForm(EMPTY_FORM);
     setCustomCategory("");
     setFormError(null);
+    setAddCredit(false);
+    setAddVendorName("");
+    setAddInvoiceNo("");
+    setAddPaidNow("");
     setShowAddModal(true);
   };
 
@@ -398,24 +686,30 @@ export default function DrinksBeverages() {
   };
 
   const handleFormChange = (field: keyof DrinkFormState, value: string) => {
-    // Number fields mein leading zero na rahe, taake 0 aasani se hat jaye
+    // No leading zeros in number fields, so a 0 is easy to remove
     const numericFields: (keyof DrinkFormState)[] = ["quantity", "low_stock_threshold", "cost_price", "price"];
     const next = numericFields.includes(field) ? stripLeadingZeros(value) : value;
     setForm((prev) => ({ ...prev, [field]: next }));
   };
 
+  // Total bill for the Add modal = quantity x cost price
+  const addTotalBill =
+    form.quantity !== "" && form.cost_price !== "" && Number(form.quantity) > 0
+      ? Number(form.quantity) * Number(form.cost_price)
+      : null;
+
   const handleAddDrink = async () => {
     setFormError(null);
 
-    // Final category: ya dropdown wali, ya nayi likhi hui
+    // Final category: either the one from the dropdown or a newly typed one
     let finalCategory = form.category;
     if (form.category === NEW_CATEGORY) {
       const typed = customCategory.trim();
       if (!typed) {
-        setFormError("Nayi category ka naam likhein.");
+        setFormError("Please enter the new category name.");
         return;
       }
-      // Pehle se maujood ho to usi ka spelling/case use karo
+      // If it already exists, reuse its spelling/case
       finalCategory =
         formCategories.find((c) => c.toLowerCase() === typed.toLowerCase()) ?? typed;
     }
@@ -427,8 +721,39 @@ export default function DrinksBeverages() {
       form.price === "" ||
       form.cost_price === ""
     ) {
-      setFormError("Name, Size, Quantity, Cost Price aur Selling Price zaroori hain.");
+      setFormError("Name, Size, Quantity, Cost Price and Selling Price are required.");
       return;
+    }
+
+    // Vendor credit checks
+    let creditPayload: VendorCreditPayload = {};
+    if (addCredit) {
+      if (Number(form.quantity) < 1) {
+        setFormError("For a vendor purchase, quantity must be at least 1.");
+        return;
+      }
+      if (!addVendorName.trim()) {
+        setFormError("Please enter the vendor name.");
+        return;
+      }
+      if (!addInvoiceNo.trim()) {
+        setFormError("Please enter the invoice number.");
+        return;
+      }
+      const paid = addPaidNow.trim() === "" ? 0 : Number(addPaidNow);
+      if (Number.isNaN(paid) || paid < 0) {
+        setFormError("Paid Now must be 0 or more.");
+        return;
+      }
+      if (paid > (addTotalBill ?? 0)) {
+        setFormError("Paid Now cannot be more than the total bill.");
+        return;
+      }
+      creditPayload = {
+        vendor_name: addVendorName.trim(),
+        invoice_no: addInvoiceNo.trim(),
+        paid_now: paid,
+      };
     }
 
     setSubmitting(true);
@@ -448,12 +773,13 @@ export default function DrinksBeverages() {
           low_stock_threshold: Number(form.low_stock_threshold || 5),
           cost_price: Number(form.cost_price),
           price: Number(form.price),
+          ...creditPayload,
         }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setFormError(data?.message ?? "Item add nahi ho saka.");
+        setFormError(extractError(data, "Could not add the item."));
         return;
       }
 
@@ -461,7 +787,7 @@ export default function DrinksBeverages() {
       fetchDrinks();
     } catch (err) {
       console.error(err);
-      setFormError("Kuch masla ho gaya, dobara try karein.");
+      setFormError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -481,20 +807,20 @@ export default function DrinksBeverages() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        alert(data?.message ?? "Sell nahi ho saka");
+        alert(data?.message ?? "Could not complete the sale.");
         return;
       }
       const { drink } = await res.json();
       setItems((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, quantity: drink.quantity, status: drink.status } : i))
       );
-      // Agar history modal isi item ki khuli hai to use bhi refresh kar do
+      // If the history modal is open for this item, refresh it too
       if (historyOpen && historyItem?.id === item.id) {
         handleView({ ...item, quantity: drink.quantity, status: drink.status });
       }
     } catch (err) {
       console.error(err);
-      alert("Kuch masla ho gaya, dobara try karein.");
+      alert("Something went wrong. Please try again.");
     }
   };
 
@@ -528,6 +854,10 @@ export default function DrinksBeverages() {
     setRestockQty("");
     setRestockCost(item.cost_price ? String(item.cost_price) : "");
     setRestockError(null);
+    setRestockCredit(false);
+    setRestockVendorName("");
+    setRestockInvoiceNo("");
+    setRestockPaidNow("");
     setShowRestockModal(true);
   };
 
@@ -537,11 +867,44 @@ export default function DrinksBeverages() {
     setRestockItem(null);
   };
 
+  // Total bill for the Restock modal = quantity x cost price (typed one, else the item's current one)
+  const restockUnitCost =
+    restockCost !== "" ? Number(restockCost) : restockItem ? restockItem.cost_price : 0;
+  const restockTotalBill =
+    Number(restockQty) > 0 && !Number.isNaN(restockUnitCost) ? Number(restockQty) * restockUnitCost : null;
+
   const handleRestock = async () => {
     if (!restockItem) return;
     if (!restockQty || Number(restockQty) <= 0) {
-      setRestockError("Sahi quantity dalein.");
+      setRestockError("Please enter a valid quantity.");
       return;
+    }
+
+    // Vendor credit checks
+    let creditPayload: VendorCreditPayload = {};
+    if (restockCredit) {
+      if (!restockVendorName.trim()) {
+        setRestockError("Please enter the vendor name.");
+        return;
+      }
+      if (!restockInvoiceNo.trim()) {
+        setRestockError("Please enter the invoice number.");
+        return;
+      }
+      const paid = restockPaidNow.trim() === "" ? 0 : Number(restockPaidNow);
+      if (Number.isNaN(paid) || paid < 0) {
+        setRestockError("Paid Now must be 0 or more.");
+        return;
+      }
+      if (paid > (restockTotalBill ?? 0)) {
+        setRestockError("Paid Now cannot be more than the total bill.");
+        return;
+      }
+      creditPayload = {
+        vendor_name: restockVendorName.trim(),
+        invoice_no: restockInvoiceNo.trim(),
+        paid_now: paid,
+      };
     }
 
     setRestockSubmitting(true);
@@ -556,12 +919,13 @@ export default function DrinksBeverages() {
         body: JSON.stringify({
           quantity: Number(restockQty),
           cost_price: restockCost === "" ? undefined : Number(restockCost),
+          ...creditPayload,
         }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setRestockError(data?.message ?? "Restock nahi ho saka.");
+        setRestockError(extractError(data, "Could not restock."));
         return;
       }
 
@@ -569,7 +933,7 @@ export default function DrinksBeverages() {
       fetchDrinks();
     } catch (err) {
       console.error(err);
-      setRestockError("Kuch masla ho gaya, dobara try karein.");
+      setRestockError("Something went wrong. Please try again.");
     } finally {
       setRestockSubmitting(false);
     }
@@ -592,7 +956,7 @@ export default function DrinksBeverages() {
   const handleUpdateDrink = async () => {
     if (!editItem) return;
     if (editCostPrice === "" || editPrice === "") {
-      setEditError("Cost Price aur Selling Price zaroori hain.");
+      setEditError("Cost Price and Selling Price are required.");
       return;
     }
 
@@ -613,7 +977,7 @@ export default function DrinksBeverages() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setEditError(data?.message ?? "Price update nahi ho saki.");
+        setEditError(data?.message ?? "Could not update the price.");
         return;
       }
 
@@ -621,7 +985,7 @@ export default function DrinksBeverages() {
       fetchDrinks();
     } catch (err) {
       console.error(err);
-      setEditError("Kuch masla ho gaya, dobara try karein.");
+      setEditError("Something went wrong. Please try again.");
     } finally {
       setEditSubmitting(false);
     }
@@ -644,12 +1008,36 @@ export default function DrinksBeverages() {
             <p className="drk-subtitle">Track and manage drinks and beverages in your fridge.</p>
           </div>
         </div>
-        {canManageDrinks && (
-          <button type="button" className="drk-btn-primary" onClick={openAddModal}>
-            <PlusIcon />
-            <span>Add Item</span>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            style={{
+              ...refreshBtnStyle,
+              opacity: refreshing ? 0.7 : 1,
+              cursor: refreshing ? "not-allowed" : "pointer",
+            }}
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshIcon />
+            <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
           </button>
-        )}
+          <button type="button" style={excelBtnStyle} onClick={handleExportExcel}>
+            <SheetIcon />
+            <span>Excel</span>
+          </button>
+          <button type="button" style={pdfBtnStyle} onClick={handleExportPdf}>
+            <DownloadIcon />
+            <span>PDF</span>
+          </button>
+          {canManageDrinks && (
+            <button type="button" className="drk-btn-primary" onClick={openAddModal}>
+              <PlusIcon />
+              <span>Add Item</span>
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Stat cards */}
@@ -982,7 +1370,7 @@ export default function DrinksBeverages() {
 
               <div className="drk-form-row">
                 <div className="drk-form-group">
-                  <label>Cost Price (khareed, per unit)</label>
+                  <label>Cost Price (purchase, per unit)</label>
                   <input
                     type="number"
                     min={0}
@@ -1004,6 +1392,18 @@ export default function DrinksBeverages() {
                   />
                 </div>
               </div>
+
+              <VendorCreditFields
+                enabled={addCredit}
+                onToggle={setAddCredit}
+                vendorName={addVendorName}
+                onVendorName={setAddVendorName}
+                invoiceNo={addInvoiceNo}
+                onInvoiceNo={setAddInvoiceNo}
+                paidNow={addPaidNow}
+                onPaidNow={setAddPaidNow}
+                totalBill={addTotalBill}
+              />
 
               {formError && <p className="drk-form-error">{formError}</p>}
             </div>
@@ -1043,7 +1443,7 @@ export default function DrinksBeverages() {
                 />
               </div>
               <div className="drk-form-group">
-                <label>New Cost Price (optional, agar badal gayi hai)</label>
+                <label>New Cost Price (optional, if it changed)</label>
                 <input
                   type="number"
                   min={0}
@@ -1053,6 +1453,19 @@ export default function DrinksBeverages() {
                   onChange={(e) => setRestockCost(stripLeadingZeros(e.target.value))}
                 />
               </div>
+
+              <VendorCreditFields
+                enabled={restockCredit}
+                onToggle={setRestockCredit}
+                vendorName={restockVendorName}
+                onVendorName={setRestockVendorName}
+                invoiceNo={restockInvoiceNo}
+                onInvoiceNo={setRestockInvoiceNo}
+                paidNow={restockPaidNow}
+                onPaidNow={setRestockPaidNow}
+                totalBill={restockTotalBill}
+              />
+
               {restockError && <p className="drk-form-error">{restockError}</p>}
             </div>
 
@@ -1068,7 +1481,7 @@ export default function DrinksBeverages() {
         </div>
       )}
 
-      {/* Edit Price Modal — sirf cost_price / price, stock quantity nahi chedta */}
+      {/* Edit Price Modal — only cost_price / price, does not touch stock quantity */}
       {showEditModal && editItem && (
         <div className="drk-modal-overlay" onClick={closeEditModal}>
           <div className="drk-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -1081,7 +1494,7 @@ export default function DrinksBeverages() {
 
             <div className="drk-modal-body">
               <div className="drk-form-group">
-                <label>Cost Price (khareed, per unit)</label>
+                <label>Cost Price (purchase, per unit)</label>
                 <input
                   type="number"
                   min={0}
@@ -1132,7 +1545,7 @@ export default function DrinksBeverages() {
               {historyLoading ? (
                 <p className="drk-empty">Loading...</p>
               ) : historyRows.length === 0 ? (
-                <p className="drk-empty">Abhi tak koi sell ya restock nahi hui.</p>
+                <p className="drk-empty">No sales or restocks yet.</p>
               ) : (
                 <table className="drk-table">
                   <thead>

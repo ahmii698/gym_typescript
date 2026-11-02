@@ -15,6 +15,9 @@ import {
   Coins,
   TrendingUp,
   Clock,
+  RefreshCw,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
 import { API_URL } from "../../../config";
 import "./Memberships.css";
@@ -166,7 +169,7 @@ const mapRow = (m: ApiRow): MembershipRecord => {
   };
 };
 
-/* Helper: Naye monthlyFees ke hisaab se expiry date nikaalein */
+/* Helper: calculate the expiry date from the updated monthlyFees */
 const computeExpiryFromMonthlyFees = (fees: MonthlyFee[], fallback: string): string => {
   if (!fees || fees.length === 0) return fallback;
 
@@ -186,7 +189,7 @@ const computeExpiryFromMonthlyFees = (fees: MonthlyFee[], fallback: string): str
   return sorted[sorted.length - 1]?.valid_till ?? fallback;
 };
 
-/* Helper: Rolling window ke hisaab se payment status */
+/* Helper: payment status based on the rolling window */
 const computePaymentStatusFromMonthlyFees = (
   fees: MonthlyFee[],
   fallback: PaymentStatus
@@ -205,7 +208,7 @@ const computePaymentStatusFromMonthlyFees = (
   return "Unpaid";
 };
 
-/* Helper: Rolling window ke hisaab se feesPaidOn */
+/* Helper: feesPaidOn based on the rolling window */
 const computeFeesPaidOnFromMonthlyFees = (
   fees: MonthlyFee[],
   fallback: string
@@ -224,7 +227,7 @@ const computeFeesPaidOnFromMonthlyFees = (
   return "";
 };
 
-/* Helper: Aaj ke date ke andar wali monthly fee dhundein */
+/* Helper: find the monthly fee that covers today's date */
 const findCurrentMonthFee = (fees: MonthlyFee[]): MonthlyFee | null => {
   if (!fees || fees.length === 0) return null;
 
@@ -240,6 +243,33 @@ const findCurrentMonthFee = (fees: MonthlyFee[]): MonthlyFee | null => {
   return null;
 };
 
+// Escape text before putting it into export HTML
+const escapeHtml = (v: string | number): string =>
+  String(v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ---------- Header action buttons (inline styles) ---------- */
+const actionBtnBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const refreshBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#3b82f6" };
+const excelBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#22c55e" };
+const pdfBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#ef4444" };
+
 /* CNIC image */
 const CnicImage = ({ url, label }: { url: string | null; label: string }) => {
   const [failed, setFailed] = useState(false);
@@ -253,7 +283,7 @@ const CnicImage = ({ url, label }: { url: string | null; label: string }) => {
   if (failed) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" className="ms-cnic-fail">
-        Image load nahi hui, link kholo
+        Image failed to load, open the link
       </a>
     );
   }
@@ -279,6 +309,7 @@ const Memberships = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [now, setNow] = useState(() => new Date());
   const [tab, setTab] = useState<TabKey>("All");
@@ -328,15 +359,15 @@ const Memberships = () => {
         },
       });
 
-      if (res.status === 401) throw new Error("Session expire ho gaya, dobara login karo.");
-      if (!res.ok) throw new Error(`Members load nahi huay (${res.status}).`);
+      if (res.status === 401) throw new Error("Your session has expired. Please log in again.");
+      if (!res.ok) throw new Error(`Could not load members (${res.status}).`);
 
       const list = extractList(await res.json()).map(mapRow);
       list.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
       setMembers(list);
     } catch (e: any) {
       if (e?.name === "AbortError") return;
-      setError(e?.message || "Kuch ghalat ho gaya.");
+      setError(e?.message || "Something went wrong.");
     } finally {
       if (!signal.aborted) setLoading(false);
     }
@@ -352,6 +383,11 @@ const Memberships = () => {
     setPage(1);
   }, [tab, query, plan]);
 
+  // Stop the header Refresh button's "Refreshing..." state once loading finishes
+  useEffect(() => {
+    if (!loading) setRefreshing(false);
+  }, [loading]);
+
   /* ---- Stats ---- */
   const todayISO = localISO(now);
 
@@ -359,7 +395,7 @@ const Memberships = () => {
     const expired = members.filter((m) => m.expiryDate && m.expiryDate < todayISO).length;
     const unpaid = members.filter((m) => m.paymentStatus === "Unpaid").length;
 
-    // Current month ki fees calculate karein
+    // Calculate this month's fees
     let totalMonthFees = 0;
     let collectedMonthFees = 0;
 
@@ -467,6 +503,115 @@ const Memberships = () => {
 
   const payClass = (s: PaymentStatus) => `ms-pay ${s.toLowerCase()}`;
 
+  /* ---------- Header actions (Refresh / Excel / PDF) ---------- */
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setReloadKey((k) => k + 1);
+  };
+
+  // Excel export (no extra library): downloads an .xls file built from an HTML table
+  const handleExportExcel = () => {
+    const body = filtered
+      .map(
+        (m, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(m.name)}</td><td>${escapeHtml(
+            dash(m.phone)
+          )}</td><td>${escapeHtml(dash(m.cnic))}</td><td>${escapeHtml(m.pkg)}</td><td>${escapeHtml(
+            m.plan
+          )}</td><td>${escapeHtml(m.trainer || "—")}</td><td>${escapeHtml(
+            m.paymentStatus
+          )}</td><td>${escapeHtml(fmtISO(m.feesPaidOn))}</td><td>${escapeHtml(
+            fmtISO(m.expiryDate)
+          )}</td><td>${escapeHtml(m.membershipType)}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8" /></head>
+<body>
+<table border="1">
+<thead><tr><th>#</th><th>Member Name</th><th>Phone</th><th>CNIC</th><th>Package</th><th>Plan</th><th>Trainer</th><th>Payment</th><th>Fees Paid On</th><th>Expiry Date</th><th>Membership Type</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body></html>`;
+
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `memberships-${localISO(new Date())}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // PDF export (no extra library): opens the print dialog, choose "Save as PDF"
+  const handleExportPdf = () => {
+    const body = filtered
+      .map(
+        (m, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(m.name)}</td><td>${escapeHtml(
+            dash(m.phone)
+          )}</td><td>${escapeHtml(dash(m.cnic))}</td><td>${escapeHtml(m.pkg)}</td><td>${escapeHtml(
+            m.plan
+          )}</td><td>${escapeHtml(m.trainer || "—")}</td><td>${escapeHtml(
+            m.paymentStatus
+          )}</td><td>${escapeHtml(fmtISO(m.feesPaidOn))}</td><td>${escapeHtml(
+            fmtISO(m.expiryDate)
+          )}</td><td>${escapeHtml(m.membershipType)}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html>
+<head>
+<meta charset="UTF-8" />
+<title>Memberships</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  th, td { border: 1px solid #ccc; padding: 5px 6px; text-align: left; }
+  th { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Memberships</h1>
+<p>Generated on ${escapeHtml(localISO(new Date()))} &middot; ${filtered.length} members</p>
+<table>
+<thead><tr><th>#</th><th>Member Name</th><th>Phone</th><th>CNIC</th><th>Package</th><th>Plan</th><th>Trainer</th><th>Payment</th><th>Fees Paid On</th><th>Expiry Date</th><th>Membership Type</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      }, 1000);
+    }, 300);
+  };
+
   /* ---------- Toggle Monthly Fee (Mark Paid / Unmark) ---------- */
   const toggleMonthlyFee = async (feeId: number) => {
     setTogglingFeeId(feeId);
@@ -483,7 +628,7 @@ const Memberships = () => {
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(json.message ?? "Update nahi ho saka");
+        alert(json.message ?? "Could not update");
         return;
       }
 
@@ -528,7 +673,7 @@ const Memberships = () => {
         );
       }
     } catch {
-      alert("Server se connect nahi ho saka.");
+      alert("Could not connect to the server.");
     } finally {
       setTogglingFeeId(null);
     }
@@ -547,12 +692,38 @@ const Memberships = () => {
           <p className="ms-subtitle">View and manage all gym memberships and their details.</p>
         </div>
 
-        <div className="ms-datetime">
-          <div className="ms-datetime-text">
-            <span className="ms-date">{fmtDateLong(now)}</span>
-            <span className="ms-time">{fmtTime(now)}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={{
+                ...refreshBtnStyle,
+                opacity: refreshing ? 0.7 : 1,
+                cursor: refreshing ? "not-allowed" : "pointer",
+              }}
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw size={16} />
+              <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+            </button>
+            <button type="button" style={excelBtnStyle} onClick={handleExportExcel}>
+              <FileSpreadsheet size={16} />
+              <span>Excel</span>
+            </button>
+            <button type="button" style={pdfBtnStyle} onClick={handleExportPdf}>
+              <Download size={16} />
+              <span>PDF</span>
+            </button>
           </div>
-          <Calendar size={22} strokeWidth={1.8} />
+
+          <div className="ms-datetime">
+            <div className="ms-datetime-text">
+              <span className="ms-date">{fmtDateLong(now)}</span>
+              <span className="ms-time">{fmtTime(now)}</span>
+            </div>
+            <Calendar size={22} strokeWidth={1.8} />
+          </div>
         </div>
       </div>
 

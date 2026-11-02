@@ -34,10 +34,46 @@ const formatDateTime = (value: string) => {
   })}`;
 };
 
-// "05" -> "5", "0.5" waise hi rehta hai
+// "05" -> "5", "0.5" stays as is
 const stripLeadingZeros = (v: string) => v.replace(/^0+(?=\d)/, "");
 
-/* ---------- Icons (inline SVG, koi extra package nahi) ---------- */
+// Local date (YYYY-MM-DD) used for export file names
+const todayISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// Escape text before putting it into export HTML
+const escapeHtml = (v: string | number): string =>
+  String(v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ---------- Header action buttons (inline styles) ---------- */
+const actionBtnBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const refreshBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#3b82f6" };
+const excelBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#22c55e" };
+const pdfBtnStyle: React.CSSProperties = { ...actionBtnBase, background: "#ef4444" };
+
+/* ---------- Icons (inline SVG, no extra package) ---------- */
 const Icon = ({ children }: { children: React.ReactNode }) => (
   <svg
     viewBox="0 0 24 24"
@@ -83,6 +119,23 @@ const UserIcon = () => (
     <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
   </Icon>
 );
+const RefreshIcon = () => (
+  <Icon>
+    <path d="M20 11a8 8 0 0 0-14.9-3M4 5v4h4" />
+    <path d="M4 13a8 8 0 0 0 14.9 3M20 19v-4h-4" />
+  </Icon>
+);
+const SheetIcon = () => (
+  <Icon>
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M4 9h16M4 15h16M10 3v18" />
+  </Icon>
+);
+const DownloadIcon = () => (
+  <Icon>
+    <path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 20h14" />
+  </Icon>
+);
 
 /* ---------- Page ---------- */
 export default function CashInHand() {
@@ -90,6 +143,7 @@ export default function CashInHand() {
   const [entries, setEntries] = useState<CashEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [type, setType] = useState<"add" | "withdraw">("add");
   const [amount, setAmount] = useState("");
@@ -116,7 +170,7 @@ export default function CashInHand() {
       setEntries(Array.isArray(data?.data) ? data.data : []);
     } catch (err) {
       console.error(err);
-      setLoadError("Cash in hand load nahi ho saka. Dobara try karein.");
+      setLoadError("Could not load cash in hand. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -126,6 +180,116 @@ export default function CashInHand() {
     load();
   }, [load]);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Excel export (no extra library): downloads an .xls file built from an HTML table
+  const handleExportExcel = () => {
+    const rows = entries
+      .map(
+        (en) =>
+          `<tr><td>${escapeHtml(formatDateTime(en.created_at))}</td><td>${
+            en.type === "add" ? "Added" : "Withdrawn"
+          }</td><td>${en.type === "add" ? "" : "-"}${Number(en.amount) || 0}</td><td>${
+            Number(en.balance_before) || 0
+          }</td><td>${Number(en.balance_after) || 0}</td><td>${escapeHtml(
+            en.note || "-"
+          )}</td><td>${escapeHtml(en.user_name || "-")}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8" /></head>
+<body>
+<table border="1">
+<thead><tr><th>Date &amp; Time</th><th>Type</th><th>Amount (Rs)</th><th>Before (Rs)</th><th>After (Rs)</th><th>Note</th><th>By</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cash-in-hand-${todayISO()}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // PDF export (no extra library): opens the print dialog, choose "Save as PDF"
+  const handleExportPdf = () => {
+    const rows = entries
+      .map(
+        (en) =>
+          `<tr><td>${escapeHtml(formatDateTime(en.created_at))}</td><td>${
+            en.type === "add" ? "Added" : "Withdrawn"
+          }</td><td>${en.type === "add" ? "+" : "-"}${escapeHtml(rs(en.amount))}</td><td>${escapeHtml(
+            rs(en.balance_before)
+          )}</td><td>${escapeHtml(rs(en.balance_after))}</td><td>${escapeHtml(
+            en.note || "-"
+          )}</td><td>${escapeHtml(en.user_name || "-")}</td></tr>`
+      )
+      .join("");
+
+    const html = `<html>
+<head>
+<meta charset="UTF-8" />
+<title>Cash in Hand</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #555; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 7px 9px; text-align: left; }
+  th { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Cash in Hand</h1>
+<p>Current balance: ${escapeHtml(rs(balance))} &middot; Generated on ${escapeHtml(todayISO())} &middot; ${
+      entries.length
+    } entries</p>
+<table>
+<thead><tr><th>Date &amp; Time</th><th>Type</th><th>Amount</th><th>Before</th><th>After</th><th>Note</th><th>By</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc || !iframe.contentWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      }, 1000);
+    }, 300);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -133,11 +297,11 @@ export default function CashInHand() {
 
     const num = parseFloat(amount);
     if (isNaN(num) || num <= 0) {
-      setMsg({ kind: "error", text: "Sahi amount likhein." });
+      setMsg({ kind: "error", text: "Please enter a valid amount." });
       return;
     }
     if (type === "withdraw" && num > balance) {
-      setMsg({ kind: "error", text: "Cash in hand se zyada withdraw nahi ho sakta." });
+      setMsg({ kind: "error", text: "You can't withdraw more than the cash in hand." });
       return;
     }
 
@@ -155,20 +319,20 @@ export default function CashInHand() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setMsg({ kind: "error", text: data?.message ?? "Update fail hua." });
+        setMsg({ kind: "error", text: data?.message ?? "Update failed." });
         return;
       }
 
       setMsg({
         kind: "success",
-        text: type === "add" ? "Cash add ho gaya!" : "Cash minus ho gaya!",
+        text: type === "add" ? "Cash added!" : "Cash withdrawn!",
       });
       setAmount("");
       setNote("");
       await load();
     } catch (err) {
       console.error(err);
-      setMsg({ kind: "error", text: "Kuch masla ho gaya, dobara try karein." });
+      setMsg({ kind: "error", text: "Something went wrong. Please try again." });
     } finally {
       setSaving(false);
     }
@@ -188,8 +352,40 @@ export default function CashInHand() {
         <div>
           <h1 className="cih-title">Cash in Hand</h1>
           <p className="cih-subtitle">
-            Cash add / withdraw karein. Inventory khareedte waqt isi cash se payment hogi.
+            Add or withdraw cash. Inventory purchases will be paid from this cash.
           </p>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+            marginLeft: "auto",
+          }}
+        >
+          <button
+            type="button"
+            style={{
+              ...refreshBtnStyle,
+              opacity: refreshing ? 0.7 : 1,
+              cursor: refreshing ? "not-allowed" : "pointer",
+            }}
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshIcon />
+            <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+          </button>
+          <button type="button" style={excelBtnStyle} onClick={handleExportExcel}>
+            <SheetIcon />
+            <span>Excel</span>
+          </button>
+          <button type="button" style={pdfBtnStyle} onClick={handleExportPdf}>
+            <DownloadIcon />
+            <span>PDF</span>
+          </button>
         </div>
       </header>
 
@@ -200,14 +396,14 @@ export default function CashInHand() {
         <span className="cih-label">Admin Cash in Hand (manual)</span>
         <p className="cih-balance">{rs(balance)}</p>
         <p className="cih-hint">
-          Inventory add karte waqt itna hi cash use ho sakta hai, baqi amount vendor ke credit me jayegi.
+          Only this much cash can be used when adding inventory. The remaining amount goes to the vendor's credit.
         </p>
       </section>
 
       {/* Update form (admin only) */}
       {isAdmin && (
         <form className="cih-card cih-form" onSubmit={handleSubmit}>
-          <h3 className="cih-card-title">Cash Update Karo</h3>
+          <h3 className="cih-card-title">Update Cash</h3>
 
           <div className="cih-toggle">
             <button
@@ -262,7 +458,7 @@ export default function CashInHand() {
         </div>
 
         {entries.length === 0 ? (
-          <p className="cih-empty">Abhi tak koi history nahi.</p>
+          <p className="cih-empty">No history yet.</p>
         ) : (
           <div className="cih-table-wrap">
             <table className="cih-table">
@@ -271,8 +467,8 @@ export default function CashInHand() {
                   <th>Date &amp; Time</th>
                   <th>Type</th>
                   <th>Amount</th>
-                  <th>Pehle</th>
-                  <th>Baad me</th>
+                  <th>Before</th>
+                  <th>After</th>
                   <th>Note</th>
                   <th>By</th>
                 </tr>

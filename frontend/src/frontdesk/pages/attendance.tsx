@@ -4,6 +4,8 @@ import {
   Calendar,
   Search,
   RotateCcw,
+  RefreshCw,
+  FileText,
   Download,
   Eye,
   X,
@@ -45,7 +47,7 @@ interface Member {
   cnicBackUrl: string | null;
 }
 
-// Backend se jaisa data aata hai (AttendanceController@index se)
+// Shape of the data returned by the backend (AttendanceController@index)
 interface ApiAttendanceRow {
   id: number;
   name: string;
@@ -66,13 +68,13 @@ interface ApiAttendanceRow {
   cnic_back_url: string | null;
 }
 
-// AttendanceController@toggle ka response shape
+// Response shape of AttendanceController@toggle
 interface ApiToggleResponse {
   status: AttendanceStatus;
   check_in: string | null;
 }
 
-// AttendanceController@history ka response shape
+// Response shape of AttendanceController@history
 interface HistoryMonth {
   month: string; // "2026-09"
   label: string; // "September 2026"
@@ -119,14 +121,14 @@ const PAGE_SIZE = 10;
 const BOTTOM_GAP = 24;
 
 /* ------------------------------------------------------------------ */
-/* API helpers (isi file ke andar)                                     */
+/* API helpers (kept inside this file)                                 */
 /* ------------------------------------------------------------------ */
 
 function getToken(): string | null {
   return localStorage.getItem("token");
 }
 
-// Local (device) date — UTC nahi, taake Pakistan mein raat ko date galat na ho
+// Local (device) date, not UTC, so the date is not wrong late at night in Pakistan
 function getLocalDateString(): string {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -134,9 +136,24 @@ function getLocalDateString(): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-// Image ko naye tab mein kholna
+// Open an image in a new tab
 function openInNewTab(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+// Escapes a value for safe use inside a CSV cell
+function csvCell(value: string | number): string {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+// Escapes a value for safe use inside HTML (PDF report)
+function escapeHtml(value: string | number): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function mapApiToMember(m: ApiAttendanceRow): Member {
@@ -167,7 +184,7 @@ async function apiFetchAttendance(date: string): Promise<Member[]> {
       Authorization: `Bearer ${getToken()}`,
     },
   });
-  if (!res.ok) throw new Error("Attendance load nahi ho saki.");
+  if (!res.ok) throw new Error("Failed to load attendance.");
   const data: ApiAttendanceRow[] = await res.json();
   return data.map(mapApiToMember);
 }
@@ -182,7 +199,7 @@ async function apiToggleAttendance(memberId: number, date: string): Promise<ApiT
     },
     body: JSON.stringify({ date }),
   });
-  if (!res.ok) throw new Error("Status update nahi ho saka.");
+  if (!res.ok) throw new Error("Failed to update status.");
   return res.json();
 }
 
@@ -194,20 +211,65 @@ async function apiFetchHistory(memberId: number, month?: string): Promise<ApiHis
       Authorization: `Bearer ${getToken()}`,
     },
   });
-  if (!res.ok) throw new Error("Attendance history load nahi ho saki.");
+  if (!res.ok) throw new Error("Failed to load attendance history.");
   return res.json();
 }
+
+/* ------------------------------------------------------------------ */
+/* Inline styles for the action buttons (no external CSS)              */
+/* ------------------------------------------------------------------ */
+
+const actionsRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 12,
+  marginBottom: 14,
+  flexShrink: 0,
+};
+
+const baseActionBtnStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "9px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#ffffff",
+  fontSize: 14,
+  fontWeight: 700,
+  fontFamily: "inherit",
+  lineHeight: 1,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const refreshBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#3b82f6",
+};
+
+const excelBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#22c55e",
+};
+
+const pdfBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#ef4444",
+};
 
 /* ------------------------------------------------------------------ */
 /* Small presentational helpers                                        */
 /* ------------------------------------------------------------------ */
 
 /**
- * Status badge — click karne par dropdown khulta hai.
- * Agar status "Absent" hai to dropdown mein sirf "Present" aata hai,
- * aur agar "Present" hai to sirf "Absent" aata hai.
- * Dropdown body par portal se render hota hai taake table ke scroll
- * (overflow) mein cut na ho.
+ * Status badge: clicking it opens a dropdown.
+ * If the status is "Absent" the dropdown only offers "Present",
+ * and if it is "Present" the dropdown only offers "Absent".
+ * The dropdown is rendered on the body through a portal so it does not
+ * get clipped by the table's scroll (overflow).
  */
 const StatusDropdown: React.FC<{
   status: AttendanceStatus;
@@ -358,7 +420,7 @@ const AttendancePage: React.FC = () => {
       const data = await apiFetchAttendance(todayDate);
       setMembers(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Attendance load nahi ho saki.");
+      setError(err instanceof Error ? err.message : "Failed to load attendance.");
     } finally {
       setLoading(false);
     }
@@ -380,7 +442,7 @@ const AttendancePage: React.FC = () => {
       setHistory(data);
     } catch (err) {
       if (reqId !== historyReq.current) return;
-      setHistoryError(err instanceof Error ? err.message : "Attendance history load nahi ho saki.");
+      setHistoryError(err instanceof Error ? err.message : "Failed to load attendance history.");
     } finally {
       if (reqId === historyReq.current) setHistoryLoading(false);
     }
@@ -427,9 +489,9 @@ const AttendancePage: React.FC = () => {
     return cells;
   }, [history]);
 
-  // Toggle Present <-> Absent for a given member (dropdown se select karne par chalta hai)
+  // Toggle Present <-> Absent for a given member (runs when selected from the dropdown)
   const toggleStatus = async (id: number) => {
-    // optimistic UI update — turant dikhta hai, table refresh nahi hota
+    // optimistic UI update: shows instantly, the table does not refresh
     setMembers((prev) =>
       prev.map((m) =>
         m.id === id
@@ -453,7 +515,7 @@ const AttendancePage: React.FC = () => {
 
     try {
       const result = await apiToggleAttendance(id, todayDate);
-      // sirf isi member ki row backend ke authoritative data se sync karein
+      // sync only this member's row with the authoritative backend data
       setMembers((prev) =>
         prev.map((m) =>
           m.id === id ? { ...m, status: result.status, checkIn: result.check_in } : m
@@ -465,8 +527,8 @@ const AttendancePage: React.FC = () => {
           : prev
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Status update nahi ho saka.");
-      // sirf error ki soorat mein poora reload karein taake sahi state wapas aa jaye
+      setError(err instanceof Error ? err.message : "Failed to update status.");
+      // reload everything only on error so the correct state comes back
       loadAttendance();
     }
   };
@@ -512,7 +574,8 @@ const AttendancePage: React.FC = () => {
     setPage(1);
   };
 
-  const handleExport = () => {
+  /* ---------------- Export: Excel (CSV, opens in Excel) ---------------- */
+  const handleExportExcel = () => {
     const header = [
       "Name",
       "Phone",
@@ -535,14 +598,77 @@ const AttendancePage: React.FC = () => {
       m.checkIn ?? "-",
       m.paymentStatus,
     ]);
-    const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    // BOM so Excel reads UTF-8 correctly
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "attendance.csv";
+    link.download = `attendance-${todayDate}.csv`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  /* ---------------- Export: PDF (print dialog > Save as PDF) ---------------- */
+  const handleExportPdf = () => {
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Please allow pop-ups for this site to export the PDF.");
+      return;
+    }
+
+    const bodyRows = filteredMembers
+      .map(
+        (m, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.phone)}</td><td>${escapeHtml(m.cnic)}</td><td>${escapeHtml(m.package)}</td><td>${escapeHtml(m.type)}</td><td>${escapeHtml(m.trainer ?? "-")}</td><td>${escapeHtml(m.status)}</td><td>${escapeHtml(m.checkIn ?? "-")}</td><td>${escapeHtml(m.paymentStatus)}</td></tr>`
+      )
+      .join("");
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Attendance Report</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  p.meta { margin: 0 0 16px; color: #666; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f3f4f6; }
+  .grid { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .card { flex: 1; min-width: 150px; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; }
+  .card span { display: block; font-size: 11px; color: #666; }
+  .card strong { font-size: 18px; }
+</style>
+</head>
+<body>
+  <h1>Attendance Report</h1>
+  <p class="meta">Date: ${escapeHtml(todayDate)} &middot; Generated ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
+
+  <div class="grid">
+    <div class="card"><span>Total Check-ins</span><strong>${stats.totalCheckIns}</strong></div>
+    <div class="card"><span>Present Today</span><strong>${stats.present}</strong></div>
+    <div class="card"><span>Absent Today</span><strong>${stats.absent}</strong></div>
+    <div class="card"><span>No Check-in (7+ Days)</span><strong>${stats.noCheckIn}</strong></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Member Name</th><th>Phone</th><th>CNIC</th><th>Package</th><th>Type</th><th>Trainer</th><th>Status</th><th>Check In</th><th>Payment</th></tr>
+    </thead>
+    <tbody>${bodyRows || '<tr><td colspan="10">No members found for the selected filters.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    // Give the new window a moment to render before opening the print dialog
+    setTimeout(() => {
+      win.print();
+    }, 300);
   };
 
   return (
@@ -551,6 +677,31 @@ const AttendancePage: React.FC = () => {
       ref={pageRef}
       style={pageHeight ? { height: pageHeight } : undefined}
     >
+      {/* Action Buttons: Refresh / Excel / PDF */}
+      <div style={actionsRowStyle}>
+        <button
+          type="button"
+          onClick={loadAttendance}
+          disabled={loading}
+          style={{
+            ...refreshBtnStyle,
+            opacity: loading ? 0.7 : 1,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+        <button type="button" onClick={handleExportExcel} style={excelBtnStyle}>
+          <FileText size={16} />
+          Excel
+        </button>
+        <button type="button" onClick={handleExportPdf} style={pdfBtnStyle}>
+          <Download size={16} />
+          PDF
+        </button>
+      </div>
+
       {/* Header */}
       <div className="attendance-header">
         <div className="attendance-header-icon">
@@ -650,10 +801,6 @@ const AttendancePage: React.FC = () => {
         <button className="btn btn-secondary" onClick={handleReset}>
           <RotateCcw size={16} />
           Reset
-        </button>
-        <button className="btn btn-danger" onClick={handleExport}>
-          <Download size={16} />
-          Export
         </button>
       </div>
 

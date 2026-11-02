@@ -5,7 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Drink;
 use App\Models\DrinkRestock;
 use App\Models\DrinkSale;
+use App\Models\Vendor;
+use App\Models\VendorPayment;
+use App\Models\VendorPurchase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class DrinkController extends Controller
 {
@@ -33,9 +39,12 @@ class DrinkController extends Controller
         return response()->json($query->orderBy('name')->get());
     }
 
-    // Admin: naya item add karna
+    // Naya item add karna
+    // Optional credit purchase: vendor_name + invoice_no + paid_now
     public function store(Request $request)
     {
+        $isCredit = filled($request->input('vendor_name'));
+
         $data = $request->validate([
             'name' => 'required|string',
             'category' => 'required|string',
@@ -43,10 +52,59 @@ class DrinkController extends Controller
             'quantity' => 'required|integer|min:0',
             'low_stock_threshold' => 'integer|min:0',
             'price' => 'numeric|min:0',        // selling price
-            'cost_price' => 'numeric|min:0',   // khareed price
+            // credit purchase mein cost price zaroori hai (bill = quantity x cost_price)
+            'cost_price' => [Rule::requiredIf($isCredit), 'numeric', 'min:0'],   // khareed price
+
+            // ---- Vendor credit (optional) ----
+            'vendor_name' => 'nullable|string|max:255',
+            'invoice_no' => [
+                Rule::requiredIf($isCredit),
+                'nullable',
+                'string',
+                'max:100',
+                'unique:vendor_purchases,invoice_no',
+            ],
+            'paid_now' => 'nullable|numeric|min:0',
         ]);
 
-        return response()->json(Drink::create($data), 201);
+        if ($isCredit) {
+            if ((int) $data['quantity'] < 1) {
+                return response()->json([
+                    'message' => 'Vendor se maal lene ke liye quantity kam az kam 1 honi chahiye.',
+                ], 422);
+            }
+
+            $total = round($data['quantity'] * $data['cost_price'], 2);
+            $paid = round((float) ($data['paid_now'] ?? 0), 2);
+
+            if ($paid > $total) {
+                return response()->json([
+                    'message' => 'Paid Now total bill (Rs ' . number_format($total, 2) . ') se zyada nahi ho sakta.',
+                ], 422);
+            }
+        }
+
+        $drink = DB::transaction(function () use ($data, $isCredit) {
+            $drink = Drink::create(Arr::only($data, [
+                'name', 'category', 'unit', 'quantity',
+                'low_stock_threshold', 'price', 'cost_price',
+            ]));
+
+            if ($isCredit) {
+                $this->recordCredit(
+                    $drink,
+                    (int) $data['quantity'],
+                    (float) $data['cost_price'],
+                    $data['vendor_name'],
+                    $data['invoice_no'],
+                    (float) ($data['paid_now'] ?? 0)
+                );
+            }
+
+            return $drink;
+        });
+
+        return response()->json($drink, 201);
     }
 
     // Admin: edit
@@ -90,26 +148,71 @@ class DrinkController extends Controller
     }
 
     // Admin/Frontdesk: stock wapis add karna (naya maal aaya)
+    // Optional credit purchase: vendor_name + invoice_no + paid_now
     public function restock(Request $request, Drink $drink)
     {
+        $isCredit = filled($request->input('vendor_name'));
+
         $data = $request->validate([
             'quantity' => 'required|integer|min:1',
             'cost_price' => 'nullable|numeric|min:0',
+
+            // ---- Vendor credit (optional) ----
+            'vendor_name' => 'nullable|string|max:255',
+            'invoice_no' => [
+                Rule::requiredIf($isCredit),
+                'nullable',
+                'string',
+                'max:100',
+                'unique:vendor_purchases,invoice_no',
+            ],
+            'paid_now' => 'nullable|numeric|min:0',
         ]);
 
-        $drink->increment('quantity', $data['quantity']);
+        // Naya cost price diya hai to wo, warna drink ka maujooda cost price
+        $unitCost = (array_key_exists('cost_price', $data) && $data['cost_price'] !== null)
+            ? (float) $data['cost_price']
+            : (float) $drink->cost_price;
 
-        // agar naya khareed price diya hai to drink ki cost_price update kar do
-        if (array_key_exists('cost_price', $data) && $data['cost_price'] !== null) {
-            $drink->update(['cost_price' => $data['cost_price']]);
+        if ($isCredit) {
+            $total = round($data['quantity'] * $unitCost, 2);
+            $paid = round((float) ($data['paid_now'] ?? 0), 2);
+
+            if ($paid > $total) {
+                return response()->json([
+                    'message' => 'Paid Now total bill (Rs ' . number_format($total, 2) . ') se zyada nahi ho sakta.',
+                ], 422);
+            }
         }
 
-        $restock = DrinkRestock::create([
-            'drink_id' => $drink->id,
-            'restocked_by' => $request->user()?->id,
-            'quantity' => $data['quantity'],
-            'cost_price' => $drink->cost_price,
-        ]);
+        $restock = DB::transaction(function () use ($request, $drink, $data, $isCredit, $unitCost) {
+            $drink->increment('quantity', $data['quantity']);
+
+            // agar naya khareed price diya hai to drink ki cost_price update kar do
+            if (array_key_exists('cost_price', $data) && $data['cost_price'] !== null) {
+                $drink->update(['cost_price' => $data['cost_price']]);
+            }
+
+            $restock = DrinkRestock::create([
+                'drink_id' => $drink->id,
+                'restocked_by' => $request->user()?->id,
+                'quantity' => $data['quantity'],
+                'cost_price' => $drink->cost_price,
+            ]);
+
+            if ($isCredit) {
+                $this->recordCredit(
+                    $drink,
+                    (int) $data['quantity'],
+                    $unitCost,
+                    $data['vendor_name'],
+                    $data['invoice_no'],
+                    (float) ($data['paid_now'] ?? 0)
+                );
+            }
+
+            return $restock;
+        });
 
         return response()->json(['drink' => $drink->fresh(), 'restock' => $restock]);
     }
@@ -146,5 +249,49 @@ class DrinkController extends Controller
     {
         $drink->delete();
         return response()->json(['message' => 'Deleted']);
+    }
+
+    /**
+     * Vendor credit record banata hai: vendor (naya ya purana) + invoice + item + paid payment.
+     * Hamesha DB::transaction ke andar se call karein.
+     */
+    private function recordCredit(
+        Drink $drink,
+        int $quantity,
+        float $unitCost,
+        string $vendorName,
+        string $invoiceNo,
+        float $paidNow
+    ): void {
+        $vendor = Vendor::firstOrCreate(['name' => trim($vendorName)]);
+
+        $total = round($quantity * $unitCost, 2);
+        $paid = round($paidNow, 2);
+
+        $purchase = VendorPurchase::create([
+            'vendor_id' => $vendor->id,
+            'invoice_no' => trim($invoiceNo),
+            'source_type' => 'drink',
+            'total_amount' => $total,
+            'paid_amount' => $paid,
+        ]);
+
+        $purchase->items()->create([
+            'item_type' => 'drink',
+            'item_id' => $drink->id,
+            'item_name' => $drink->name,
+            'quantity' => $quantity,
+            'unit_price' => $unitCost,
+        ]);
+
+        // Agar usi waqt kuch paise diye to wo bhi payment history mein dikhein
+        if ($paid > 0) {
+            VendorPayment::create([
+                'vendor_id' => $vendor->id,
+                'purchase_id' => $purchase->id,
+                'amount' => $paid,
+                'note' => 'Paid at purchase',
+            ]);
+        }
     }
 }

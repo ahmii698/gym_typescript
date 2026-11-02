@@ -21,7 +21,7 @@ interface GymPackage {
   icon: PackageIcon;
 }
 
-// Backend se jaisa data aata hai
+// Shape of the data returned by the backend
 interface ApiPackage {
   id: number;
   name: string;
@@ -36,11 +36,11 @@ interface ApiPackage {
 type ViewMode = "grid" | "list";
 
 /* ------------------------------------------------------------------ */
-/* API helpers (isi file ke andar)                                     */
+/* API helpers (kept inside this file)                                 */
 /* ------------------------------------------------------------------ */
 
 function getToken(): string | null {
-  return localStorage.getItem("token"); // apke login flow ke mutabiq key adjust kar lein
+  return localStorage.getItem("token"); // adjust the key to match your login flow
 }
 
 function mapApiToPackage(p: ApiPackage): GymPackage {
@@ -75,7 +75,7 @@ async function apiFetchPackages(): Promise<GymPackage[]> {
       Authorization: `Bearer ${getToken()}`,
     },
   });
-  if (!res.ok) throw new Error("Packages load nahi ho sakin.");
+  if (!res.ok) throw new Error("Failed to load packages.");
   const data: ApiPackage[] = await res.json();
   return data.map(mapApiToPackage);
 }
@@ -92,7 +92,7 @@ async function apiCreatePackage(data: Omit<GymPackage, "id">): Promise<GymPackag
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.message || "Package add nahi ho saka.");
+    throw new Error(body?.message || "Failed to add package.");
   }
   const created: ApiPackage = await res.json();
   return mapApiToPackage(created);
@@ -110,7 +110,7 @@ async function apiUpdatePackage(id: string, data: Omit<GymPackage, "id">): Promi
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.message || "Package update nahi ho saka.");
+    throw new Error(body?.message || "Failed to update package.");
   }
   const updated: ApiPackage = await res.json();
   return mapApiToPackage(updated);
@@ -124,8 +124,68 @@ async function apiDeletePackage(id: string): Promise<void> {
       Authorization: `Bearer ${getToken()}`,
     },
   });
-  if (!res.ok) throw new Error("Package delete nahi ho saka.");
+  if (!res.ok) throw new Error("Failed to delete package.");
 }
+
+/* Escapes a value for safe use inside a CSV cell */
+function csvCell(value: string | number): string {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+/* Escapes a value for safe use inside HTML (PDF report) */
+function escapeHtml(value: string | number): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/* ------------------------------------------------------------------ */
+/* Inline styles for the action buttons (no external CSS)              */
+/* ------------------------------------------------------------------ */
+
+const actionsRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 12,
+  marginBottom: 14,
+  flexShrink: 0,
+};
+
+const baseActionBtnStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "9px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#ffffff",
+  fontSize: 14,
+  fontWeight: 700,
+  fontFamily: "inherit",
+  lineHeight: 1,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const refreshBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#3b82f6",
+};
+
+const excelBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#22c55e",
+};
+
+const pdfBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#ef4444",
+};
 
 /* ------------------------------------------------------------------ */
 /* Inline icons                                                        */
@@ -153,6 +213,25 @@ const Icon = {
     <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M3 12a9 9 0 1 0 3-6.7" strokeLinecap="round" />
       <path d="M3 4v5h5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Refresh: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 12a9 9 0 0 0-15.5-6.3L3 8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 12a9 9 0 0 0 15.5 6.3L21 16" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M21 21v-5h-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  File: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" strokeLinejoin="round" />
+      <path d="M14 3v5h5M9 13h6M9 17h6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Download: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3v12M7 10l5 5 5-5M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   Grid: () => (
@@ -297,15 +376,15 @@ const PackageModal: React.FC<PackageModalProps> = ({
 
   const validate = () => {
     const next: Partial<Record<keyof FormState, string>> = {};
-    if (!form.name.trim()) next.name = "Package ka naam likhein.";
+    if (!form.name.trim()) next.name = "Please enter a package name.";
     const price = Number(form.price);
     if (!form.price.trim() || Number.isNaN(price) || price <= 0)
-      next.price = "Price 0 se zyada honi chahiye.";
+      next.price = "Price must be greater than 0.";
     const days = Number(form.durationDays);
     if (!form.durationDays.trim() || !Number.isInteger(days) || days <= 0)
-      next.durationDays = "Duration poore dinon mein likhein.";
+      next.durationDays = "Enter the duration in whole days.";
     const feats = form.features.split("\n").map((f) => f.trim()).filter(Boolean);
-    if (feats.length === 0) next.features = "Kam az kam aik feature add karein.";
+    if (feats.length === 0) next.features = "Add at least one feature.";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -339,7 +418,7 @@ const PackageModal: React.FC<PackageModalProps> = ({
         <header className="pkg-modal__head">
           <div>
             <h2 id="pkg-modal-title">{editing ? "Edit package" : "Add new package"}</h2>
-            <p>Membership ki details bharein aur save karein.</p>
+            <p>Fill in the membership details and save.</p>
           </div>
           <button type="button" className="pkg-modal__close" onClick={onClose} aria-label="Close">
             <Icon.Close />
@@ -426,7 +505,7 @@ const PackageModal: React.FC<PackageModalProps> = ({
               value={form.features}
               onChange={(e) => update("features", e.target.value)}
             />
-            <span className="pkg-hint">Har feature nayi line par likhein.</span>
+            <span className="pkg-hint">Enter each feature on a new line.</span>
             {errors.features && <span className="pkg-error">{errors.features}</span>}
           </div>
 
@@ -486,7 +565,7 @@ const Packages: React.FC = () => {
       const data = await apiFetchPackages();
       setPackages(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Packages load nahi ho sakin.");
+      setError(err instanceof Error ? err.message : "Failed to load packages.");
     } finally {
       setLoading(false);
     }
@@ -513,6 +592,92 @@ const Packages: React.FC = () => {
     setStatusFilter("all");
   };
 
+  /* ---------------- Export: Excel (CSV, opens in Excel) ---------------- */
+  const handleExportExcel = () => {
+    const header = ["Name", "Type", "Price (PKR)", "Duration (Days)", "Features", "Status"];
+    const rows = filtered.map((p) => [
+      p.name,
+      p.type,
+      p.price,
+      p.durationDays,
+      p.features.join("; "),
+      p.status,
+    ]);
+    const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    // BOM so Excel reads UTF-8 correctly
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `packages-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /* ---------------- Export: PDF (print dialog > Save as PDF) ---------------- */
+  const handleExportPdf = () => {
+    const win = window.open("", "_blank");
+    if (!win) {
+      window.alert("Please allow pop-ups for this site to export the PDF.");
+      return;
+    }
+
+    const activeCount = packages.filter((p) => p.status === "Active").length;
+    const inactiveCount = packages.length - activeCount;
+
+    const bodyRows = filtered
+      .map(
+        (p, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.type)}</td><td>PKR ${escapeHtml(p.price.toLocaleString("en-PK"))}</td><td>${p.durationDays}</td><td>${escapeHtml(p.features.join(", "))}</td><td>${escapeHtml(p.status)}</td></tr>`
+      )
+      .join("");
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Packages Report</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  p.meta { margin: 0 0 16px; color: #666; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; }
+  .grid { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .card { flex: 1; min-width: 130px; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; }
+  .card span { display: block; font-size: 11px; color: #666; }
+  .card strong { font-size: 18px; }
+</style>
+</head>
+<body>
+  <h1>Packages Report</h1>
+  <p class="meta">Generated ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
+
+  <div class="grid">
+    <div class="card"><span>Total Packages</span><strong>${packages.length}</strong></div>
+    <div class="card"><span>Active</span><strong>${activeCount}</strong></div>
+    <div class="card"><span>Inactive</span><strong>${inactiveCount}</strong></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Name</th><th>Type</th><th>Price</th><th>Days</th><th>Features</th><th>Status</th></tr>
+    </thead>
+    <tbody>${bodyRows || '<tr><td colspan="7">No packages found.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    // Give the new window a moment to render before opening the print dialog
+    setTimeout(() => {
+      win.print();
+    }, 300);
+  };
+
   const openAdd = () => {
     setEditing(null);
     setModalOpen(true);
@@ -537,20 +702,20 @@ const Packages: React.FC = () => {
       setModalOpen(false);
       setEditing(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Package save nahi ho saka.");
+      setError(err instanceof Error ? err.message : "Failed to save package.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (pkg: GymPackage) => {
-    const ok = window.confirm(`"${pkg.name}" delete kar dein?`);
+    const ok = window.confirm(`Delete "${pkg.name}"?`);
     if (!ok) return;
     try {
       await apiDeletePackage(pkg.id);
       setPackages((list) => list.filter((p) => p.id !== pkg.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Package delete nahi ho saka.");
+      setError(err instanceof Error ? err.message : "Failed to delete package.");
     }
   };
 
@@ -568,7 +733,7 @@ const Packages: React.FC = () => {
       });
       setPackages((list) => list.map((p) => (p.id === pkg.id ? updated : p)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Status update nahi ho saka.");
+      setError(err instanceof Error ? err.message : "Failed to update status.");
     }
   };
 
@@ -578,6 +743,31 @@ const Packages: React.FC = () => {
       ref={pageRef}
       style={pageHeight ? { height: pageHeight } : undefined}
     >
+      {/* Action Buttons: Refresh / Excel / PDF */}
+      <div style={actionsRowStyle}>
+        <button
+          type="button"
+          onClick={loadPackages}
+          disabled={loading}
+          style={{
+            ...refreshBtnStyle,
+            opacity: loading ? 0.7 : 1,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          <Icon.Refresh />
+          Refresh
+        </button>
+        <button type="button" onClick={handleExportExcel} style={excelBtnStyle}>
+          <Icon.File />
+          Excel
+        </button>
+        <button type="button" onClick={handleExportPdf} style={pdfBtnStyle}>
+          <Icon.Download />
+          PDF
+        </button>
+      </div>
+
       <header className="pkg-header">
         <div className="pkg-header__left">
           <span className="pkg-header__icon">
@@ -668,8 +858,8 @@ const Packages: React.FC = () => {
         </div>
       ) : filtered.length === 0 ? (
         <div className="pkg-empty">
-          <h3>Koi package nahi mila</h3>
-          <p>Filters reset karein ya naya package add karein.</p>
+          <h3>No packages found</h3>
+          <p>Reset the filters or add a new package.</p>
           <button type="button" className="btn btn--primary" onClick={openAdd}>
             <Icon.Plus />
             Add New Package
@@ -712,7 +902,7 @@ const Packages: React.FC = () => {
                     type="button"
                     className={`status-pill status-pill--${pkg.status.toLowerCase()}`}
                     onClick={() => toggleStatus(pkg)}
-                    title="Status badalne ke liye click karein"
+                    title="Click to change status"
                   >
                     {pkg.status}
                   </button>

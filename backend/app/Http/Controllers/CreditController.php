@@ -1,0 +1,201 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Vendor;
+use App\Models\VendorPayment;
+use App\Models\VendorPurchase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class CreditController extends Controller
+{
+    // GET /api/credit/vendors?q=
+    // Vendors ki list + upar ke 3 cards ka data
+    public function index(Request $request)
+    {
+        $query = Vendor::with(['purchases.items'])->orderBy('name');
+
+        // Search: vendor name, product name ya invoice #
+        if ($request->filled('q')) {
+            $q = $request->q;
+            $query->where(function ($w) use ($q) {
+                $w->where('name', 'like', "%{$q}%")
+                  ->orWhereHas('purchases', function ($p) use ($q) {
+                      $p->where('invoice_no', 'like', "%{$q}%")
+                        ->orWhereHas('items', fn ($i) => $i->where('item_name', 'like', "%{$q}%"));
+                  });
+            });
+        }
+
+        $rows = $query->get()->map(function ($vendor) {
+            $total = (float) $vendor->purchases->sum('total_amount');
+            $paid  = (float) $vendor->purchases->sum('paid_amount');
+
+            // Same product ki quantity jama karke: "car ac x 1"
+            $products = $vendor->purchases
+                ->flatMap(fn ($p) => $p->items)
+                ->groupBy('item_name')
+                ->map(fn ($group, $name) => [
+                    'name'     => $name,
+                    'quantity' => (int) $group->sum('quantity'),
+                ])
+                ->values();
+
+            return [
+                'id'            => $vendor->id,
+                'name'          => $vendor->name,
+                'phone'         => $vendor->phone,
+                'products'      => $products,
+                'total_qty'     => (int) $products->sum('quantity'),
+                'total_orders'  => $vendor->purchases->count(),
+                'total_amount'  => round($total, 2),
+                'total_paid'    => round($paid, 2),
+                'total_balance' => round($total - $paid, 2),
+            ];
+        })->values();
+
+        // Cards: saare vendors ka overall hisaab (search se asar nahi padta)
+        $allTotal = (float) VendorPurchase::sum('total_amount');
+        $allPaid  = (float) VendorPurchase::sum('paid_amount');
+
+        return response()->json([
+            'data'    => $rows,
+            'summary' => [
+                'total_vendors' => Vendor::count(),
+                'total_amount'  => round($allTotal, 2),
+                'total_paid'    => round($allPaid, 2),
+                'total_balance' => round($allTotal - $allPaid, 2),
+                'pending_count' => $rows->where('total_balance', '>', 0)->count(),
+            ],
+        ]);
+    }
+
+    // GET /api/credit/vendors/{vendor}/history
+    // Eye button: saari invoices (product-wise) + payment history
+    public function history(Vendor $vendor)
+    {
+        $purchases = $vendor->purchases()
+            ->with(['items', 'payments'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+
+        // "All Records" table: har product ki alag row
+        $records = [];
+        foreach ($purchases as $purchase) {
+            foreach ($purchase->items as $item) {
+                $records[] = [
+                    'purchase_id' => $purchase->id,
+                    'invoice_no'  => $purchase->invoice_no,
+                    'date'        => $purchase->created_at,
+                    'product'     => $item->item_name,
+                    'quantity'    => $item->quantity,
+                    'total'       => round($item->quantity * $item->unit_price, 2),
+                ];
+            }
+        }
+
+        // Payment History table
+        $payments = $vendor->payments()
+            ->with('purchase:id,invoice_no')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($p) => [
+                'id'         => $p->id,
+                'invoice_no' => $p->purchase?->invoice_no,
+                'amount'     => $p->amount,
+                'note'       => $p->note,
+                'date'       => $p->created_at,
+            ]);
+
+        $total = (float) $purchases->sum('total_amount');
+        $paid  = (float) $purchases->sum('paid_amount');
+
+        return response()->json([
+            'vendor'    => ['id' => $vendor->id, 'name' => $vendor->name],
+            'summary'   => [
+                'total_orders' => $purchases->count(),
+                'total_amount' => round($total, 2),
+                'total_paid'   => round($paid, 2),
+                'balance'      => round($total - $paid, 2),
+            ],
+            // Invoice-wise paid/balance (screenshot ke PAID aur BALANCE columns ke liye)
+            'invoices'  => $purchases->map(fn ($p) => [
+                'id'           => $p->id,
+                'invoice_no'   => $p->invoice_no,
+                'date'         => $p->created_at,
+                'source_type'  => $p->source_type,
+                'total_amount' => $p->total_amount,
+                'paid_amount'  => $p->paid_amount,
+                'balance'      => $p->balance,
+            ])->values(),
+            'records'   => $records,
+            'payments'  => $payments,
+        ]);
+    }
+
+    // POST /api/credit/vendors/{vendor}/pay
+    // Pay Now: amount sabse purani unpaid invoice se bharna shuru hota hai (oldest first)
+    public function pay(Request $request, Vendor $vendor)
+    {
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'note'   => 'nullable|string|max:255',
+        ]);
+
+        $amount = round((float) $data['amount'], 2);
+
+        $paid = DB::transaction(function () use ($vendor, $data, $amount) {
+            // lockForUpdate: do log ek saath pay karein to hisaab na bigray
+            $purchases = VendorPurchase::where('vendor_id', $vendor->id)
+                ->whereColumn('paid_amount', '<', 'total_amount')
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $balance = round($purchases->sum(fn ($p) => $p->total_amount - $p->paid_amount), 2);
+
+            if ($balance <= 0) {
+                abort(response()->json(['message' => 'Is vendor ka koi balance baqi nahi hai.'], 422));
+            }
+
+            if ($amount > $balance) {
+                abort(response()->json([
+                    'message' => 'Amount balance se zyada hai. Baqi balance: Rs ' . number_format($balance, 2),
+                ], 422));
+            }
+
+            $remaining = $amount;
+
+            foreach ($purchases as $purchase) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $due   = round($purchase->total_amount - $purchase->paid_amount, 2);
+                $apply = min($due, $remaining);
+
+                $purchase->paid_amount = round($purchase->paid_amount + $apply, 2);
+                $purchase->save();
+
+                VendorPayment::create([
+                    'vendor_id'   => $vendor->id,
+                    'purchase_id' => $purchase->id,
+                    'amount'      => $apply,
+                    'note'        => $data['note'] ?? null,
+                ]);
+
+                $remaining = round($remaining - $apply, 2);
+            }
+
+            return $amount;
+        });
+
+        return response()->json([
+            'message' => 'Payment save ho gayi: Rs ' . number_format($paid, 2),
+        ]);
+    }
+}

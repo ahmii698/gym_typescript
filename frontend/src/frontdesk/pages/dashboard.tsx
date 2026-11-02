@@ -7,6 +7,9 @@ import {
   Database,
   ChevronDown,
   CalendarDays,
+  RefreshCw,
+  FileText,
+  Download,
 } from "lucide-react";
 import { API_URL } from "../../../config";
 import "./dashboard.css";
@@ -81,8 +84,66 @@ const formatPKR = (amount: number) => {
 };
 
 const BOTTOM_GAP = 24;
-/* Is width ke neeche (tablet/mobile) fixed height nahi lagti */
+/* Below this width (tablet/mobile) no fixed height is applied */
 const FIXED_HEIGHT_MIN_WIDTH = 1024;
+
+/* Escapes a value for safe use inside a CSV cell */
+const csvCell = (value: string | number) => {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
+/* Escapes a value for safe use inside HTML (PDF report) */
+const escapeHtml = (value: string | number) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ------------------------------------------------------------------ */
+/*  Inline styles for the action buttons (no external CSS)             */
+/* ------------------------------------------------------------------ */
+
+const actionsRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 12,
+  flexShrink: 0,
+};
+
+const baseActionBtnStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "9px 18px",
+  border: "none",
+  borderRadius: 10,
+  color: "#ffffff",
+  fontSize: 14,
+  fontWeight: 700,
+  fontFamily: "inherit",
+  lineHeight: 1,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const refreshBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#3b82f6",
+};
+
+const excelBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#22c55e",
+};
+
+const pdfBtnStyle: React.CSSProperties = {
+  ...baseActionBtnStyle,
+  backgroundColor: "#ef4444",
+};
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -108,55 +169,57 @@ const Dashboard: React.FC = () => {
   const [loadingStats, setLoadingStats] = useState(true);
 
   /* ---------------- Fetch dashboard stats ---------------- */
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await fetch(`${API_URL}/dashboard/stats`, {
-          headers: authHeaders(),
+  const fetchStats = async () => {
+    setLoadingStats(true);
+    try {
+      const res = await fetch(`${API_URL}/dashboard/stats`, {
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStats({
+          totalMembers: data.total_members ?? 0,
+          activeMembers: data.active_members ?? 0,
+          pendingDue: data.pending_due ?? 0,
+          feesCollected: Number(data.fees_collected) || 0,
+          feesTrend: data.fees_trend ?? 0,
+          membersTrend: data.members_trend ?? 0,
+          feesByMethod: {
+            cash: Number(data.fees_by_method?.cash) || 0,
+            bank_transfer: Number(data.fees_by_method?.bank_transfer) || 0,
+            online: Number(data.fees_by_method?.online) || 0,
+            card: Number(data.fees_by_method?.card) || 0,
+          },
+          chart: {
+            labels: data.chart?.labels ?? [],
+            total: data.chart?.total ?? [],
+            active: data.chart?.active ?? [],
+          },
+          upcomingDues: Array.isArray(data.upcoming_dues)
+            ? data.upcoming_dues
+            : [],
+          recentMembers: Array.isArray(data.recent_members)
+            ? data.recent_members
+            : [],
         });
-        if (res.ok) {
-          const data = await res.json();
-          setStats({
-            totalMembers: data.total_members ?? 0,
-            activeMembers: data.active_members ?? 0,
-            pendingDue: data.pending_due ?? 0,
-            feesCollected: Number(data.fees_collected) || 0,
-            feesTrend: data.fees_trend ?? 0,
-            membersTrend: data.members_trend ?? 0,
-            feesByMethod: {
-              cash: Number(data.fees_by_method?.cash) || 0,
-              bank_transfer: Number(data.fees_by_method?.bank_transfer) || 0,
-              online: Number(data.fees_by_method?.online) || 0,
-              card: Number(data.fees_by_method?.card) || 0,
-            },
-            chart: {
-              labels: data.chart?.labels ?? [],
-              total: data.chart?.total ?? [],
-              active: data.chart?.active ?? [],
-            },
-            upcomingDues: Array.isArray(data.upcoming_dues)
-              ? data.upcoming_dues
-              : [],
-            recentMembers: Array.isArray(data.recent_members)
-              ? data.recent_members
-              : [],
-          });
-        }
-      } catch (err) {
-        console.error("Dashboard stats load nahi ho sake", err);
-      } finally {
-        setLoadingStats(false);
       }
-    };
+    } catch (err) {
+      console.error("Failed to load dashboard stats", err);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  useEffect(() => {
     fetchStats();
   }, []);
 
-  /* ---------------- Page height (sirf desktop pe) ---------------- */
+  /* ---------------- Page height (desktop only) ---------------- */
   useLayoutEffect(() => {
     const updateHeight = () => {
       if (!pageRef.current) return;
 
-      // Tablet / mobile: fixed height nahi, page natural scroll kare
+      // Tablet / mobile: no fixed height, let the page scroll naturally
       if (window.innerWidth <= FIXED_HEIGHT_MIN_WIDTH) {
         setPageHeight(undefined);
         return;
@@ -262,12 +325,170 @@ const Dashboard: React.FC = () => {
 
   const topMethodPercent = methodRows.length > 0 ? methodRows[0].percent : 0;
 
+  /* ---------------- Export: Excel (CSV, opens in Excel) ---------------- */
+  const handleExportExcel = () => {
+    const rows: (string | number)[][] = [];
+
+    rows.push(["Dashboard Report"]);
+    rows.push(["Generated", new Date().toLocaleString("en-US")]);
+    rows.push([]);
+
+    rows.push(["Summary"]);
+    rows.push(["Total Members", stats.totalMembers]);
+    rows.push(["Active Members", stats.activeMembers]);
+    rows.push(["Pending Due (This Month)", stats.pendingDue]);
+    rows.push(["Fees Collected (This Month)", stats.feesCollected]);
+    rows.push(["Fees Trend (%)", stats.feesTrend]);
+    rows.push([]);
+
+    rows.push(["Fee Collection By Method"]);
+    rows.push(["Method", "Amount", "Percent"]);
+    methodRows.forEach((r) => rows.push([r.label, r.amount, `${r.percent}%`]));
+    rows.push([]);
+
+    rows.push(["Recent Members"]);
+    rows.push(["#", "Name", "Package", "Join Date", "Status"]);
+    stats.recentMembers.forEach((m, i) =>
+      rows.push([i + 1, m.name, m.package, m.join_date, m.status])
+    );
+    rows.push([]);
+
+    rows.push(["Upcoming Fee Dues"]);
+    rows.push(["#", "Member Name", "Package", "Due Date", "Days Left", "Amount"]);
+    stats.upcomingDues.forEach((d, i) =>
+      rows.push([i + 1, d.name, d.package, d.due_date, d.days_left, Number(d.amount) || 0])
+    );
+
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+    // BOM so Excel reads UTF-8 correctly
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `dashboard-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /* ---------------- Export: PDF (print dialog > Save as PDF) ---------------- */
+  const handleExportPdf = () => {
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Please allow pop-ups for this site to export the PDF.");
+      return;
+    }
+
+    const memberRows = stats.recentMembers
+      .map(
+        (m, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.package)}</td><td>${escapeHtml(m.join_date)}</td><td>${escapeHtml(m.status)}</td></tr>`
+      )
+      .join("");
+
+    const dueRows = stats.upcomingDues
+      .map(
+        (d, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(d.name)}</td><td>${escapeHtml(d.package)}</td><td>${escapeHtml(d.due_date)}</td><td>${d.days_left}</td><td>${escapeHtml(formatPKR(Number(d.amount) || 0))}</td></tr>`
+      )
+      .join("");
+
+    const methodHtmlRows = methodRows
+      .map(
+        (r) =>
+          `<tr><td>${escapeHtml(r.label)}</td><td>${escapeHtml(formatPKR(r.amount))}</td><td>${r.percent}%</td></tr>`
+      )
+      .join("");
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Dashboard Report</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  h2 { margin: 24px 0 8px; font-size: 16px; }
+  p.meta { margin: 0 0 16px; color: #666; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f3f4f6; }
+  .grid { display: flex; gap: 12px; flex-wrap: wrap; }
+  .card { flex: 1; min-width: 150px; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; }
+  .card span { display: block; font-size: 11px; color: #666; }
+  .card strong { font-size: 18px; }
+</style>
+</head>
+<body>
+  <h1>Dashboard Report</h1>
+  <p class="meta">Generated ${escapeHtml(new Date().toLocaleString("en-US"))}</p>
+
+  <div class="grid">
+    <div class="card"><span>Total Members</span><strong>${stats.totalMembers}</strong></div>
+    <div class="card"><span>Active Members</span><strong>${stats.activeMembers}</strong></div>
+    <div class="card"><span>Pending Due (This Month)</span><strong>${stats.pendingDue}</strong></div>
+    <div class="card"><span>Fees Collected (This Month)</span><strong>${escapeHtml(formatPKR(stats.feesCollected))}</strong></div>
+  </div>
+
+  <h2>Fee Collection By Method</h2>
+  <table>
+    <thead><tr><th>Method</th><th>Amount</th><th>Percent</th></tr></thead>
+    <tbody>${methodHtmlRows || '<tr><td colspan="3">No payments were recorded this month.</td></tr>'}</tbody>
+  </table>
+
+  <h2>Recent Members</h2>
+  <table>
+    <thead><tr><th>#</th><th>Name</th><th>Package</th><th>Join Date</th><th>Status</th></tr></thead>
+    <tbody>${memberRows || '<tr><td colspan="5">No recent members.</td></tr>'}</tbody>
+  </table>
+
+  <h2>Upcoming Fee Dues</h2>
+  <table>
+    <thead><tr><th>#</th><th>Member Name</th><th>Package</th><th>Due Date</th><th>Days Left</th><th>Amount</th></tr></thead>
+    <tbody>${dueRows || '<tr><td colspan="6">No upcoming dues in the next 7 days.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    // Give the new window a moment to render before opening the print dialog
+    setTimeout(() => {
+      win.print();
+    }, 300);
+  };
+
   return (
     <div
       className="db-dashboard"
       ref={pageRef}
       style={pageHeight ? { height: pageHeight } : undefined}
     >
+      {/* Action Buttons: Refresh / Excel / PDF */}
+      <div style={actionsRowStyle}>
+        <button
+          type="button"
+          onClick={fetchStats}
+          disabled={loadingStats}
+          style={{
+            ...refreshBtnStyle,
+            opacity: loadingStats ? 0.7 : 1,
+            cursor: loadingStats ? "not-allowed" : "pointer",
+          }}
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+        <button type="button" onClick={handleExportExcel} style={excelBtnStyle}>
+          <FileText size={16} />
+          Excel
+        </button>
+        <button type="button" onClick={handleExportPdf} style={pdfBtnStyle}>
+          <Download size={16} />
+          PDF
+        </button>
+      </div>
+
       {/* Stat Cards */}
       <div className="db-stats-row">
         {statCards.map((card) => (
@@ -564,7 +785,7 @@ const Dashboard: React.FC = () => {
 
           <div className="db-summary-breakdown">
             {methodRows.length === 0 ? (
-              <p className="db-summary-empty">Is month koi payment nahi hui.</p>
+              <p className="db-summary-empty">No payments were recorded this month.</p>
             ) : (
               methodRows.map((row) => (
                 <div className="db-summary-row" key={row.label}>
