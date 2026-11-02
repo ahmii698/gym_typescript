@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccessoryController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CashInHandController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DrinkController;
 use App\Http\Controllers\MemberController;
@@ -89,6 +90,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/accessories/{accessory}/restock', [AccessoryController::class, 'restock']);
     Route::get('/accessories/{accessory}/history', [AccessoryController::class, 'history']);
 
+    // ---------- Cash in Hand (balance + history dekhna sab logged-in users; update sirf admin, neeche) ----------
+    Route::get('/cash-in-hand', [CashInHandController::class, 'index']);
+
     // ---------- Fixed Expenses ----------
     Route::get('/fixed-expenses', [FixedExpenseController::class, 'index']);
     Route::post('/fixed-expenses', [FixedExpenseController::class, 'store']);
@@ -122,5 +126,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Drinks — edit/delete sirf admin karega
         Route::put('/drinks/{drink}', [DrinkController::class, 'update']);
         Route::delete('/drinks/{drink}', [DrinkController::class, 'destroy']);
+
+        // Cash in Hand — add / withdraw sirf admin karega
+        Route::post('/cash-in-hand', [CashInHandController::class, 'store']);
     });
 });

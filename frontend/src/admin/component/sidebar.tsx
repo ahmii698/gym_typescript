@@ -13,6 +13,7 @@ import {
   Wallet,           // Expense group icon
   Receipt,          // Fixed Expense
   CircleDollarSign, // Extra Expense
+  Banknote,         // Cash in Hand
   ShieldCheck,      // Create > Admin
   Headset,          // Create > Front Desk
   Menu,
@@ -30,6 +31,13 @@ const inventoryItems = [
   { to: "/admin/inventory/accessories", label: "Accessories", icon: ShoppingBag },
   { to: "/admin/inventory/drinks", label: "Drinks & Beverages", icon: CupSoda },
 ];
+
+// --- Cash in Hand (Inventory ke neeche) ---
+const cashItem = {
+  to: "/admin/cash-in-hand",
+  label: "Cash in Hand",
+  icon: Banknote,
+};
 
 // --- Expense Menu Items ---
 const expenseItems = [
@@ -194,6 +202,9 @@ const Sidebar = () => {
               ))}
             </div>
           )}
+
+          {/* --- Cash in Hand (Inventory ke neeche) --- */}
+          {renderLink(cashItem)}
 
           {/* --- Expense Group --- */}
           <button

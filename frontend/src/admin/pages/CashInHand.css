@@ -1,0 +1,224 @@
+.cih-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: #f2f2f5;
+}
+
+.cih-loading {
+  padding: 80px 0;
+  text-align: center;
+  color: #8a8a93;
+}
+
+/* Header */
+.cih-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.cih-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  color: #ff2a3d;
+  background: rgba(255, 42, 61, 0.12);
+}
+.cih-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.cih-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: #8a8a93;
+}
+
+/* Cards */
+.cih-card {
+  background: #111114;
+  border: 1px solid #23232a;
+  border-radius: 14px;
+  padding: 20px;
+}
+.cih-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.cih-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #8a8a93;
+}
+.cih-balance {
+  margin: 6px 0 4px;
+  font-size: 2rem;
+  font-weight: 800;
+}
+.cih-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6f6f78;
+}
+
+/* Form */
+.cih-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cih-toggle {
+  display: flex;
+  gap: 8px;
+}
+.cih-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: #c9c9d1;
+  background: #1c1c22;
+}
+.cih-toggle-btn.add-active {
+  background: #10b981;
+  color: #fff;
+}
+.cih-toggle-btn.withdraw-active {
+  background: #ef4444;
+  color: #fff;
+}
+.cih-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #2a2a32;
+  background: #1a1a1f;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.cih-input:focus {
+  outline: none;
+  border-color: #ff2a3d;
+  box-shadow: 0 0 0 2px rgba(255, 42, 61, 0.25);
+}
+.cih-btn-primary {
+  align-self: flex-start;
+  padding: 9px 22px;
+  border: none;
+  border-radius: 8px;
+  background: #e11d2e;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cih-btn-primary:hover:not(:disabled) {
+  background: #ff2a3d;
+}
+.cih-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Messages */
+.cih-msg {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.cih-msg.error {
+  color: #ff6b78;
+  background: rgba(239, 68, 68, 0.12);
+}
+.cih-msg.success {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+/* History */
+.cih-history {
+  padding: 0;
+  overflow: hidden;
+}
+.cih-history-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #23232a;
+  color: #ff2a3d;
+}
+.cih-empty {
+  margin: 0;
+  padding: 28px;
+  text-align: center;
+  font-size: 0.88rem;
+  color: #8a8a93;
+}
+.cih-table-wrap {
+  overflow-x: auto;
+}
+.cih-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.cih-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #8a8a93;
+  background: #17171c;
+}
+.cih-table td {
+  padding: 12px 16px;
+  border-top: 1px solid #1d1d23;
+  white-space: nowrap;
+}
+.cih-table .muted {
+  color: #8a8a93;
+}
+.cih-table .strong {
+  font-weight: 700;
+}
+.cih-table .pos {
+  color: #10b981;
+  font-weight: 700;
+}
+.cih-table .neg {
+  color: #ef4444;
+  font-weight: 700;
+}
+.cih-tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+}
+.cih-tag.add {
+  background: #10b981;
+}
+.cih-tag.withdraw {
+  background: #ef4444;
+}
+.cih-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

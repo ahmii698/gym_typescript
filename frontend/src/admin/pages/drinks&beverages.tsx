@@ -209,7 +209,7 @@ const EditIcon = () => (
 interface DrinkFormState {
   name: string;
   category: string;
-  unit: string;
+  unit: string; // UI mein "Size" (ml) — backend field ka naam unit hi hai
   quantity: string;
   low_stock_threshold: string;
   cost_price: string;
@@ -227,6 +227,18 @@ const EMPTY_FORM: DrinkFormState = {
 };
 
 const money = (n: number) => `Rs ${n.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
+
+// "05" -> "5", "007" -> "7", "0.5" waise hi rehta hai
+const stripLeadingZeros = (v: string) => v.replace(/^0+(?=\d)/, "");
+
+// Stat card value ka font amount ki lambai ke hisaab se chhota hota hai taake poori amount nazar aaye
+const statValueFontSize = (v: string | number) => {
+  const len = String(v).length;
+  if (len <= 6) return undefined;
+  if (len <= 9) return "1.4rem";
+  if (len <= 12) return "1.15rem";
+  return "1rem";
+};
 
 /* ---------- Page ---------- */
 export default function DrinksBeverages() {
@@ -353,7 +365,7 @@ export default function DrinksBeverages() {
   const countBy = (s: Status) => items.filter((i) => i.status === s).length;
 
   // Agar poora current stock bik jaye to kitna profit banega (selling - cost) * qty
-  const potentialProfit = useMemo(
+  const totalProfit = useMemo(
     () => items.reduce((sum, i) => sum + (i.price - i.cost_price) * i.quantity, 0),
     [items]
   );
@@ -365,9 +377,9 @@ export default function DrinksBeverages() {
     { id: "out", title: "Out of Stock", period: "Right now", value: countBy("out"), variant: "orange", Icon: BanIcon },
     {
       id: "profit",
-      title: "Potential Profit",
+      title: "Profit",
       period: "If all stock sold",
-      value: money(potentialProfit),
+      value: money(totalProfit),
       variant: "purple",
       Icon: TrendUpIcon,
     },
@@ -386,7 +398,10 @@ export default function DrinksBeverages() {
   };
 
   const handleFormChange = (field: keyof DrinkFormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    // Number fields mein leading zero na rahe, taake 0 aasani se hat jaye
+    const numericFields: (keyof DrinkFormState)[] = ["quantity", "low_stock_threshold", "cost_price", "price"];
+    const next = numericFields.includes(field) ? stripLeadingZeros(value) : value;
+    setForm((prev) => ({ ...prev, [field]: next }));
   };
 
   const handleAddDrink = async () => {
@@ -412,7 +427,7 @@ export default function DrinksBeverages() {
       form.price === "" ||
       form.cost_price === ""
     ) {
-      setFormError("Name, Unit, Quantity, Cost Price aur Selling Price zaroori hain.");
+      setFormError("Name, Size, Quantity, Cost Price aur Selling Price zaroori hain.");
       return;
     }
 
@@ -647,7 +662,18 @@ export default function DrinksBeverages() {
             <div className="drk-stat-info">
               <span className="drk-stat-title">{s.title}</span>
               <span className="drk-stat-period">{s.period}</span>
-              <span className="drk-stat-value">{s.value}</span>
+              <span
+                className="drk-stat-value"
+                title={String(s.value)}
+                style={{
+                  overflow: "visible",
+                  textOverflow: "clip",
+                  whiteSpace: "nowrap",
+                  fontSize: statValueFontSize(s.value),
+                }}
+              >
+                {s.value}
+              </span>
             </div>
           </div>
         ))}
@@ -726,7 +752,7 @@ export default function DrinksBeverages() {
                 <th>#</th>
                 <th>Item Name</th>
                 <th>Category</th>
-                <th>Unit</th>
+                <th>Size</th>
                 <th className="center">Quantity</th>
                 <th className="center">Cost</th>
                 <th className="center">Price</th>
@@ -908,10 +934,10 @@ export default function DrinksBeverages() {
                   </select>
                 </div>
                 <div className="drk-form-group">
-                  <label>Unit</label>
+                  <label>Size</label>
                   <input
                     type="text"
-                    placeholder="e.g. Can (250ml)"
+                    placeholder="e.g. 250ml"
                     value={form.unit}
                     onChange={(e) => handleFormChange("unit", e.target.value)}
                   />
@@ -937,7 +963,7 @@ export default function DrinksBeverages() {
                   <input
                     type="number"
                     min={0}
-                    placeholder="0"
+                    placeholder="e.g. 24"
                     value={form.quantity}
                     onChange={(e) => handleFormChange("quantity", e.target.value)}
                   />
@@ -947,7 +973,7 @@ export default function DrinksBeverages() {
                   <input
                     type="number"
                     min={0}
-                    placeholder="5"
+                    placeholder="e.g. 5"
                     value={form.low_stock_threshold}
                     onChange={(e) => handleFormChange("low_stock_threshold", e.target.value)}
                   />
@@ -961,7 +987,7 @@ export default function DrinksBeverages() {
                     type="number"
                     min={0}
                     step="0.01"
-                    placeholder="0.00"
+                    placeholder="e.g. 150"
                     value={form.cost_price}
                     onChange={(e) => handleFormChange("cost_price", e.target.value)}
                   />
@@ -972,7 +998,7 @@ export default function DrinksBeverages() {
                     type="number"
                     min={0}
                     step="0.01"
-                    placeholder="0.00"
+                    placeholder="e.g. 180"
                     value={form.price}
                     onChange={(e) => handleFormChange("price", e.target.value)}
                   />
@@ -1011,9 +1037,9 @@ export default function DrinksBeverages() {
                 <input
                   type="number"
                   min={1}
-                  placeholder="0"
+                  placeholder="e.g. 24"
                   value={restockQty}
-                  onChange={(e) => setRestockQty(e.target.value)}
+                  onChange={(e) => setRestockQty(stripLeadingZeros(e.target.value))}
                 />
               </div>
               <div className="drk-form-group">
@@ -1024,7 +1050,7 @@ export default function DrinksBeverages() {
                   step="0.01"
                   placeholder={String(restockItem.cost_price)}
                   value={restockCost}
-                  onChange={(e) => setRestockCost(e.target.value)}
+                  onChange={(e) => setRestockCost(stripLeadingZeros(e.target.value))}
                 />
               </div>
               {restockError && <p className="drk-form-error">{restockError}</p>}
@@ -1060,9 +1086,9 @@ export default function DrinksBeverages() {
                   type="number"
                   min={0}
                   step="0.01"
-                  placeholder="0.00"
+                  placeholder="e.g. 150"
                   value={editCostPrice}
-                  onChange={(e) => setEditCostPrice(e.target.value)}
+                  onChange={(e) => setEditCostPrice(stripLeadingZeros(e.target.value))}
                 />
               </div>
               <div className="drk-form-group">
@@ -1071,9 +1097,9 @@ export default function DrinksBeverages() {
                   type="number"
                   min={0}
                   step="0.01"
-                  placeholder="0.00"
+                  placeholder="e.g. 180"
                   value={editPrice}
-                  onChange={(e) => setEditPrice(e.target.value)}
+                  onChange={(e) => setEditPrice(stripLeadingZeros(e.target.value))}
                 />
               </div>
               {editError && <p className="drk-form-error">{editError}</p>}

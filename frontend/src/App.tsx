@@ -23,6 +23,9 @@ import AdminSettings from "./admin/pages/Settings";
 import Accessories from "./admin/pages/accessories";
 import DrinksBeverages from "./admin/pages/drinks&beverages";
 
+// --- Cash in Hand Page Import ---
+import CashInHand from "./admin/pages/CashInHand";
+
 // --- Expense Pages Import ---
 import ExpenseOverview from "./admin/pages/expense";
 import FixedExpense from "./admin/pages/FixedExpense";
@@ -75,6 +78,9 @@ function App() {
         {/* --- Inventory --- */}
         <Route path="inventory/accessories" element={<Accessories />} />
         <Route path="inventory/drinks" element={<DrinksBeverages />} />
+
+        {/* --- Cash in Hand --- */}
+        <Route path="cash-in-hand" element={<CashInHand />} />
 
         <Route path="reports" element={<AdminReports />} />
         <Route path="settings" element={<AdminSettings />} />

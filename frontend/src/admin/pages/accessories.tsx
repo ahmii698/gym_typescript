@@ -3,7 +3,6 @@ import { API_URL } from "../../../config";
 import "./accessories.css";
 
 /* ---------- Types ---------- */
-type Status = "in" | "low" | "out";
 type LogType = "initial" | "restock" | "removed";
 // "custom" = ek single specific date (backend ko from = to bhej rahe hain)
 type SpendFilterType = "month" | "week" | "custom";
@@ -11,19 +10,11 @@ type SpendFilterType = "month" | "week" | "custom";
 interface AccessoryItem {
   id: number;
   name: string;
-  category: string;
+  category?: string | null;
   quantity: number;
   unit_price?: number | null;
-  status: Status;
   image?: string | null;
   notes?: string | null;
-}
-
-interface Stats {
-  total: number;
-  in: number;
-  low: number;
-  out: number;
 }
 
 interface StockLog {
@@ -39,8 +30,6 @@ interface StockLog {
 interface HistorySummary {
   total_purchased: number;
   total_spent: number;
-  avg_unit_price: number | null;
-  last_unit_price: number | null;
 }
 
 interface SpendFiltered {
@@ -61,8 +50,7 @@ interface SavePayload {
   category: string;
   quantity: number;
   notes: string | null;
-  unit_price?: number | null; // only when adding a new item
-  reason?: string | null; // only when stock is reduced in edit
+  unit_price: number | null;
 }
 
 interface RestockPayload {
@@ -72,13 +60,10 @@ interface RestockPayload {
 }
 
 /* ---------- Helpers ---------- */
-const CATEGORIES = ["All Categories", "Dumbbells", "Rods", "Attachments", "Weights", "Accessories"];
-
-const STATUS_LABEL: Record<Status, string> = {
-  in: "In Stock",
-  low: "Low Stock",
-  out: "Out of Stock",
-};
+// UI se category hata di gayi hai. Backend abhi category maangta hai,
+// is liye har naye item ke saath yeh default bhej rahe hain.
+// (Backend mein category nullable kar do to yeh bhi hata sakte ho.)
+const DEFAULT_CATEGORY = "Accessories";
 
 const LOG_LABEL: Record<LogType, string> = {
   initial: "Opening stock",
@@ -150,6 +135,9 @@ const formatDate = (iso: string): string =>
     minute: "2-digit",
   });
 
+// "05" -> "5", "007" -> "7", "0.5" waise hi rehta hai
+const stripLeadingZeros = (v: string) => v.replace(/^0+(?=\d)/, "");
+
 // Laravel validation errors come as { message, errors: { field: [msg] } }
 const extractError = (json: any, fallback: string): string => {
   const first = json?.errors ? (Object.values(json.errors).flat()[0] as string | undefined) : undefined;
@@ -189,23 +177,6 @@ const BoxIcon = () => (
     <path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8" />
   </Icon>
 );
-const CheckBoxIcon = () => (
-  <Icon>
-    <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
-    <path d="M8.5 12l2.5 2.5 4.5-5" />
-  </Icon>
-);
-const AlertIcon = () => (
-  <Icon>
-    <path d="M12 3l10 18H2L12 3zM12 10v5M12 18h.01" />
-  </Icon>
-);
-const BanIcon = () => (
-  <Icon>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M5.6 5.6l12.8 12.8" />
-  </Icon>
-);
 const CashIcon = () => (
   <Icon>
     <rect x="2.5" y="6.5" width="19" height="11" rx="2" />
@@ -237,11 +208,6 @@ const SearchIcon = () => (
     <path d="M20 20l-3.5-3.5" />
   </Icon>
 );
-const ChevronDownIcon = () => (
-  <Icon>
-    <path d="M6 9l6 6 6-6" />
-  </Icon>
-);
 const ChevronLeftIcon = () => (
   <Icon>
     <path d="M15 6l-6 6 6 6" />
@@ -268,11 +234,6 @@ const PlusIcon = () => (
     <path d="M12 5v14M5 12h14" />
   </Icon>
 );
-const EditIcon = () => (
-  <Icon>
-    <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z" />
-  </Icon>
-);
 const TrashIcon = () => (
   <Icon>
     <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
@@ -290,7 +251,6 @@ export default function Accessories() {
   const [pageHeight, setPageHeight] = useState<number | undefined>(undefined);
 
   const [items, setItems] = useState<AccessoryItem[]>([]);
-  const [stats, setStats] = useState<Stats>({ total: 0, in: 0, low: 0, out: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -305,13 +265,9 @@ export default function Accessories() {
   const [spendFilterOpen, setSpendFilterOpen] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All Categories");
-  const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
-  const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<AccessoryItem | null>(null);
   const [restocking, setRestocking] = useState<AccessoryItem | null>(null);
   const [viewing, setViewing] = useState<AccessoryItem | null>(null);
 
@@ -336,7 +292,7 @@ export default function Accessories() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, category, statusFilter]);
+  }, [search]);
 
   /* ---------- Load from API ---------- */
   const loadItems = async () => {
@@ -351,7 +307,6 @@ export default function Accessories() {
       if (!res.ok) throw new Error();
       const json = await res.json();
       setItems(json.data ?? []);
-      setStats(json.stats ?? { total: 0, in: 0, low: 0, out: 0 });
     } catch {
       setError("Accessories load nahi ho sake. Backend chal raha hai?");
     } finally {
@@ -440,13 +395,8 @@ export default function Accessories() {
   /* ---------- Filtering ---------- */
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items.filter((item) => {
-      const matchName = !q || item.name.toLowerCase().includes(q);
-      const matchCat = category === "All Categories" || item.category === category;
-      const matchStatus = statusFilter === "all" || item.status === statusFilter;
-      return matchName && matchCat && matchStatus;
-    });
-  }, [items, search, category, statusFilter]);
+    return items.filter((item) => !q || item.name.toLowerCase().includes(q));
+  }, [items, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -461,16 +411,6 @@ export default function Accessories() {
     filterType === "custom" ? formatDay(filterDate) : spend?.filtered.label ?? "This month";
 
   /* ---------- Actions ---------- */
-  const openAdd = () => {
-    setEditing(null);
-    setModalOpen(true);
-  };
-
-  const openEdit = (item: AccessoryItem) => {
-    setEditing(item);
-    setModalOpen(true);
-  };
-
   const handleDelete = async (item: AccessoryItem) => {
     if (!window.confirm(`"${item.name}" ko delete kar dein? Iski history bhi delete ho jaegi.`)) return;
     try {
@@ -485,12 +425,9 @@ export default function Accessories() {
     }
   };
 
-  const handleSave = async (data: SavePayload, id?: number) => {
-    const url = id ? `${API_URL}/accessories/${id}` : `${API_URL}/accessories`;
-    const method = id ? "PUT" : "POST";
-
-    const res = await fetch(url, {
-      method,
+  const handleSave = async (data: SavePayload) => {
+    const res = await fetch(`${API_URL}/accessories`, {
+      method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
@@ -529,7 +466,7 @@ export default function Accessories() {
             <p className="acc-subtitle">Manage gym accessories, equipment and their stock.</p>
           </div>
         </div>
-        <button type="button" className="acc-btn-primary" onClick={openAdd}>
+        <button type="button" className="acc-btn-primary" onClick={() => setModalOpen(true)}>
           <PlusIcon />
           <span>Add Item</span>
         </button>
@@ -541,7 +478,7 @@ export default function Accessories() {
         </div>
       )}
 
-      {/* Stat cards (8 total: spend cards + stock cards) */}
+      {/* Stat cards */}
       <section className="acc-stats">
         {/* 1. Total Spent — all time */}
         <div className="acc-stat-card">
@@ -682,44 +619,14 @@ export default function Accessories() {
           <div className="acc-stat-info">
             <span className="acc-stat-title">Total Items</span>
             <span className="acc-stat-period">All time</span>
-            <span className="acc-stat-value">{stats.total}</span>
-          </div>
-        </div>
-
-        {/* 6. In Stock */}
-        <div className="acc-stat-card">
-          <div className="acc-stat-icon green"><CheckBoxIcon /></div>
-          <div className="acc-stat-info">
-            <span className="acc-stat-title">In Stock</span>
-            <span className="acc-stat-period">Right now</span>
-            <span className="acc-stat-value">{stats.in}</span>
-          </div>
-        </div>
-
-        {/* 7. Low Stock */}
-        <div className="acc-stat-card">
-          <div className="acc-stat-icon amber"><AlertIcon /></div>
-          <div className="acc-stat-info">
-            <span className="acc-stat-title">Low Stock</span>
-            <span className="acc-stat-period">Right now</span>
-            <span className="acc-stat-value">{stats.low}</span>
-          </div>
-        </div>
-
-        {/* 8. Out of Stock */}
-        <div className="acc-stat-card">
-          <div className="acc-stat-icon orange"><BanIcon /></div>
-          <div className="acc-stat-info">
-            <span className="acc-stat-title">Out of Stock</span>
-            <span className="acc-stat-period">Right now</span>
-            <span className="acc-stat-value">{stats.out}</span>
+            <span className="acc-stat-value">{items.length}</span>
           </div>
         </div>
       </section>
 
       {/* Table panel */}
       <section className="acc-panel">
-        {/* Toolbar */}
+        {/* Toolbar (sirf search, category filter hata diya) */}
         <div className="acc-toolbar">
           <label className="acc-search">
             <SearchIcon />
@@ -730,49 +637,6 @@ export default function Accessories() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-
-          <div className="acc-select-wrap">
-            <select
-              className="acc-select"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              aria-label="Filter by category"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <span className="acc-select-icon"><ChevronDownIcon /></span>
-          </div>
-
-          <div className="acc-filter">
-            <button
-              type="button"
-              className={`acc-icon-btn ${statusFilter !== "all" ? "is-active" : ""}`}
-              onClick={() => setFilterOpen((o) => !o)}
-              aria-label="Filter by status"
-            >
-              <FilterIcon />
-            </button>
-            {filterOpen && (
-              <ul className="acc-filter-menu" role="menu">
-                {(["all", "in", "low", "out"] as const).map((s) => (
-                  <li key={s}>
-                    <button
-                      type="button"
-                      className={statusFilter === s ? "is-selected" : ""}
-                      onClick={() => {
-                        setStatusFilter(s);
-                        setFilterOpen(false);
-                      }}
-                    >
-                      {s === "all" ? "All Status" : STATUS_LABEL[s]}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </div>
 
         {/* Table */}
@@ -782,23 +646,21 @@ export default function Accessories() {
               <tr>
                 <th>#</th>
                 <th>Item Name</th>
-                <th>Category</th>
                 <th className="center">Quantity</th>
-                <th className="center">Price / Unit</th>
-                <th className="center">Status</th>
+                <th className="center">Per unit price</th>
                 <th className="center">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="acc-empty">Loading...</td>
+                  <td colSpan={5} className="acc-empty">Loading...</td>
                 </tr>
               )}
               {!loading && pageItems.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="acc-empty">
-                    No accessories found. Try a different search or filter.
+                  <td colSpan={5} className="acc-empty">
+                    No accessories found. Try a different search.
                   </td>
                 </tr>
               )}
@@ -813,14 +675,8 @@ export default function Accessories() {
                       <span className="item-name">{item.name}</span>
                     </div>
                   </td>
-                  <td className="muted">{item.category}</td>
                   <td className="center">{item.quantity}</td>
                   <td className="center">{formatPrice(item.unit_price)}</td>
-                  <td className="center">
-                    <span className={`acc-status ${item.status}`}>
-                      {STATUS_LABEL[item.status]}
-                    </span>
-                  </td>
                   <td className="center">
                     <div style={{ display: "inline-flex", gap: 6 }}>
                       <button
@@ -840,15 +696,6 @@ export default function Accessories() {
                         title="View details & history"
                       >
                         <EyeIcon />
-                      </button>
-                      <button
-                        type="button"
-                        className="acc-view-btn"
-                        onClick={() => openEdit(item)}
-                        aria-label={`Edit ${item.name}`}
-                        title="Edit"
-                      >
-                        <EditIcon />
                       </button>
                       <button
                         type="button"
@@ -910,14 +757,10 @@ export default function Accessories() {
         </div>
       </section>
 
-      {/* Add/Edit Modal */}
+      {/* Add Modal */}
       {modalOpen && (
-        <AccessoryModal
-          editing={editing}
-          onClose={() => {
-            setModalOpen(false);
-            setEditing(null);
-          }}
+        <AddAccessoryModal
+          onClose={() => setModalOpen(false)}
           onSave={handleSave}
         />
       )}
@@ -946,24 +789,6 @@ export default function Accessories() {
               </button>
             </div>
             <div className="acc-modal-body">
-              <div className="acc-modal-row">
-                <span className="muted">Category</span>
-                <strong>{viewing.category}</strong>
-              </div>
-              <div className="acc-modal-row">
-                <span className="muted">Quantity</span>
-                <strong>{viewing.quantity}</strong>
-              </div>
-              <div className="acc-modal-row">
-                <span className="muted">Latest price / unit</span>
-                <strong>{formatPrice(viewing.unit_price)}</strong>
-              </div>
-              <div className="acc-modal-row">
-                <span className="muted">Status</span>
-                <span className={`acc-status ${viewing.status}`}>
-                  {STATUS_LABEL[viewing.status]}
-                </span>
-              </div>
               {viewing.notes && (
                 <div className="acc-modal-row">
                   <span className="muted">Notes</span>
@@ -971,20 +796,44 @@ export default function Accessories() {
                 </div>
               )}
 
-              {/* Summary */}
+              {/* Summary: dono card poori width mein barabar */}
               {summary && (
-                <div className="acc-summary">
-                  <div className="acc-summary-card">
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 12,
+                    width: "100%",
+                    margin: "0 0 20px",
+                  }}
+                >
+                  <div
+                    className="acc-summary-card"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      minWidth: 0,
+                      width: "100%",
+                      margin: 0,
+                    }}
+                  >
                     <span className="muted">Total purchased</span>
-                    <strong>{summary.total_purchased} pcs</strong>
+                    <strong>{summary.total_purchased} pieces</strong>
                   </div>
-                  <div className="acc-summary-card">
+                  <div
+                    className="acc-summary-card"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      minWidth: 0,
+                      width: "100%",
+                      margin: 0,
+                    }}
+                  >
                     <span className="muted">Total spent</span>
                     <strong>{formatPrice(summary.total_spent)}</strong>
-                  </div>
-                  <div className="acc-summary-card">
-                    <span className="muted">Average price / unit</span>
-                    <strong>{formatPrice(summary.avg_unit_price)}</strong>
                   </div>
                 </div>
               )}
@@ -1006,9 +855,9 @@ export default function Accessories() {
                         <th>Date</th>
                         <th>Type</th>
                         <th className="center">Qty</th>
-                        <th className="center">Price / Unit</th>
+                        <th className="center">Per unit price</th>
                         <th className="center">Total cost</th>
-                        <th className="center">Stock after</th>
+                        <th className="center">Total stock</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1050,23 +899,20 @@ export default function Accessories() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Add / Edit Modal                                                   */
+/*  Add Modal                                                          */
 /* ------------------------------------------------------------------ */
 
-interface AccessoryModalProps {
-  editing: AccessoryItem | null;
+interface AddAccessoryModalProps {
   onClose: () => void;
-  onSave: (data: SavePayload, id?: number) => Promise<void>;
+  onSave: (data: SavePayload) => Promise<void>;
 }
 
-const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSave }) => {
+const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }) => {
   const [form, setForm] = useState({
-    name: editing?.name ?? "",
-    category: editing?.category ?? "Dumbbells",
-    quantity: editing?.quantity ?? 0,
+    name: "",
+    quantity: "", // string rakha hai taake 0 aasani se hat jaye
     unitPrice: "",
-    reason: "",
-    notes: editing?.notes ?? "",
+    notes: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1074,8 +920,6 @@ const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSav
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
   };
-
-  const isDecrease = !!editing && Number(form.quantity) < editing.quantity;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1087,15 +931,9 @@ const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSav
 
     const quantity = Number(form.quantity) || 0;
 
-    // Edit: stock can only go down here, going up is done with "Add stock" (+)
-    if (editing && quantity > editing.quantity) {
-      setError("Stock badhane ke liye table mein + (Add stock) button use karein.");
-      return;
-    }
-
-    // Add: price is required when starting with some stock
+    // Price is required when starting with some stock
     let unitPrice: number | null = null;
-    if (!editing && quantity > 0) {
+    if (quantity > 0) {
       if (form.unitPrice.trim() === "" || Number(form.unitPrice) < 0 || Number.isNaN(Number(form.unitPrice))) {
         setError("Har piece ki price likhein (kitne ka liya).");
         return;
@@ -1106,16 +944,13 @@ const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSav
     setSaving(true);
     setError(null);
     try {
-      const payload: SavePayload = {
+      await onSave({
         name: form.name.trim(),
-        category: form.category,
+        category: DEFAULT_CATEGORY,
         quantity,
         notes: form.notes.trim() || null,
-      };
-      if (!editing) payload.unit_price = unitPrice;
-      if (editing && isDecrease) payload.reason = form.reason.trim() || null;
-
-      await onSave(payload, editing?.id);
+        unit_price: unitPrice,
+      });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kuch ghalat ho gaya.");
@@ -1126,15 +961,13 @@ const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSav
 
   const newQty = Number(form.quantity) || 0;
   const totalCost =
-    !editing && newQty > 0 && form.unitPrice.trim() !== ""
-      ? newQty * Number(form.unitPrice)
-      : null;
+    newQty > 0 && form.unitPrice.trim() !== "" ? newQty * Number(form.unitPrice) : null;
 
   return (
     <div className="acc-modal-overlay" onClick={onClose}>
       <div className="acc-modal" onClick={(e) => e.stopPropagation()}>
         <div className="acc-modal-head">
-          <h2>{editing ? "Edit Item" : "Add Item"}</h2>
+          <h2>Add Item</h2>
           <button type="button" className="acc-icon-btn" onClick={onClose}>
             <CloseIcon />
           </button>
@@ -1156,31 +989,16 @@ const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSav
 
           <div className="acc-form-row">
             <div className="acc-form-field">
-              <label>Category</label>
-              <select
-                value={form.category}
-                onChange={(e) => update("category", e.target.value)}
-              >
-                {CATEGORIES.filter((c) => c !== "All Categories").map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="acc-form-field">
-              <label>{editing ? "Quantity" : "Quantity (opening stock)"}</label>
+              <label>Quantity (opening stock)</label>
               <input
                 type="number"
                 min={0}
-                max={editing ? editing.quantity : undefined}
                 value={form.quantity}
-                onChange={(e) => update("quantity", Number(e.target.value))}
+                onChange={(e) => update("quantity", stripLeadingZeros(e.target.value))}
+                placeholder="e.g. 10"
               />
             </div>
-          </div>
 
-          {/* New item: ask the purchase price */}
-          {!editing && (
             <div className="acc-form-field">
               <label>Price per unit (Rs)</label>
               <input
@@ -1188,33 +1006,15 @@ const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSav
                 min={0}
                 step="0.01"
                 value={form.unitPrice}
-                onChange={(e) => update("unitPrice", e.target.value)}
-                placeholder="Har piece kitne ka liya? e.g. 1500"
-              />
-              {totalCost !== null && !Number.isNaN(totalCost) && (
-                <small className="acc-hint">
-                  Total cost: {formatPrice(totalCost)}
-                </small>
-              )}
-            </div>
-          )}
-
-          {/* Edit: stock reduced -> optional reason */}
-          {editing && isDecrease && (
-            <div className="acc-form-field">
-              <label>Reason for reducing stock (optional)</label>
-              <input
-                type="text"
-                value={form.reason}
-                onChange={(e) => update("reason", e.target.value)}
-                placeholder="e.g. 1 damaged, 1 gift"
+                onChange={(e) => update("unitPrice", stripLeadingZeros(e.target.value))}
+                placeholder="e.g. 1500"
               />
             </div>
-          )}
+          </div>
 
-          {editing && (
+          {totalCost !== null && !Number.isNaN(totalCost) && (
             <small className="acc-hint">
-              Stock badhana hai? Table mein + (Add stock) button use karein — wahan price bhi save hoti hai.
+              Total cost: {formatPrice(totalCost)}
             </small>
           )}
 
@@ -1222,7 +1022,7 @@ const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSav
             <label>Notes (optional)</label>
             <input
               type="text"
-              value={form.notes ?? ""}
+              value={form.notes}
               onChange={(e) => update("notes", e.target.value)}
               placeholder="e.g. Brand new stock"
             />
@@ -1233,7 +1033,7 @@ const AccessoryModal: React.FC<AccessoryModalProps> = ({ editing, onClose, onSav
               Cancel
             </button>
             <button type="submit" className="acc-btn-primary" disabled={saving}>
-              {saving ? "Saving..." : editing ? "Save Changes" : "Add Item"}
+              {saving ? "Saving..." : "Add Item"}
             </button>
           </div>
         </form>
@@ -1318,7 +1118,7 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
                 type="number"
                 min={1}
                 value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
+                onChange={(e) => setQuantity(stripLeadingZeros(e.target.value))}
                 placeholder="e.g. 10"
                 autoFocus
               />
@@ -1331,7 +1131,7 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
                 min={0}
                 step="0.01"
                 value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
+                onChange={(e) => setUnitPrice(stripLeadingZeros(e.target.value))}
                 placeholder="e.g. 1500"
               />
             </div>

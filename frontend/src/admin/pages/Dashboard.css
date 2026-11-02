@@ -1,5 +1,4 @@
 .dashboard-page {
-  /* Height is set precisely from JS; this is only the pre-measure fallback */
   height: calc(100vh - 130px);
   overflow-x: hidden;
   overflow-y: auto;
@@ -11,8 +10,6 @@
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: #2a2a32 transparent;
-
-  /* Breakpoints follow the dashboard's own width, not the screen width */
   container-type: inline-size;
   container-name: dash;
   -webkit-overflow-scrolling: touch;
@@ -41,15 +38,13 @@
   box-sizing: border-box;
 }
 
-/* ------------------------------- Header ------------------------------- */
-
 .dash-header {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px 16px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .dash-title {
@@ -91,13 +86,81 @@
   white-space: nowrap;
 }
 
-/* ---------------------------- Stat cards ---------------------------- */
+.dash-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.dash-filter-tabs {
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dash-filter-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #b5b5c0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dash-filter-btn:hover {
+  color: #ffffff;
+}
+
+.dash-filter-btn.active {
+  background: #ff2d4a;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(255, 45, 74, 0.35);
+}
+
+.dash-filter-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dash-filter-to {
+  color: #8a8a96;
+  font-size: 13px;
+}
+
+.dash-date-input {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 45, 74, 0.4);
+  color: #ffffff;
+  font-size: 13px;
+  color-scheme: dark;
+  outline: none;
+}
+
+.dash-date-input:focus {
+  border-color: #ff2d4a;
+}
 
 .dash-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
+}
+
+.dash-stats.dash-stats-6 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .dash-stat-card {
@@ -130,14 +193,17 @@
   background: rgba(239, 35, 60, 0.18);
   color: #ff3b57;
 }
+
 .dash-stat-icon.green {
   background: rgba(34, 197, 94, 0.15);
   color: #22c55e;
 }
+
 .dash-stat-icon.blue {
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
 }
+
 .dash-stat-icon.blue svg {
   border: 2px solid #38bdf8;
   border-radius: 50%;
@@ -145,6 +211,7 @@
   width: 30px;
   height: 30px;
 }
+
 .dash-stat-icon.orange {
   background: rgba(239, 68, 68, 0.18);
   color: #ff5a4d;
@@ -201,15 +268,12 @@
   color: #8b96ab;
 }
 
-/* ---------------------------- Panels grid ---------------------------- */
-
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-/* Row 1: revenue chart 70% + last 5 inventory 30% */
 .dash-grid-70-30 {
   grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
 }
@@ -268,6 +332,15 @@
   color: #a7b0c3;
 }
 
+.dash-head-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
 .dash-pill-btn {
   display: inline-flex;
   align-items: center;
@@ -289,8 +362,6 @@
   border-color: #ef233c;
   color: #ef233c;
 }
-
-/* ------------------------------- Table ------------------------------- */
 
 .dash-table-wrap {
   overflow-x: auto;
@@ -351,7 +422,6 @@
   color: #ffffff;
 }
 
-/* Empty state cell (used in Inventory & Memberships Expiring Soon) */
 .dash-empty-cell {
   text-align: center !important;
   padding: 20px 8px !important;
@@ -404,11 +474,13 @@
   font-weight: 500;
 }
 
-/* ------------------------------- Charts ------------------------------- */
-
 .dash-select-wrap {
   position: relative;
   flex-shrink: 0;
+}
+
+.dash-head-controls .dash-select-wrap {
+  margin-left: 0;
 }
 
 .dash-select {
@@ -462,7 +534,6 @@
   fill: #8b96ab;
 }
 
-/* ------ OLD line chart styles (kept for safety, not used) ------ */
 .chart-line {
   fill: none;
   stroke: #ef233c;
@@ -508,10 +579,6 @@
   color: #a7b0c3;
 }
 
-/* ============================================ */
-/*  MONTHLY REVENUE BAR CHART                   */
-/* ============================================ */
-
 .dash-revenue-chart {
   display: flex;
   gap: 12px;
@@ -544,7 +611,6 @@
   position: relative;
 }
 
-/* faint horizontal grid lines */
 .dash-revenue-bars::before {
   content: "";
   position: absolute;
@@ -618,15 +684,156 @@
   font-size: 13px;
 }
 
-/* ============================================ */
-/*  MEMBER GROWTH CHART (12 months)             */
-/* ============================================ */
-
 .dash-growth-chart {
   height: 300px;
 }
 
-/* ------- Old member growth bar chart (kept for safety) ------- */
+.dash-alt-chart {
+  width: 100%;
+  min-height: 280px;
+  padding: 10px 6px 0;
+}
+
+.dash-hbar-list {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.dash-hbar-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 90px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #b5b5c0;
+}
+
+.dash-hbar-track {
+  height: 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.dash-hbar-fill {
+  height: 100%;
+  min-width: 2px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #a3162a, #ff2d4d);
+  transition: width 0.4s ease;
+}
+
+.dash-hbar-value {
+  text-align: right;
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dash-line-wrap {
+  display: flex;
+  gap: 12px;
+}
+
+.dash-line-yaxis {
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.dash-line-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.dash-line-svg {
+  width: 100%;
+  height: 260px;
+  display: block;
+}
+
+.dash-line-dots {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 260px;
+  pointer-events: none;
+}
+
+.dash-line-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: #ff2d4a;
+  border: 2px solid #0b0b10;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.dash-line-labels {
+  display: flex;
+  margin-top: 8px;
+}
+
+.dash-line-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  color: #b5b5c0;
+}
+
+.dash-pie-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.dash-pie-svg {
+  width: 240px;
+  height: 240px;
+  flex-shrink: 0;
+}
+
+.dash-pie-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  min-width: 260px;
+}
+
+.dash-pie-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #b5b5c0;
+}
+
+.dash-pie-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dash-pie-name {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.dash-pie-val {
+  margin-left: auto;
+  white-space: nowrap;
+}
 
 .dash-bar-scroll {
   overflow-x: auto;
@@ -660,19 +867,13 @@
   cursor: pointer;
 }
 
-/* ============================================ */
-/*  RESPONSIVE — based on dashboard width       */
-/*  (works even when the sidebar is open)       */
-/* ============================================ */
-
-/* Medium: stat cards 2 per row */
 @container dash (max-width: 1000px) {
-  .dash-stats {
+  .dash-stats,
+  .dash-stats.dash-stats-6 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-/* Tablet: panels stack in one column */
 @container dash (max-width: 820px) {
   .dash-grid,
   .dash-grid-70-30 {
@@ -680,12 +881,11 @@
   }
 }
 
-/* Small: phone-like widths */
 @container dash (max-width: 560px) {
   .dash-header {
     flex-direction: column;
     align-items: flex-start;
-    margin-bottom: 18px;
+    margin-bottom: 14px;
   }
 
   .dash-title {
@@ -700,7 +900,38 @@
     flex-direction: row-reverse;
   }
 
-  .dash-stats {
+  .dash-filter-bar {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .dash-filter-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .dash-filter-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dash-filter-btn {
+    padding: 8px 12px;
+    flex-shrink: 0;
+  }
+
+  .dash-filter-custom {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .dash-date-input {
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .dash-stats,
+  .dash-stats.dash-stats-6 {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     margin-bottom: 18px;
@@ -741,9 +972,19 @@
     flex: 1 1 140px;
   }
 
+  .dash-head-controls {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
   .dash-select-wrap,
   .dash-pill-btn {
     margin-left: auto;
+  }
+
+  .dash-head-controls .dash-select-wrap {
+    margin-left: 0;
   }
 
   .dash-table th,
@@ -751,7 +992,6 @@
     padding: 10px 10px;
   }
 
-  /* ---- Charts: horizontally scrollable, all 12 months reachable ---- */
   .dash-revenue-chart {
     height: 240px;
     gap: 0;
@@ -776,7 +1016,6 @@
     border-radius: 999px;
   }
 
-  /* Y-axis stays fixed on the left while bars scroll */
   .dash-revenue-yaxis {
     position: sticky;
     left: 0;
@@ -788,7 +1027,6 @@
     background: #0c0c0e;
   }
 
-  /* 12 months x 46px = fixed width, so the container scrolls */
   .dash-revenue-bars {
     flex: 0 0 auto;
     min-width: 552px;
@@ -822,9 +1060,46 @@
   .dash-revenue-empty {
     min-width: 200px;
   }
+
+  .dash-alt-chart {
+    min-height: 240px;
+    padding: 6px 0 0;
+  }
+
+  .dash-hbar-row {
+    grid-template-columns: 34px 1fr 74px;
+    gap: 8px;
+  }
+
+  .dash-line-wrap {
+    gap: 8px;
+  }
+
+  .dash-line-yaxis {
+    min-width: 46px;
+    font-size: 10px;
+  }
+
+  .dash-line-labels span {
+    font-size: 10px;
+  }
+
+  .dash-pie-wrap {
+    gap: 18px;
+  }
+
+  .dash-pie-svg {
+    width: 200px;
+    height: 200px;
+  }
+
+  .dash-pie-legend {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    width: 100%;
+  }
 }
 
-/* Page padding (needs viewport media query: the container can't style itself) */
 @media (max-width: 640px) {
   .dashboard-page {
     padding: 18px 12px;
