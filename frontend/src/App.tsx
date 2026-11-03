@@ -23,6 +23,9 @@ import AdminSettings from "./admin/pages/Settings";
 import Accessories from "./admin/pages/accessories";
 import DrinksBeverages from "./admin/pages/drinks&beverages";
 
+// --- Inventory History Page Import ---
+import InvHistory from "./admin/pages/invhistory";
+
 // --- Cash in Hand Page Import ---
 import CashInHand from "./admin/pages/CashInHand";
 
@@ -33,6 +36,10 @@ import CreditManagement from "./admin/pages/CreditManagement";
 import ExpenseOverview from "./admin/pages/expense";
 import FixedExpense from "./admin/pages/FixedExpense";
 import ExtraExpense from "./admin/pages/ExtraExpense";
+import Expenses from "./admin/pages/Expenses"; // Fixed + Extra + Salary tabs
+
+// --- Employees Page Import ---
+import Employees from "./admin/pages/employees";
 
 import "./App.css";
 
@@ -67,20 +74,26 @@ function App() {
         <Route path="memberships" element={<Memberships />} />
         <Route path="payments" element={<Payments />} />
 
+        {/* --- Employees --- */}
+        <Route path="employees" element={<Employees />} />
+
         {/* --- Expense Routes --- */}
         {/* Overview: sab kuch combined (Fixed + Extra + Profit/Loss) */}
         <Route path="expense" element={<ExpenseOverview />} />
 
-        {/* Individual Pages */}
+        {/* Expenses: Fixed / Extra / Salary tabs wala naya page */}
+        <Route path="expenses" element={<Expenses />} />
+
+        {/* Individual Pages (purane links ke liye rehne diye) */}
         <Route path="finance/fixed" element={<FixedExpense />} />
         <Route path="finance/extra" element={<ExtraExpense />} />
-
-        {/* Purane route ko naye overview par redirect kar dein */}
-        <Route path="expenses" element={<Navigate to="expense" replace />} />
 
         {/* --- Inventory --- */}
         <Route path="inventory/accessories" element={<Accessories />} />
         <Route path="inventory/drinks" element={<DrinksBeverages />} />
+
+        {/* --- Inventory History --- */}
+        <Route path="inv-history" element={<InvHistory />} />
 
         {/* --- Cash in Hand --- */}
         <Route path="cash-in-hand" element={<CashInHand />} />

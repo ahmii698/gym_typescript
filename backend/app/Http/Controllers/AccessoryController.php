@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Accessory;
 use App\Models\AccessoryStockLog;
+use App\Models\CashInHandEntry;
 use App\Models\Vendor;
 use App\Models\VendorPayment;
 use App\Models\VendorPurchase;
@@ -12,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 class AccessoryController extends Controller
 {
@@ -116,6 +118,7 @@ class AccessoryController extends Controller
 
     // POST /api/accessories
     // Optional credit purchase: vendor_name + invoice_no + paid_now
+    // Cash in hand: bina vendor ke poora bill, vendor ke saath sirf paid_now cash se katta hai.
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -149,7 +152,7 @@ class AccessoryController extends Controller
         if ($isCredit) {
             if ((int) $data['quantity'] < 1) {
                 return response()->json([
-                    'message' => 'Vendor se maal lene ke liye quantity kam az kam 1 honi chahiye.',
+                    'message' => 'Quantity must be at least 1 for a vendor purchase.',
                 ], 422);
             }
 
@@ -158,43 +161,63 @@ class AccessoryController extends Controller
 
             if ($paid > $total) {
                 return response()->json([
-                    'message' => 'Paid Now total bill (Rs ' . number_format($total, 2) . ') se zyada nahi ho sakta.',
+                    'message' => 'Paid Now cannot be more than the total bill (Rs ' . number_format($total, 2) . ').',
                 ], 422);
             }
         }
 
-        $accessory = DB::transaction(function () use ($data, $isCredit) {
-            $accessory = new Accessory(
-                Arr::only($data, ['name', 'category', 'quantity', 'unit_price', 'image', 'notes'])
-            );
-            $accessory->updateStatusFromQuantity();
-            $accessory->save();
+        // Is purchase ke liye cash in hand se kitna katna hai
+        $totalBill = round((int) $data['quantity'] * (float) ($data['unit_price'] ?? 0), 2);
+        $cashToSpend = $isCredit
+            ? round((float) ($data['paid_now'] ?? 0), 2)
+            : $totalBill;
 
-            if ($accessory->quantity > 0) {
-                $accessory->stockLogs()->create([
-                    'type'            => 'initial',
-                    'quantity_change' => $accessory->quantity,
-                    'quantity_after'  => $accessory->quantity,
-                    'unit_price'      => $data['unit_price'] ?? null,
-                    'note'            => $isCredit
-                        ? 'New item added (Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no']) . ')'
-                        : 'New item added',
-                ]);
-            }
-
-            if ($isCredit) {
-                $this->recordCredit(
-                    $accessory,
-                    (int) $data['quantity'],
-                    (float) $data['unit_price'],
-                    $data['vendor_name'],
-                    $data['invoice_no'],
-                    (float) ($data['paid_now'] ?? 0)
+        try {
+            $accessory = DB::transaction(function () use ($request, $data, $isCredit, $cashToSpend) {
+                $accessory = new Accessory(
+                    Arr::only($data, ['name', 'category', 'quantity', 'unit_price', 'image', 'notes'])
                 );
-            }
+                $accessory->updateStatusFromQuantity();
+                $accessory->save();
 
-            return $accessory;
-        });
+                if ($accessory->quantity > 0) {
+                    $accessory->stockLogs()->create([
+                        'type'            => 'initial',
+                        'quantity_change' => $accessory->quantity,
+                        'quantity_after'  => $accessory->quantity,
+                        'unit_price'      => $data['unit_price'] ?? null,
+                        'note'            => $isCredit
+                            ? 'New item added (Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no']) . ')'
+                            : 'New item added',
+                    ]);
+                }
+
+                // Cash in hand se paise kaato (kam hon to RuntimeException -> poori purchase rollback)
+                CashInHandEntry::spend(
+                    $cashToSpend,
+                    $isCredit
+                        ? 'Accessory purchase (paid now): ' . $accessory->name . ' x' . $accessory->quantity
+                            . ' - Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no'])
+                        : 'Accessory purchase: ' . $accessory->name . ' x' . $accessory->quantity,
+                    $request->user()
+                );
+
+                if ($isCredit) {
+                    $this->recordCredit(
+                        $accessory,
+                        (int) $data['quantity'],
+                        (float) $data['unit_price'],
+                        $data['vendor_name'],
+                        $data['invoice_no'],
+                        (float) ($data['paid_now'] ?? 0)
+                    );
+                }
+
+                return $accessory;
+            });
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Item added successfully',
@@ -250,6 +273,7 @@ class AccessoryController extends Controller
 
     // POST /api/accessories/{accessory}/restock
     // Optional credit purchase: vendor_name + invoice_no + paid_now
+    // Cash in hand: bina vendor ke poora bill, vendor ke saath sirf paid_now cash se katta hai.
     public function restock(Request $request, Accessory $accessory)
     {
         $data = $request->validate([
@@ -270,49 +294,68 @@ class AccessoryController extends Controller
         ]);
 
         $isCredit = filled($data['vendor_name'] ?? null);
+        $totalBill = round($data['quantity'] * $data['unit_price'], 2);
 
         if ($isCredit) {
-            $total = round($data['quantity'] * $data['unit_price'], 2);
-            $paid  = round((float) ($data['paid_now'] ?? 0), 2);
+            $paid = round((float) ($data['paid_now'] ?? 0), 2);
 
-            if ($paid > $total) {
+            if ($paid > $totalBill) {
                 return response()->json([
-                    'message' => 'Paid Now total bill (Rs ' . number_format($total, 2) . ') se zyada nahi ho sakta.',
+                    'message' => 'Paid Now cannot be more than the total bill (Rs ' . number_format($totalBill, 2) . ').',
                 ], 422);
             }
         }
 
-        DB::transaction(function () use ($accessory, $data, $isCredit) {
-            $accessory->quantity   = $accessory->quantity + $data['quantity'];
-            $accessory->unit_price = $data['unit_price']; // latest purchase price
-            $accessory->updateStatusFromQuantity();
-            $accessory->save();
+        // Is purchase ke liye cash in hand se kitna katna hai
+        $cashToSpend = $isCredit
+            ? round((float) ($data['paid_now'] ?? 0), 2)
+            : $totalBill;
 
-            $note = $data['note'] ?? null;
-            if ($isCredit) {
-                $creditNote = 'Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no']);
-                $note = $note ? $note . ' | ' . $creditNote : $creditNote;
-            }
+        try {
+            DB::transaction(function () use ($request, $accessory, $data, $isCredit, $cashToSpend) {
+                $accessory->quantity   = $accessory->quantity + $data['quantity'];
+                $accessory->unit_price = $data['unit_price']; // latest purchase price
+                $accessory->updateStatusFromQuantity();
+                $accessory->save();
 
-            $accessory->stockLogs()->create([
-                'type'            => 'restock',
-                'quantity_change' => $data['quantity'],
-                'quantity_after'  => $accessory->quantity,
-                'unit_price'      => $data['unit_price'],
-                'note'            => $note,
-            ]);
+                $note = $data['note'] ?? null;
+                if ($isCredit) {
+                    $creditNote = 'Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no']);
+                    $note = $note ? $note . ' | ' . $creditNote : $creditNote;
+                }
 
-            if ($isCredit) {
-                $this->recordCredit(
-                    $accessory,
-                    (int) $data['quantity'],
-                    (float) $data['unit_price'],
-                    $data['vendor_name'],
-                    $data['invoice_no'],
-                    (float) ($data['paid_now'] ?? 0)
+                $accessory->stockLogs()->create([
+                    'type'            => 'restock',
+                    'quantity_change' => $data['quantity'],
+                    'quantity_after'  => $accessory->quantity,
+                    'unit_price'      => $data['unit_price'],
+                    'note'            => $note,
+                ]);
+
+                // Cash in hand se paise kaato (kam hon to RuntimeException -> poora restock rollback)
+                CashInHandEntry::spend(
+                    $cashToSpend,
+                    $isCredit
+                        ? 'Accessory restock (paid now): ' . $accessory->name . ' x' . $data['quantity']
+                            . ' - Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no'])
+                        : 'Accessory restock: ' . $accessory->name . ' x' . $data['quantity'],
+                    $request->user()
                 );
-            }
-        });
+
+                if ($isCredit) {
+                    $this->recordCredit(
+                        $accessory,
+                        (int) $data['quantity'],
+                        (float) $data['unit_price'],
+                        $data['vendor_name'],
+                        $data['invoice_no'],
+                        (float) ($data['paid_now'] ?? 0)
+                    );
+                }
+            });
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Stock added successfully',

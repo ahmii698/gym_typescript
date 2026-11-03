@@ -41,6 +41,14 @@ interface HistoryRow {
   created_at: string;
 }
 
+// Totals shown in the 5 summary cards
+interface SummaryTotals {
+  purchase: number; // total money spent on buying stock
+  selling: number; // total money received from sales
+  profit: number; // total profit from sales
+  quantity: number; // total quantity currently in stock
+}
+
 // Optional vendor credit fields (sent only when "Purchased from a vendor" is checked)
 interface VendorCreditPayload {
   vendor_name?: string;
@@ -205,6 +213,32 @@ const TrendUpIcon = () => (
     <path d="M3 17l6-6 4 4 8-8M15 7h6v6" />
   </Icon>
 );
+const WalletIcon = () => (
+  <Icon>
+    <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h11.5a1.5 1.5 0 0 1 1.5 1.5V8" />
+    <rect x="3.5" y="8" width="17" height="11" rx="2" />
+    <path d="M16 13.5h.01" />
+  </Icon>
+);
+const CartIcon = () => (
+  <Icon>
+    <circle cx="9" cy="20" r="1.4" />
+    <circle cx="18" cy="20" r="1.4" />
+    <path d="M2 3h3l2.6 12.4a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.1L21 8H6" />
+  </Icon>
+);
+const TagIcon = () => (
+  <Icon>
+    <path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z" />
+    <path d="M7.5 7.5h.01" />
+  </Icon>
+);
+const LayersIcon = () => (
+  <Icon>
+    <path d="M12 3l9 5-9 5-9-5 9-5z" />
+    <path d="M3 13l9 5 9-5M3 17.5l9 5 9-5" />
+  </Icon>
+);
 const SearchIcon = () => (
   <Icon>
     <circle cx="11" cy="11" r="7" />
@@ -294,6 +328,12 @@ const EMPTY_FORM: DrinkFormState = {
 
 const money = (n: number) => `Rs ${n.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
 
+// Same wording as the backend, used for the quick check before saving
+const notEnoughCashMessage = (available: number, required: number): string =>
+  `Not enough cash in hand. Available: ${money(available)}, required: ${money(
+    required
+  )}. Please add cash in hand first.`;
+
 // "05" -> "5", "007" -> "7", "0.5" stays as is
 const stripLeadingZeros = (v: string) => v.replace(/^0+(?=\d)/, "");
 
@@ -306,7 +346,33 @@ const statValueFontSize = (v: string | number) => {
   return "1rem";
 };
 
-/* ---------- Vendor credit fields (shared by Add + Restock modals) ---------- */
+/* ---------- Cash notice (shown inside Add modal) ---------- */
+interface CashNoticeProps {
+  cashInHand: number | null;
+  needed: number | null;
+}
+
+const CashNotice: React.FC<CashNoticeProps> = ({ cashInHand, needed }) => {
+  if (cashInHand === null || needed === null || needed <= 0) return null;
+
+  const short = needed > cashInHand;
+
+  return (
+    <small
+      style={{
+        fontSize: 12,
+        opacity: short ? 1 : 0.75,
+        color: short ? "#f87171" : undefined,
+        fontWeight: short ? 600 : undefined,
+      }}
+    >
+      Cash in hand: {money(cashInHand)} • Needed now: {money(needed)}
+      {short && " — not enough cash, please add cash in hand first."}
+    </small>
+  );
+};
+
+/* ---------- Vendor credit fields (used by Add modal) ---------- */
 interface VendorCreditFieldsProps {
   enabled: boolean;
   onToggle: (value: boolean) => void;
@@ -414,6 +480,15 @@ export default function DrinksBeverages() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Cash in hand (balance shown in a card + used to warn before saving a purchase)
+  const [cashInHand, setCashInHand] = useState<number | null>(null);
+
+  // Summary cards: purchase / selling / profit / quantity (calculated from items + sales history)
+  const [summary, setSummary] = useState<SummaryTotals | null>(null);
+  // Summary card: money still owed to vendors (only for drinks)
+  const [vendorRemaining, setVendorRemaining] = useState<number | null>(null);
+  const [vendorFailed, setVendorFailed] = useState(false);
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
@@ -438,23 +513,9 @@ export default function DrinksBeverages() {
   const [historyRows, setHistoryRows] = useState<HistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Restock modal
-  const [showRestockModal, setShowRestockModal] = useState(false);
-  const [restockItem, setRestockItem] = useState<DrinkItem | null>(null);
-  const [restockQty, setRestockQty] = useState("");
-  const [restockCost, setRestockCost] = useState("");
-  const [restockError, setRestockError] = useState<string | null>(null);
-  const [restockSubmitting, setRestockSubmitting] = useState(false);
-  // Restock modal: vendor credit
-  const [restockCredit, setRestockCredit] = useState(false);
-  const [restockVendorName, setRestockVendorName] = useState("");
-  const [restockInvoiceNo, setRestockInvoiceNo] = useState("");
-  const [restockPaidNow, setRestockPaidNow] = useState("");
-
-  // Edit price modal (cost_price / price, without touching stock)
+  // Edit price modal (only selling price, without touching stock or cost price)
   const [showEditModal, setShowEditModal] = useState(false);
   const [editItem, setEditItem] = useState<DrinkItem | null>(null);
-  const [editCostPrice, setEditCostPrice] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
@@ -498,10 +559,106 @@ export default function DrinksBeverages() {
     }
   };
 
+  const loadCash = async () => {
+    try {
+      const res = await fetch(`${API_URL}/cash-in-hand`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      if (!res.ok) throw new Error("Failed to load cash in hand");
+      const json = await res.json();
+      setCashInHand(Number(json?.balance) || 0);
+    } catch (err) {
+      // Keep the old value; the server still checks the cash on every purchase
+      console.error(err);
+    }
+  };
+
+  // Money still owed to vendors for DRINKS only (accessories are counted on their own page)
+  const loadVendorRemaining = async () => {
+    try {
+      const res = await fetch(`${API_URL}/credit/remaining?source=drink`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      if (!res.ok) throw new Error("Failed to load vendor credit");
+      const json = await res.json();
+      setVendorRemaining(Number(json?.remaining) || 0);
+      setVendorFailed(false);
+    } catch (err) {
+      console.error(err);
+      setVendorFailed(true);
+    }
+  };
+
   useEffect(() => {
     fetchDrinks();
+    loadCash();
+    loadVendorRemaining();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Recalculate purchase / selling / profit / quantity whenever the drinks change
+  // (first load, refresh, after adding an item, after a sale)
+  useEffect(() => {
+    let cancelled = false;
+
+    const calculate = async () => {
+      if (items.length === 0) {
+        setSummary({ purchase: 0, selling: 0, profit: 0, quantity: 0 });
+        return;
+      }
+
+      const results = await Promise.all(
+        items.map(async (item) => {
+          try {
+            const res = await fetch(`${API_URL}/drinks/${item.id}/history`, {
+              headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+            });
+            if (!res.ok) throw new Error("Failed to load history");
+            const rows: HistoryRow[] = await res.json();
+            return { item, rows };
+          } catch (err) {
+            console.error(err);
+            return { item, rows: [] as HistoryRow[] };
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      let purchase = 0;
+      let selling = 0;
+      let profit = 0;
+      let quantity = 0;
+
+      results.forEach(({ item, rows }) => {
+        let soldQty = 0;
+        rows.forEach((row) => {
+          if (row.type === "sale") {
+            soldQty += Math.abs(Number(row.quantity) || 0);
+            selling += Number(row.amount) || 0;
+            profit += Number(row.profit) || 0;
+          }
+        });
+        // Everything bought = what is still in stock + what was already sold
+        purchase += (item.quantity + soldQty) * item.cost_price;
+        quantity += item.quantity;
+      });
+
+      setSummary({ purchase, selling, profit, quantity });
+    };
+
+    calculate();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   useEffect(() => {
     setPage(1);
@@ -539,24 +696,62 @@ export default function DrinksBeverages() {
 
   const countBy = (s: Status) => items.filter((i) => i.status === s).length;
 
-  // Profit if all current stock is sold: (selling price - cost price) * quantity
-  const totalProfit = useMemo(
-    () => items.reduce((sum, i) => sum + (i.price - i.cost_price) * i.quantity, 0),
-    [items]
-  );
-
   const STATS = [
+    {
+      id: "cash",
+      title: "Cash in Hand",
+      period: "Available now",
+      value: cashInHand === null ? "…" : money(cashInHand),
+      variant: "green",
+      Icon: WalletIcon,
+    },
     { id: "total", title: "Total Items", period: "All time", value: items.length, variant: "red", Icon: BoxIcon },
     { id: "in", title: "In Stock", period: "Right now", value: countBy("in"), variant: "green", Icon: CheckBoxIcon },
     { id: "low", title: "Low Stock", period: "Right now", value: countBy("low"), variant: "amber", Icon: AlertIcon },
     { id: "out", title: "Out of Stock", period: "Right now", value: countBy("out"), variant: "orange", Icon: BanIcon },
+  ] as const;
+
+  // The 5 new summary cards
+  const SUMMARY_STATS = [
     {
-      id: "profit",
-      title: "Profit",
-      period: "If all stock sold",
-      value: money(totalProfit),
+      id: "purchase",
+      title: "Total Purchase",
+      period: "All time",
+      value: summary === null ? "…" : money(summary.purchase),
+      variant: "red",
+      Icon: CartIcon,
+    },
+    {
+      id: "selling",
+      title: "Total Selling",
+      period: "All time",
+      value: summary === null ? "…" : money(summary.selling),
+      variant: "green",
+      Icon: TagIcon,
+    },
+    {
+      id: "realized-profit",
+      title: "Total Profit",
+      period: "From sales",
+      value: summary === null ? "…" : money(summary.profit),
       variant: "purple",
       Icon: TrendUpIcon,
+    },
+    {
+      id: "quantity",
+      title: "Total Quantity",
+      period: "In stock now",
+      value: summary === null ? "…" : summary.quantity,
+      variant: "amber",
+      Icon: LayersIcon,
+    },
+    {
+      id: "vendor",
+      title: "Vendor Remaining",
+      period: "Left to pay",
+      value: vendorFailed ? "N/A" : vendorRemaining === null ? "…" : money(vendorRemaining),
+      variant: "orange",
+      Icon: WalletIcon,
     },
   ] as const;
 
@@ -564,7 +759,7 @@ export default function DrinksBeverages() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await fetchDrinks();
+      await Promise.all([fetchDrinks(), loadCash(), loadVendorRemaining()]);
     } finally {
       setRefreshing(false);
     }
@@ -677,6 +872,7 @@ export default function DrinksBeverages() {
     setAddVendorName("");
     setAddInvoiceNo("");
     setAddPaidNow("");
+    loadCash(); // fresh balance every time the modal opens
     setShowAddModal(true);
   };
 
@@ -697,6 +893,9 @@ export default function DrinksBeverages() {
     form.quantity !== "" && form.cost_price !== "" && Number(form.quantity) > 0
       ? Number(form.quantity) * Number(form.cost_price)
       : null;
+
+  // Cash this purchase needs right now: vendor purchase = only "Paid Now", normal purchase = full bill
+  const addCashNeeded: number | null = addCredit ? Number(addPaidNow) || 0 : addTotalBill;
 
   const handleAddDrink = async () => {
     setFormError(null);
@@ -756,6 +955,12 @@ export default function DrinksBeverages() {
       };
     }
 
+    // Quick cash check (the server checks again before saving)
+    if (cashInHand !== null && addCashNeeded !== null && addCashNeeded > cashInHand) {
+      setFormError(notEnoughCashMessage(cashInHand, addCashNeeded));
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/drinks`, {
@@ -785,6 +990,8 @@ export default function DrinksBeverages() {
 
       setShowAddModal(false);
       fetchDrinks();
+      loadCash();
+      loadVendorRemaining();
     } catch (err) {
       console.error(err);
       setFormError("Something went wrong. Please try again.");
@@ -814,6 +1021,7 @@ export default function DrinksBeverages() {
       setItems((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, quantity: drink.quantity, status: drink.status } : i))
       );
+      loadCash(); // a sale adds cash, so keep the Cash in Hand card up to date
       // If the history modal is open for this item, refresh it too
       if (historyOpen && historyItem?.id === item.id) {
         handleView({ ...item, quantity: drink.quantity, status: drink.status });
@@ -849,99 +1057,8 @@ export default function DrinksBeverages() {
     setHistoryRows([]);
   };
 
-  const openRestockModal = (item: DrinkItem) => {
-    setRestockItem(item);
-    setRestockQty("");
-    setRestockCost(item.cost_price ? String(item.cost_price) : "");
-    setRestockError(null);
-    setRestockCredit(false);
-    setRestockVendorName("");
-    setRestockInvoiceNo("");
-    setRestockPaidNow("");
-    setShowRestockModal(true);
-  };
-
-  const closeRestockModal = () => {
-    if (restockSubmitting) return;
-    setShowRestockModal(false);
-    setRestockItem(null);
-  };
-
-  // Total bill for the Restock modal = quantity x cost price (typed one, else the item's current one)
-  const restockUnitCost =
-    restockCost !== "" ? Number(restockCost) : restockItem ? restockItem.cost_price : 0;
-  const restockTotalBill =
-    Number(restockQty) > 0 && !Number.isNaN(restockUnitCost) ? Number(restockQty) * restockUnitCost : null;
-
-  const handleRestock = async () => {
-    if (!restockItem) return;
-    if (!restockQty || Number(restockQty) <= 0) {
-      setRestockError("Please enter a valid quantity.");
-      return;
-    }
-
-    // Vendor credit checks
-    let creditPayload: VendorCreditPayload = {};
-    if (restockCredit) {
-      if (!restockVendorName.trim()) {
-        setRestockError("Please enter the vendor name.");
-        return;
-      }
-      if (!restockInvoiceNo.trim()) {
-        setRestockError("Please enter the invoice number.");
-        return;
-      }
-      const paid = restockPaidNow.trim() === "" ? 0 : Number(restockPaidNow);
-      if (Number.isNaN(paid) || paid < 0) {
-        setRestockError("Paid Now must be 0 or more.");
-        return;
-      }
-      if (paid > (restockTotalBill ?? 0)) {
-        setRestockError("Paid Now cannot be more than the total bill.");
-        return;
-      }
-      creditPayload = {
-        vendor_name: restockVendorName.trim(),
-        invoice_no: restockInvoiceNo.trim(),
-        paid_now: paid,
-      };
-    }
-
-    setRestockSubmitting(true);
-    try {
-      const res = await fetch(`${API_URL}/drinks/${restockItem.id}/restock`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          quantity: Number(restockQty),
-          cost_price: restockCost === "" ? undefined : Number(restockCost),
-          ...creditPayload,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setRestockError(extractError(data, "Could not restock."));
-        return;
-      }
-
-      setShowRestockModal(false);
-      fetchDrinks();
-    } catch (err) {
-      console.error(err);
-      setRestockError("Something went wrong. Please try again.");
-    } finally {
-      setRestockSubmitting(false);
-    }
-  };
-
   const openEditModal = (item: DrinkItem) => {
     setEditItem(item);
-    setEditCostPrice(String(item.cost_price));
     setEditPrice(String(item.price));
     setEditError(null);
     setShowEditModal(true);
@@ -955,8 +1072,8 @@ export default function DrinksBeverages() {
 
   const handleUpdateDrink = async () => {
     if (!editItem) return;
-    if (editCostPrice === "" || editPrice === "") {
-      setEditError("Cost Price and Selling Price are required.");
+    if (editPrice === "") {
+      setEditError("Selling Price is required.");
       return;
     }
 
@@ -970,14 +1087,13 @@ export default function DrinksBeverages() {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          cost_price: Number(editCostPrice),
           price: Number(editPrice),
         }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setEditError(data?.message ?? "Could not update the price.");
+        setEditError(extractError(data, "Could not update the price."));
         return;
       }
 
@@ -1043,6 +1159,33 @@ export default function DrinksBeverages() {
       {/* Stat cards */}
       <section className="drk-stats">
         {STATS.map((s) => (
+          <div key={s.id} className="drk-stat-card">
+            <div className={`drk-stat-icon ${s.variant}`}>
+              <s.Icon />
+            </div>
+            <div className="drk-stat-info">
+              <span className="drk-stat-title">{s.title}</span>
+              <span className="drk-stat-period">{s.period}</span>
+              <span
+                className="drk-stat-value"
+                title={String(s.value)}
+                style={{
+                  overflow: "visible",
+                  textOverflow: "clip",
+                  whiteSpace: "nowrap",
+                  fontSize: statValueFontSize(s.value),
+                }}
+              >
+                {s.value}
+              </span>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Summary cards: purchase / selling / profit / quantity / vendor remaining */}
+      <section className="drk-stats">
+        {SUMMARY_STATS.map((s) => (
           <div key={s.id} className="drk-stat-card">
             <div className={`drk-stat-icon ${s.variant}`}>
               <s.Icon />
@@ -1197,25 +1340,15 @@ export default function DrinksBeverages() {
                           <EyeIcon />
                         </button>
                         {canManageDrinks && (
-                          <>
-                            <button
-                              type="button"
-                              className="drk-view-btn"
-                              onClick={() => handleSell(item)}
-                              disabled={item.quantity <= 0}
-                              aria-label={`Sell ${item.name}`}
-                            >
-                              Sell
-                            </button>
-                            <button
-                              type="button"
-                              className="drk-view-btn"
-                              onClick={() => openRestockModal(item)}
-                              aria-label={`Restock ${item.name}`}
-                            >
-                              Restock
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            className="drk-view-btn"
+                            onClick={() => handleSell(item)}
+                            disabled={item.quantity <= 0}
+                            aria-label={`Sell ${item.name}`}
+                          >
+                            Sell
+                          </button>
                         )}
                         {canEditDrink && (
                           <button
@@ -1405,6 +1538,8 @@ export default function DrinksBeverages() {
                 totalBill={addTotalBill}
               />
 
+              <CashNotice cashInHand={cashInHand} needed={addCashNeeded} />
+
               {formError && <p className="drk-form-error">{formError}</p>}
             </div>
 
@@ -1420,68 +1555,7 @@ export default function DrinksBeverages() {
         </div>
       )}
 
-      {/* Restock Modal */}
-      {showRestockModal && restockItem && (
-        <div className="drk-modal-overlay" onClick={closeRestockModal}>
-          <div className="drk-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="drk-modal-header">
-              <h2>Restock — {restockItem.name}</h2>
-              <button className="drk-modal-close" onClick={closeRestockModal} aria-label="Close">
-                <XIcon />
-              </button>
-            </div>
-
-            <div className="drk-modal-body">
-              <div className="drk-form-group">
-                <label>Quantity to Add</label>
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="e.g. 24"
-                  value={restockQty}
-                  onChange={(e) => setRestockQty(stripLeadingZeros(e.target.value))}
-                />
-              </div>
-              <div className="drk-form-group">
-                <label>New Cost Price (optional, if it changed)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder={String(restockItem.cost_price)}
-                  value={restockCost}
-                  onChange={(e) => setRestockCost(stripLeadingZeros(e.target.value))}
-                />
-              </div>
-
-              <VendorCreditFields
-                enabled={restockCredit}
-                onToggle={setRestockCredit}
-                vendorName={restockVendorName}
-                onVendorName={setRestockVendorName}
-                invoiceNo={restockInvoiceNo}
-                onInvoiceNo={setRestockInvoiceNo}
-                paidNow={restockPaidNow}
-                onPaidNow={setRestockPaidNow}
-                totalBill={restockTotalBill}
-              />
-
-              {restockError && <p className="drk-form-error">{restockError}</p>}
-            </div>
-
-            <div className="drk-modal-footer">
-              <button className="drk-btn-secondary" onClick={closeRestockModal} disabled={restockSubmitting}>
-                Cancel
-              </button>
-              <button className="drk-btn-primary" onClick={handleRestock} disabled={restockSubmitting}>
-                {restockSubmitting ? "Adding..." : "Add Stock"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Price Modal — only cost_price / price, does not touch stock quantity */}
+      {/* Edit Price Modal — only selling price, does not touch stock quantity or cost price */}
       {showEditModal && editItem && (
         <div className="drk-modal-overlay" onClick={closeEditModal}>
           <div className="drk-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -1493,17 +1567,6 @@ export default function DrinksBeverages() {
             </div>
 
             <div className="drk-modal-body">
-              <div className="drk-form-group">
-                <label>Cost Price (purchase, per unit)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder="e.g. 150"
-                  value={editCostPrice}
-                  onChange={(e) => setEditCostPrice(stripLeadingZeros(e.target.value))}
-                />
-              </div>
               <div className="drk-form-group">
                 <label>Selling Price (per unit)</label>
                 <input

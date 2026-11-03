@@ -24,7 +24,6 @@ const navItems = [
   { to: "/frontdesk/fee-collection", label: "Fee Collection", icon: Layers },
   { to: "/frontdesk/packages", label: "Packages", icon: Package },
   { to: "/frontdesk/drinks", label: "Drinks & Beverages", icon: CupSoda },
-  { to: "/frontdesk/trainers", label: "Trainers", icon: Users },
 ];
 
 interface SidebarProps {
@@ -108,7 +107,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
               <span className="fd-footer-status-dot" />
             </div>
             <div className="fd-footer-info">
-            
               <span className="fd-footer-role">Front Desk</span>
             </div>
           </div>

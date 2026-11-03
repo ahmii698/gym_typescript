@@ -153,7 +153,6 @@ function AddMember() {
 
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [trainers, setTrainers] = useState<TrainerItem[]>([]);
-  const [showTrainerModal, setShowTrainerModal] = useState(false);
 
   const needsTrainer = form.memberType === "normal-trainer" || form.memberType === "package-trainer";
 
@@ -227,12 +226,6 @@ function AddMember() {
     setErrors({});
     setAlert(null);
     setFormKey((k) => k + 1);
-  };
-
-  const handleTrainerCreated = (trainer: TrainerItem) => {
-    setTrainers((prev) => [...prev, trainer].sort((a, b) => a.name.localeCompare(b.name)));
-    updateField("trainer", String(trainer.id));
-    setShowTrainerModal(false);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -495,14 +488,6 @@ function AddMember() {
                 ))}
               </select>
             </Field>
-
-            <div className="am-or-divider">
-              <span>OR</span>
-            </div>
-
-            <button type="button" className="am-add-trainer-btn" onClick={() => setShowTrainerModal(true)}>
-              <PlusIcon /> Add New Trainer
-            </button>
           </section>
 
           <section className="am-card">
@@ -600,205 +585,6 @@ function AddMember() {
           </section>
         </div>
       </form>
-
-      {showTrainerModal && (
-        <AddTrainerModal onClose={() => setShowTrainerModal(false)} onCreated={handleTrainerCreated} />
-      )}
-    </div>
-  );
-}
-
-/* ---------- Add Trainer modal ---------- */
-
-interface TrainerFormState {
-  name: string;
-  phone: string;
-  cnic: string;
-  email: string;
-  role: string;
-  status: string;
-  specialization: string;
-  experienceYears: string;
-  photoUrl: string;
-}
-
-const trainerInitialState: TrainerFormState = {
-  name: "",
-  phone: "",
-  cnic: "",
-  email: "",
-  role: "Fitness Trainer",
-  status: "Active",
-  specialization: "",
-  experienceYears: "",
-  photoUrl: "",
-};
-
-function AddTrainerModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (trainer: TrainerItem) => void;
-}) {
-  const [form, setForm] = useState<TrainerFormState>(trainerInitialState);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const updateField = <K extends keyof TrainerFormState>(field: K, value: TrainerFormState[K]) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleInput =
-    (field: keyof TrainerFormState) =>
-    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      updateField(field, e.target.value);
-    };
-
-  const handleCnic = (e: ChangeEvent<HTMLInputElement>) => {
-    updateField("cnic", formatCnic(e.target.value));
-  };
-
-  const save = async () => {
-    if (!form.name.trim()) {
-      setError("Trainer ka naam zaroori hai.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-    try {
-      const res = await fetch(`${API_URL}/trainers`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          phone: form.phone.trim() || null,
-          cnic: form.cnic.trim() || null,
-          email: form.email.trim() || null,
-          role: form.role.trim() || null,
-          status: form.status || null,
-          specialization: form.specialization.trim() || null,
-          experience_years: form.experienceYears ? Number(form.experienceYears) : null,
-          photo_url: form.photoUrl.trim() || null,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(firstError(json));
-        return;
-      }
-      onCreated(json.data);
-    } catch {
-      setError("Server se connect nahi ho saka.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="am-modal-overlay" onClick={onClose}>
-      <div className="am-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <h3>Add New Trainer</h3>
-
-        {error && <div className="am-error am-modal-error">{error}</div>}
-
-        <Field label="Full Name" required>
-          <input
-            type="text"
-            placeholder="e.g. Usman Ali"
-            value={form.name}
-            onChange={handleInput("name")}
-            autoFocus
-          />
-        </Field>
-
-        <div className="am-row">
-          <Field label="Phone" optional>
-            <input
-              type="tel"
-              placeholder="03XX-XXXXXXX"
-              value={form.phone}
-              onChange={handleInput("phone")}
-            />
-          </Field>
-          <Field label="CNIC" optional>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="XXXXX-XXXXXXX-X"
-              value={form.cnic}
-              onChange={handleCnic}
-              maxLength={15}
-            />
-          </Field>
-        </div>
-
-        <Field label="Email" optional>
-          <input
-            type="email"
-            placeholder="name@fitzone.com"
-            value={form.email}
-            onChange={handleInput("email")}
-          />
-        </Field>
-
-        <div className="am-row">
-          <Field label="Role" optional>
-            <select value={form.role} onChange={handleInput("role")}>
-              <option value="Fitness Trainer">Fitness Trainer</option>
-              <option value="Personal Trainer">Personal Trainer</option>
-              <option value="Yoga Trainer">Yoga Trainer</option>
-            </select>
-          </Field>
-          <Field label="Status" optional>
-            <select value={form.status} onChange={handleInput("status")}>
-              <option value="Active">Active</option>
-              <option value="On Leave">On Leave</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </Field>
-        </div>
-
-        <div className="am-row">
-          <Field label="Specialization" optional>
-            <input
-              type="text"
-              placeholder="e.g. Weight training, Cardio"
-              value={form.specialization}
-              onChange={handleInput("specialization")}
-            />
-          </Field>
-          <Field label="Experience (years)" optional>
-            <input
-              type="number"
-              min={0}
-              placeholder="5"
-              value={form.experienceYears}
-              onChange={handleInput("experienceYears")}
-            />
-          </Field>
-        </div>
-
-        <Field label="Photo URL" optional>
-          <input
-            type="text"
-            placeholder="https://..."
-            value={form.photoUrl}
-            onChange={handleInput("photoUrl")}
-          />
-        </Field>
-
-        <div className="am-modal-actions">
-          <button type="button" className="am-reset-btn" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
-          <button type="button" className="am-submit-btn" onClick={save} disabled={saving}>
-            <PlusIcon /> {saving ? "Saving..." : "Save Trainer"}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

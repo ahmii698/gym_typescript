@@ -151,6 +151,12 @@ const extractError = (json: any, fallback: string): string => {
   return first ?? json?.message ?? fallback;
 };
 
+// Same wording as the backend, used for the quick check before saving
+const notEnoughCashMessage = (available: number, required: number): string =>
+  `Not enough cash in hand. Available: ${formatPrice(available)}, required: ${formatPrice(
+    required
+  )}. Please add cash in hand first.`;
+
 // Escape text before putting it into export HTML
 const escapeHtml = (v: string | number): string =>
   String(v)
@@ -295,6 +301,13 @@ const DownloadIcon = () => (
     <path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 20h14" />
   </Icon>
 );
+const WalletIcon = () => (
+  <Icon>
+    <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h11.5a1.5 1.5 0 0 1 1.5 1.5V8" />
+    <rect x="3.5" y="8" width="17" height="11" rx="2" />
+    <path d="M16 13.5h.01" />
+  </Icon>
+);
 
 /* ---------- Page ---------- */
 export default function Accessories() {
@@ -305,6 +318,9 @@ export default function Accessories() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Cash in hand (balance shown in a card + used to warn before saving a purchase)
+  const [cashInHand, setCashInHand] = useState<number | null>(null);
 
   // Spend cards (Total spent / filterable / this week / today)
   const [spend, setSpend] = useState<SpendSummary | null>(null);
@@ -366,6 +382,17 @@ export default function Accessories() {
     }
   };
 
+  const loadCash = async () => {
+    try {
+      const res = await fetch(`${API_URL}/cash-in-hand`, { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setCashInHand(Number(json?.balance) || 0);
+    } catch {
+      // Keep the old value; the server still checks the cash on every purchase
+    }
+  };
+
   const loadSpend = async () => {
     // Don't send a request if the date was cleared
     if (filterType === "custom" && !filterDate) {
@@ -402,6 +429,7 @@ export default function Accessories() {
 
   useEffect(() => {
     loadItems();
+    loadCash();
   }, []);
 
   useEffect(() => {
@@ -466,7 +494,7 @@ export default function Accessories() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([loadItems(), loadSpend()]);
+      await Promise.all([loadItems(), loadSpend(), loadCash()]);
     } finally {
       setRefreshing(false);
     }
@@ -586,7 +614,7 @@ export default function Accessories() {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(extractError(json, "Could not save."));
-    await Promise.all([loadItems(), loadSpend()]);
+    await Promise.all([loadItems(), loadSpend(), loadCash()]);
   };
 
   const handleRestock = async (id: number, data: RestockPayload) => {
@@ -598,7 +626,7 @@ export default function Accessories() {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(extractError(json, "Could not add stock."));
-    await Promise.all([loadItems(), loadSpend()]);
+    await Promise.all([loadItems(), loadSpend(), loadCash()]);
   };
 
   return (
@@ -656,6 +684,18 @@ export default function Accessories() {
 
       {/* Stat cards */}
       <section className="acc-stats">
+        {/* 0. Cash in Hand */}
+        <div className="acc-stat-card">
+          <div className="acc-stat-icon green"><WalletIcon /></div>
+          <div className="acc-stat-info">
+            <span className="acc-stat-title">Cash in Hand</span>
+            <span className="acc-stat-period">Available now</span>
+            <span className="acc-stat-value">
+              {cashInHand === null ? "…" : formatPrice(cashInHand)}
+            </span>
+          </div>
+        </div>
+
         {/* 1. Total Spent — all time */}
         <div className="acc-stat-card">
           <div className="acc-stat-icon red"><CashIcon /></div>
@@ -936,6 +976,7 @@ export default function Accessories() {
       {/* Add Modal */}
       {modalOpen && (
         <AddAccessoryModal
+          cashInHand={cashInHand}
           onClose={() => setModalOpen(false)}
           onSave={handleSave}
         />
@@ -945,6 +986,7 @@ export default function Accessories() {
       {restocking && (
         <RestockModal
           item={restocking}
+          cashInHand={cashInHand}
           onClose={() => setRestocking(null)}
           onSave={handleRestock}
         />
@@ -1075,6 +1117,31 @@ export default function Accessories() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Cash notice (shown inside Add + Restock modals)                    */
+/* ------------------------------------------------------------------ */
+
+interface CashNoticeProps {
+  cashInHand: number | null;
+  needed: number | null;
+}
+
+const CashNotice: React.FC<CashNoticeProps> = ({ cashInHand, needed }) => {
+  if (cashInHand === null || needed === null || needed <= 0) return null;
+
+  const short = needed > cashInHand;
+
+  return (
+    <small
+      className="acc-hint"
+      style={{ color: short ? "#f87171" : undefined, fontWeight: short ? 600 : undefined }}
+    >
+      Cash in hand: {formatPrice(cashInHand)} • Needed now: {formatPrice(needed)}
+      {short && " — not enough cash, please add cash in hand first."}
+    </small>
+  );
+};
+
+/* ------------------------------------------------------------------ */
 /*  Vendor credit fields (shared by Add + Restock modals)              */
 /* ------------------------------------------------------------------ */
 
@@ -1187,11 +1254,12 @@ const VendorCreditFields: React.FC<VendorCreditFieldsProps> = ({
 /* ------------------------------------------------------------------ */
 
 interface AddAccessoryModalProps {
+  cashInHand: number | null;
   onClose: () => void;
   onSave: (data: SavePayload) => Promise<void>;
 }
 
-const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }) => {
+const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ cashInHand, onClose, onSave }) => {
   const [form, setForm] = useState({
     name: "",
     quantity: "", // kept as a string so a leading 0 is easy to remove
@@ -1211,6 +1279,18 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
   };
+
+  const newQty = Number(form.quantity) || 0;
+  const totalCost =
+    newQty > 0 && form.unitPrice.trim() !== "" ? newQty * Number(form.unitPrice) : null;
+
+  // How much cash this purchase needs right now:
+  // vendor purchase = only "Paid Now", normal purchase = the full bill
+  const cashNeeded: number | null = credit
+    ? Number(paidNow) || 0
+    : totalCost !== null && !Number.isNaN(totalCost)
+    ? totalCost
+    : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1263,6 +1343,12 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
       };
     }
 
+    // Quick cash check (the server checks again before saving)
+    if (cashInHand !== null && cashNeeded !== null && cashNeeded > cashInHand) {
+      setError(notEnoughCashMessage(cashInHand, cashNeeded));
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -1281,10 +1367,6 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
       setSaving(false);
     }
   };
-
-  const newQty = Number(form.quantity) || 0;
-  const totalCost =
-    newQty > 0 && form.unitPrice.trim() !== "" ? newQty * Number(form.unitPrice) : null;
 
   return (
     <div className="acc-modal-overlay" onClick={onClose}>
@@ -1363,6 +1445,8 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
             totalBill={totalCost !== null && !Number.isNaN(totalCost) ? totalCost : null}
           />
 
+          <CashNotice cashInHand={cashInHand} needed={cashNeeded} />
+
           <div className="acc-modal-foot">
             <button type="button" className="acc-btn-ghost" onClick={onClose} disabled={saving}>
               Cancel
@@ -1383,11 +1467,12 @@ const AddAccessoryModal: React.FC<AddAccessoryModalProps> = ({ onClose, onSave }
 
 interface RestockModalProps {
   item: AccessoryItem;
+  cashInHand: number | null;
   onClose: () => void;
   onSave: (id: number, data: RestockPayload) => Promise<void>;
 }
 
-const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) => {
+const RestockModal: React.FC<RestockModalProps> = ({ item, cashInHand, onClose, onSave }) => {
   const [quantity, setQuantity] = useState<string>("");
   const [unitPrice, setUnitPrice] = useState<string>(
     item.unit_price !== null && item.unit_price !== undefined ? String(item.unit_price) : ""
@@ -1406,6 +1491,14 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
   const qty = Number(quantity) || 0;
   const price = Number(unitPrice);
   const hasPrice = unitPrice.trim() !== "" && !Number.isNaN(price) && price >= 0;
+
+  // How much cash this purchase needs right now:
+  // vendor purchase = only "Paid Now", normal purchase = the full bill
+  const cashNeeded: number | null = credit
+    ? Number(paidNow) || 0
+    : qty > 0 && hasPrice
+    ? qty * price
+    : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1444,6 +1537,12 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
         invoice_no: invoiceNo.trim(),
         paid_now: paid,
       };
+    }
+
+    // Quick cash check (the server checks again before saving)
+    if (cashInHand !== null && cashNeeded !== null && cashNeeded > cashInHand) {
+      setError(notEnoughCashMessage(cashInHand, cashNeeded));
+      return;
     }
 
     setSaving(true);
@@ -1535,6 +1634,8 @@ const RestockModal: React.FC<RestockModalProps> = ({ item, onClose, onSave }) =>
             onPaidNow={setPaidNow}
             totalBill={qty > 0 && hasPrice ? qty * price : null}
           />
+
+          <CashNotice cashInHand={cashInHand} needed={cashNeeded} />
 
           <div className="acc-modal-foot">
             <button type="button" className="acc-btn-ghost" onClick={onClose} disabled={saving}>

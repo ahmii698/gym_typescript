@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CashInHandEntry;
 use App\Models\Drink;
 use App\Models\DrinkRestock;
 use App\Models\DrinkSale;
@@ -12,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 class DrinkController extends Controller
 {
@@ -41,6 +43,7 @@ class DrinkController extends Controller
 
     // Naya item add karna
     // Optional credit purchase: vendor_name + invoice_no + paid_now
+    // Cash in hand: bina vendor ke poora bill, vendor ke saath sirf paid_now cash se katta hai.
     public function store(Request $request)
     {
         $isCredit = filled($request->input('vendor_name'));
@@ -67,42 +70,62 @@ class DrinkController extends Controller
             'paid_now' => 'nullable|numeric|min:0',
         ]);
 
+        $totalBill = round((int) $data['quantity'] * (float) ($data['cost_price'] ?? 0), 2);
+
         if ($isCredit) {
             if ((int) $data['quantity'] < 1) {
                 return response()->json([
-                    'message' => 'Vendor se maal lene ke liye quantity kam az kam 1 honi chahiye.',
+                    'message' => 'Quantity must be at least 1 for a vendor purchase.',
                 ], 422);
             }
 
-            $total = round($data['quantity'] * $data['cost_price'], 2);
             $paid = round((float) ($data['paid_now'] ?? 0), 2);
 
-            if ($paid > $total) {
+            if ($paid > $totalBill) {
                 return response()->json([
-                    'message' => 'Paid Now total bill (Rs ' . number_format($total, 2) . ') se zyada nahi ho sakta.',
+                    'message' => 'Paid Now cannot be more than the total bill (Rs ' . number_format($totalBill, 2) . ').',
                 ], 422);
             }
         }
 
-        $drink = DB::transaction(function () use ($data, $isCredit) {
-            $drink = Drink::create(Arr::only($data, [
-                'name', 'category', 'unit', 'quantity',
-                'low_stock_threshold', 'price', 'cost_price',
-            ]));
+        // Is purchase ke liye cash in hand se kitna katna hai
+        $cashToSpend = $isCredit
+            ? round((float) ($data['paid_now'] ?? 0), 2)
+            : $totalBill;
 
-            if ($isCredit) {
-                $this->recordCredit(
-                    $drink,
-                    (int) $data['quantity'],
-                    (float) $data['cost_price'],
-                    $data['vendor_name'],
-                    $data['invoice_no'],
-                    (float) ($data['paid_now'] ?? 0)
+        try {
+            $drink = DB::transaction(function () use ($request, $data, $isCredit, $cashToSpend) {
+                $drink = Drink::create(Arr::only($data, [
+                    'name', 'category', 'unit', 'quantity',
+                    'low_stock_threshold', 'price', 'cost_price',
+                ]));
+
+                // Cash in hand se paise kaato (kam hon to RuntimeException -> poori purchase rollback)
+                CashInHandEntry::spend(
+                    $cashToSpend,
+                    $isCredit
+                        ? 'Drink purchase (paid now): ' . $drink->name . ' x' . $data['quantity']
+                            . ' - Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no'])
+                        : 'Drink purchase: ' . $drink->name . ' x' . $data['quantity'],
+                    $request->user()
                 );
-            }
 
-            return $drink;
-        });
+                if ($isCredit) {
+                    $this->recordCredit(
+                        $drink,
+                        (int) $data['quantity'],
+                        (float) $data['cost_price'],
+                        $data['vendor_name'],
+                        $data['invoice_no'],
+                        (float) ($data['paid_now'] ?? 0)
+                    );
+                }
+
+                return $drink;
+            });
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json($drink, 201);
     }
@@ -149,6 +172,7 @@ class DrinkController extends Controller
 
     // Admin/Frontdesk: stock wapis add karna (naya maal aaya)
     // Optional credit purchase: vendor_name + invoice_no + paid_now
+    // Cash in hand: bina vendor ke poora bill, vendor ke saath sirf paid_now cash se katta hai.
     public function restock(Request $request, Drink $drink)
     {
         $isCredit = filled($request->input('vendor_name'));
@@ -174,45 +198,65 @@ class DrinkController extends Controller
             ? (float) $data['cost_price']
             : (float) $drink->cost_price;
 
+        $totalBill = round($data['quantity'] * $unitCost, 2);
+
         if ($isCredit) {
-            $total = round($data['quantity'] * $unitCost, 2);
             $paid = round((float) ($data['paid_now'] ?? 0), 2);
 
-            if ($paid > $total) {
+            if ($paid > $totalBill) {
                 return response()->json([
-                    'message' => 'Paid Now total bill (Rs ' . number_format($total, 2) . ') se zyada nahi ho sakta.',
+                    'message' => 'Paid Now cannot be more than the total bill (Rs ' . number_format($totalBill, 2) . ').',
                 ], 422);
             }
         }
 
-        $restock = DB::transaction(function () use ($request, $drink, $data, $isCredit, $unitCost) {
-            $drink->increment('quantity', $data['quantity']);
+        // Is purchase ke liye cash in hand se kitna katna hai
+        $cashToSpend = $isCredit
+            ? round((float) ($data['paid_now'] ?? 0), 2)
+            : $totalBill;
 
-            // agar naya khareed price diya hai to drink ki cost_price update kar do
-            if (array_key_exists('cost_price', $data) && $data['cost_price'] !== null) {
-                $drink->update(['cost_price' => $data['cost_price']]);
-            }
+        try {
+            $restock = DB::transaction(function () use ($request, $drink, $data, $isCredit, $unitCost, $cashToSpend) {
+                $drink->increment('quantity', $data['quantity']);
 
-            $restock = DrinkRestock::create([
-                'drink_id' => $drink->id,
-                'restocked_by' => $request->user()?->id,
-                'quantity' => $data['quantity'],
-                'cost_price' => $drink->cost_price,
-            ]);
+                // agar naya khareed price diya hai to drink ki cost_price update kar do
+                if (array_key_exists('cost_price', $data) && $data['cost_price'] !== null) {
+                    $drink->update(['cost_price' => $data['cost_price']]);
+                }
 
-            if ($isCredit) {
-                $this->recordCredit(
-                    $drink,
-                    (int) $data['quantity'],
-                    $unitCost,
-                    $data['vendor_name'],
-                    $data['invoice_no'],
-                    (float) ($data['paid_now'] ?? 0)
+                $restock = DrinkRestock::create([
+                    'drink_id' => $drink->id,
+                    'restocked_by' => $request->user()?->id,
+                    'quantity' => $data['quantity'],
+                    'cost_price' => $drink->cost_price,
+                ]);
+
+                // Cash in hand se paise kaato (kam hon to RuntimeException -> poora restock rollback)
+                CashInHandEntry::spend(
+                    $cashToSpend,
+                    $isCredit
+                        ? 'Drink restock (paid now): ' . $drink->name . ' x' . $data['quantity']
+                            . ' - Vendor: ' . trim($data['vendor_name']) . ', Invoice: ' . trim($data['invoice_no'])
+                        : 'Drink restock: ' . $drink->name . ' x' . $data['quantity'],
+                    $request->user()
                 );
-            }
 
-            return $restock;
-        });
+                if ($isCredit) {
+                    $this->recordCredit(
+                        $drink,
+                        (int) $data['quantity'],
+                        $unitCost,
+                        $data['vendor_name'],
+                        $data['invoice_no'],
+                        (float) ($data['paid_now'] ?? 0)
+                    );
+                }
+
+                return $restock;
+            });
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json(['drink' => $drink->fresh(), 'restock' => $restock]);
     }

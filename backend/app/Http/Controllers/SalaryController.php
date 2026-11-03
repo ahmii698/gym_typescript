@@ -56,6 +56,7 @@ class SalaryController extends Controller
      * POST /salary-payments
      * Multiple partial payments allowed. Us month ki saari paid payments
      * (settled + unsettled) base salary ki limit mein count hoti hain.
+     * Commission base salary ki limit mein count NAHI hoti (wo bonus hai).
      */
     public function store(Request $request)
     {
@@ -63,6 +64,7 @@ class SalaryController extends Controller
             'staff_id'   => 'required|integer',
             'staff_type' => 'required|in:trainer,frontdesk',
             'amount'     => 'required|numeric|min:0',
+            'commission' => 'nullable|numeric|min:0',
             'month'      => 'required|integer|min:1|max:12',
             'year'       => 'required|integer|min:2000|max:2100',
             'paid_on'    => 'required|date',
@@ -109,6 +111,7 @@ class SalaryController extends Controller
                 'staff_id'   => $request->staff_id,
                 'staff_type' => $request->staff_type,
                 'amount'     => $request->amount,
+                'commission' => $request->commission ?? 0,
                 'month'      => $request->month,
                 'year'       => $request->year,
                 'paid_on'    => $request->paid_on,
@@ -146,10 +149,11 @@ class SalaryController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'amount'  => 'sometimes|required|numeric|min:0',
-            'paid_on' => 'sometimes|required|date',
-            'status'  => 'sometimes|in:paid,pending',
-            'note'    => 'nullable|string|max:255',
+            'amount'     => 'sometimes|required|numeric|min:0',
+            'commission' => 'sometimes|nullable|numeric|min:0',
+            'paid_on'    => 'sometimes|required|date',
+            'status'     => 'sometimes|in:paid,pending',
+            'note'       => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -160,7 +164,13 @@ class SalaryController extends Controller
         }
 
         try {
-            $payment->update($request->only(['amount', 'paid_on', 'status', 'note']));
+            $payload = $request->only(['amount', 'commission', 'paid_on', 'status', 'note']);
+
+            if (array_key_exists('commission', $payload) && $payload['commission'] === null) {
+                $payload['commission'] = 0;
+            }
+
+            $payment->update($payload);
 
             return response()->json([
                 'status' => true,
@@ -211,6 +221,10 @@ class SalaryController extends Controller
      * Card ke liye us month ki SAARI payments (settled + unsettled) count hoti hain.
      * Refresh sirf table ke "Remaining" ko reset karta hai, card ko nahi.
      * Naya month shuru hote hi card khud naye month ka data (Rs 0 se) dikhata hai.
+     *
+     * paid_this_month        = sirf salary (purana hisaab, Remaining isi se banta hai)
+     * commission_this_month  = us month ki total commission
+     * total_paid_this_month  = salary + commission
      */
     public function summary(Request $request)
     {
@@ -231,6 +245,11 @@ class SalaryController extends Controller
                                  ->where('status', 'paid')
                                  ->sum('amount');
 
+            $commission = SalaryPayment::where('month', $month)
+                                       ->where('year', $year)
+                                       ->where('status', 'paid')
+                                       ->sum('commission');
+
             $pending = SalaryPayment::where('month', $month)
                                     ->where('year', $year)
                                     ->where('status', 'pending')
@@ -243,6 +262,8 @@ class SalaryController extends Controller
                     'trainer_budget' => (float) $trainerBudget,
                     'frontdesk_budget' => (float) $frontdeskBudget,
                     'paid_this_month' => (float) $paid,
+                    'commission_this_month' => (float) $commission,
+                    'total_paid_this_month' => (float) $paid + (float) $commission,
                     'pending_this_month' => (float) $pending,
                     'month' => $month,
                     'year' => $year,
@@ -300,6 +321,9 @@ class SalaryController extends Controller
                 $paidQuery->whereDate('paid_on', '<=', $cutoff->toDateString());
             }
 
+            $paid       = (float) (clone $paidQuery)->sum('amount');
+            $commission = (float) (clone $paidQuery)->sum('commission');
+
             return response()->json([
                 'status' => true,
                 'data' => [
@@ -307,7 +331,9 @@ class SalaryController extends Controller
                     'trainers'    => $trainerCount,
                     'frontdesk'   => $frontCount,
                     'budget'      => $budget,
-                    'paid'        => (float) $paidQuery->sum('amount'),
+                    'paid'        => $paid,
+                    'commission'  => $commission,
+                    'total_paid'  => $paid + $commission,
                 ],
             ], 200);
         } catch (\Exception $e) {

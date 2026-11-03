@@ -92,7 +92,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/accessories/{accessory}/history', [AccessoryController::class, 'history']);
 
     // ---------- Credit Management (vendors ka udhaar hisaab — admin aur frontdesk dono) ----------
+    // Delete sirf admin karega (neeche admin group mein)
+    Route::get('/credit/remaining', [CreditController::class, 'remaining']);   // <-- NAYI LINE (drinks / accessories ka remaining)
     Route::get('/credit/vendors', [CreditController::class, 'index']);
+    Route::post('/credit/vendors', [CreditController::class, 'store']);
+    Route::put('/credit/vendors/{vendor}', [CreditController::class, 'update']);
     Route::get('/credit/vendors/{vendor}/history', [CreditController::class, 'history']);
     Route::post('/credit/vendors/{vendor}/pay', [CreditController::class, 'pay']);
 
@@ -132,6 +136,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Drinks — edit/delete sirf admin karega
         Route::put('/drinks/{drink}', [DrinkController::class, 'update']);
         Route::delete('/drinks/{drink}', [DrinkController::class, 'destroy']);
+
+        // Credit Management — vendor delete sirf admin karega
+        Route::delete('/credit/vendors/{vendor}', [CreditController::class, 'destroy']);
 
         // Cash in Hand — add / withdraw sirf admin karega
         Route::post('/cash-in-hand', [CashInHandController::class, 'store']);

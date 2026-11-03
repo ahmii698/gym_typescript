@@ -10,13 +10,15 @@ import {
   CalendarCheck,
   IdCard,
   UserPlus,
+  UserCog,          // Employees
   Wallet,           // Expense group icon
-  Receipt,          // Fixed Expense
-  CircleDollarSign, // Extra Expense
+  Receipt,          // Expenses (combined page)
+  PieChart,         // Expense Overview
   Banknote,         // Cash in Hand
   CreditCard,       // Credit Management
   ShieldCheck,      // Create > Admin
   Headset,          // Create > Front Desk
+  History,          // Inventory History
   Menu,
   X,
 } from "lucide-react";
@@ -33,7 +35,14 @@ const inventoryItems = [
   { to: "/admin/inventory/drinks", label: "Drinks & Beverages", icon: CupSoda },
 ];
 
-// --- Cash in Hand (Inventory ke neeche) ---
+// --- Inventory History (Inventory ke neeche) ---
+const invHistoryItem = {
+  to: "/admin/inv-history",
+  label: "Inventory History",
+  icon: History,
+};
+
+// --- Cash in Hand (Inventory History ke neeche) ---
 const cashItem = {
   to: "/admin/cash-in-hand",
   label: "Cash in Hand",
@@ -49,15 +58,16 @@ const creditItem = {
 
 // --- Expense Menu Items ---
 const expenseItems = [
-  { to: "/admin/expense", label: "Expense Overview", icon: Wallet },
-  { to: "/admin/finance/fixed", label: "Fixed Expense", icon: Receipt },
-  { to: "/admin/finance/extra", label: "Extra Expense", icon: CircleDollarSign },
+  { to: "/admin/expense", label: "Expense Overview", icon: PieChart },
+  { to: "/admin/expenses", label: "Expenses", icon: Receipt },
 ];
 
+// --- Memberships ke baad Employees ---
 const bottomItems = [
   { to: "/admin/members", label: "Members", icon: Users },
   { to: "/admin/checkins", label: "Check-ins", icon: CalendarCheck },
   { to: "/admin/memberships", label: "Memberships", icon: IdCard },
+  { to: "/admin/employees", label: "Employees", icon: UserCog },
 ];
 
 // --- Create Menu Items (Admin / Front Desk) ---
@@ -76,7 +86,7 @@ const Sidebar = () => {
   const inInventory = pathname.startsWith("/admin/inventory");
   const [inventoryOpen, setInventoryOpen] = useState(inInventory);
 
-  // --- Expense States (Finance + Overview) ---
+  // --- Expense States (Overview + Expenses) ---
   const inExpense =
     pathname.startsWith("/admin/expense") ||
     pathname.startsWith("/admin/finance");
@@ -130,6 +140,8 @@ const Sidebar = () => {
     <NavLink
       key={to}
       to={to}
+      // Employees ke andar ke pages (add trainer etc.) par bhi active rahe
+      end={to !== "/admin/employees"}
       className={({ isActive }) =>
         `sidebar-nav-item ${isActive ? "active" : ""}`
       }
@@ -211,7 +223,10 @@ const Sidebar = () => {
             </div>
           )}
 
-          {/* --- Cash in Hand (Inventory ke neeche) --- */}
+          {/* --- Inventory History (Inventory ke neeche) --- */}
+          {renderLink(invHistoryItem)}
+
+          {/* --- Cash in Hand (Inventory History ke neeche) --- */}
           {renderLink(cashItem)}
 
           {/* --- Credit Management (Cash in Hand ke neeche) --- */}
@@ -240,6 +255,7 @@ const Sidebar = () => {
                 <NavLink
                   key={to}
                   to={to}
+                  end
                   className={({ isActive }) =>
                     `sidebar-nav-item sidebar-sub-item ${isActive ? "active" : ""}`
                   }
@@ -251,6 +267,7 @@ const Sidebar = () => {
             </div>
           )}
 
+          {/* Members, Check-ins, Memberships, Employees */}
           {bottomItems.map(renderLink)}
 
           {/* --- Create Group (Admin / Front Desk) --- */}

@@ -2,14 +2,33 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CashInHandEntry;
 use App\Models\Vendor;
 use App\Models\VendorPayment;
 use App\Models\VendorPurchase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use RuntimeException;
 
 class CreditController extends Controller
 {
+    // GET /api/credit/remaining?source=drink|accessory
+    // Ek page (drinks ya accessories) ka vendors ko dena baqi (total - paid)
+    public function remaining(Request $request)
+    {
+        $data = $request->validate([
+            'source' => 'required|in:drink,accessory',
+        ]);
+
+        $total = (float) VendorPurchase::where('source_type', $data['source'])->sum('total_amount');
+        $paid  = (float) VendorPurchase::where('source_type', $data['source'])->sum('paid_amount');
+
+        return response()->json([
+            'remaining' => round(max($total - $paid, 0), 2),
+        ]);
+    }
+
     // GET /api/credit/vendors?q=
     // Vendors ki list + upar ke 3 cards ka data
     public function index(Request $request)
@@ -136,8 +155,70 @@ class CreditController extends Controller
         ]);
     }
 
+    // POST /api/credit/vendors  { name, phone? }
+    // Add Vendor
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'name'  => ['required', 'string', 'max:255', 'unique:vendors,name'],
+            'phone' => 'nullable|string|max:50',
+        ]);
+
+        $vendor = Vendor::create([
+            'name'  => trim($data['name']),
+            'phone' => $data['phone'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Vendor added successfully.',
+            'data'    => $vendor,
+        ], 201);
+    }
+
+    // PUT /api/credit/vendors/{vendor}  { name, phone? }
+    // Edit Vendor
+    public function update(Request $request, Vendor $vendor)
+    {
+        $data = $request->validate([
+            'name'  => ['required', 'string', 'max:255', Rule::unique('vendors', 'name')->ignore($vendor->id)],
+            'phone' => 'nullable|string|max:50',
+        ]);
+
+        $vendor->update([
+            'name'  => trim($data['name']),
+            'phone' => $data['phone'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Vendor updated successfully.',
+            'data'    => $vendor,
+        ]);
+    }
+
+    // DELETE /api/credit/vendors/{vendor}
+    // Balance baqi ho to delete nahi hoga, warna udhaar ka hisaab gayab ho jayega
+    public function destroy(Vendor $vendor)
+    {
+        $balance = round(
+            (float) $vendor->purchases()->sum('total_amount') - (float) $vendor->purchases()->sum('paid_amount'),
+            2
+        );
+
+        if ($balance > 0) {
+            return response()->json([
+                'message' => 'Cannot delete this vendor: Rs ' . number_format($balance, 2)
+                    . ' is still unpaid. Clear the balance with Pay Now first.',
+            ], 422);
+        }
+
+        $vendor->delete(); // invoices, items aur payments cascade se delete ho jate hain
+
+        return response()->json(['message' => 'Vendor deleted successfully.']);
+    }
+
     // POST /api/credit/vendors/{vendor}/pay
     // Pay Now: amount sabse purani unpaid invoice se bharna shuru hota hai (oldest first)
+    // Cash in hand: jitni payment ki, utni cash in hand se kat'ti hai. Cash kam ho to payment block.
     public function pay(Request $request, Vendor $vendor)
     {
         $data = $request->validate([
@@ -147,55 +228,66 @@ class CreditController extends Controller
 
         $amount = round((float) $data['amount'], 2);
 
-        $paid = DB::transaction(function () use ($vendor, $data, $amount) {
-            // lockForUpdate: do log ek saath pay karein to hisaab na bigray
-            $purchases = VendorPurchase::where('vendor_id', $vendor->id)
-                ->whereColumn('paid_amount', '<', 'total_amount')
-                ->orderBy('created_at')
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->get();
+        try {
+            $paid = DB::transaction(function () use ($request, $vendor, $data, $amount) {
+                // lockForUpdate: do log ek saath pay karein to hisaab na bigray
+                $purchases = VendorPurchase::where('vendor_id', $vendor->id)
+                    ->whereColumn('paid_amount', '<', 'total_amount')
+                    ->orderBy('created_at')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
 
-            $balance = round($purchases->sum(fn ($p) => $p->total_amount - $p->paid_amount), 2);
+                $balance = round($purchases->sum(fn ($p) => $p->total_amount - $p->paid_amount), 2);
 
-            if ($balance <= 0) {
-                abort(response()->json(['message' => 'Is vendor ka koi balance baqi nahi hai.'], 422));
-            }
-
-            if ($amount > $balance) {
-                abort(response()->json([
-                    'message' => 'Amount balance se zyada hai. Baqi balance: Rs ' . number_format($balance, 2),
-                ], 422));
-            }
-
-            $remaining = $amount;
-
-            foreach ($purchases as $purchase) {
-                if ($remaining <= 0) {
-                    break;
+                if ($balance <= 0) {
+                    abort(response()->json(['message' => 'This vendor has no balance left to pay.'], 422));
                 }
 
-                $due   = round($purchase->total_amount - $purchase->paid_amount, 2);
-                $apply = min($due, $remaining);
+                if ($amount > $balance) {
+                    abort(response()->json([
+                        'message' => 'Amount is more than the balance. Remaining balance: Rs ' . number_format($balance, 2) . '.',
+                    ], 422));
+                }
 
-                $purchase->paid_amount = round($purchase->paid_amount + $apply, 2);
-                $purchase->save();
+                // Cash in hand se paise kaato (kam hon to RuntimeException -> payment rollback)
+                CashInHandEntry::spend(
+                    $amount,
+                    'Vendor payment: ' . $vendor->name . (filled($data['note'] ?? null) ? ' - ' . $data['note'] : ''),
+                    $request->user()
+                );
 
-                VendorPayment::create([
-                    'vendor_id'   => $vendor->id,
-                    'purchase_id' => $purchase->id,
-                    'amount'      => $apply,
-                    'note'        => $data['note'] ?? null,
-                ]);
+                $remaining = $amount;
 
-                $remaining = round($remaining - $apply, 2);
-            }
+                foreach ($purchases as $purchase) {
+                    if ($remaining <= 0) {
+                        break;
+                    }
 
-            return $amount;
-        });
+                    $due   = round($purchase->total_amount - $purchase->paid_amount, 2);
+                    $apply = min($due, $remaining);
+
+                    $purchase->paid_amount = round($purchase->paid_amount + $apply, 2);
+                    $purchase->save();
+
+                    VendorPayment::create([
+                        'vendor_id'   => $vendor->id,
+                        'purchase_id' => $purchase->id,
+                        'amount'      => $apply,
+                        'note'        => $data['note'] ?? null,
+                    ]);
+
+                    $remaining = round($remaining - $apply, 2);
+                }
+
+                return $amount;
+            });
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
-            'message' => 'Payment save ho gayi: Rs ' . number_format($paid, 2),
+            'message' => 'Payment saved: Rs ' . number_format($paid, 2),
         ]);
     }
 }
