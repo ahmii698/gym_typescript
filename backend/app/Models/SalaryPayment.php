@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 class SalaryPayment extends Model
 {
+    use BelongsToCompany;
+
     protected $table = 'salary_payments';
 
     protected $fillable = [

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Dumbbell, Headset, Briefcase } from "lucide-react";
 import Trainers from "../../frontdesk/pages/trainers";
+import RegisterFrontdesk from "../../auth/frontdesk/frontdeskregister";
+import Staff from "./staff"; // NEW: staff.tsx lives in the same folder as this file
 import "./employees.css";
 
 type Tab = "trainers" | "frontdesk" | "staff";
@@ -36,19 +38,10 @@ const Employees = () => {
 
       {active === "trainers" && <Trainers />}
 
-      {active === "frontdesk" && (
-        <div className="employees-placeholder">
-          <h2 className="employees-title">Front Desk</h2>
-          <p className="employees-subtitle">Coming soon...</p>
-        </div>
-      )}
+      {active === "frontdesk" && <RegisterFrontdesk />}
 
-      {active === "staff" && (
-        <div className="employees-placeholder">
-          <h2 className="employees-title">Staff</h2>
-          <p className="employees-subtitle">Coming soon...</p>
-        </div>
-      )}
+      {/* NEW: the Staff tab now renders the real Staff page */}
+      {active === "staff" && <Staff />}
     </div>
   );
 };

@@ -76,6 +76,15 @@ const Login = () => {
     } catch (err: any) {
       console.error(err);
 
+      // Company blocked: koi token save nahi hoga, seedha payment page par
+      if (err.response?.status === 403 && err.response?.data?.code === "company_blocked") {
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        localStorage.removeItem("name");
+        navigate("/payment-required", { replace: true });
+        return;
+      }
+
       if (err.response?.status === 429) {
         setServerError("Too many login attempts. Please wait a minute and try again.");
       } else {

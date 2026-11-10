@@ -1,0 +1,72 @@
+.rem-page { padding: 8px 4px 40px; color: #e5e7eb; }
+
+.rem-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.rem-title { font-size: 28px; font-weight: 800; margin: 0; color: #fff; }
+.rem-subtitle { margin: 0; font-size: 13px; color: #9ca3af; max-width: 620px; text-align: right; }
+
+.rem-alert { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: #fca5a5; padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; }
+.rem-alert-btn { background: #ef4444; color: #fff; border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; font-weight: 600; }
+
+/* summary cards */
+.rem-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.rem-card { display: flex; align-items: center; gap: 14px; background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 18px; }
+.rem-card > div:last-child { display: flex; flex-direction: column; gap: 4px; }
+.rem-card-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #9ca3af; font-weight: 600; }
+.rem-card-value { font-size: 26px; font-weight: 800; color: #fff; }
+.rem-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.rem-icon-amber { background: rgba(251,191,36,.15); color: #fbbf24; }
+.rem-icon-orange { background: rgba(249,115,22,.15); color: #fb923c; }
+.rem-icon-red { background: rgba(239,68,68,.15); color: #f87171; }
+.rem-icon-green { background: rgba(34,197,94,.15); color: #4ade80; }
+
+.rem-green { color: #4ade80 !important; }
+.rem-red { color: #f87171 !important; }
+.rem-amber { color: #fbbf24 !important; }
+.rem-bold { font-weight: 700; }
+.rem-muted { color: #6b7280; }
+
+/* panel */
+.rem-panel { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 20px; }
+.rem-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.rem-panel-title { margin: 0; font-size: 17px; font-weight: 700; color: #fff; }
+.rem-panel-sub { margin: 2px 0 0; font-size: 12px; color: #6b7280; }
+
+.rem-search-wrap { display: flex; align-items: center; gap: 8px; background: #0b1120; border: 1px solid #1f2937; border-radius: 10px; padding: 0 12px; color: #6b7280; min-width: 260px; }
+.rem-search { background: transparent; border: 0; outline: 0; color: #e5e7eb; padding: 10px 0; width: 100%; font-size: 14px; }
+
+/* filter chips */
+.rem-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.rem-chip { background: #0b1120; border: 1px solid #1f2937; color: #9ca3af; border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s; }
+.rem-chip:hover { border-color: #fbbf24; color: #fbbf24; }
+.rem-chip-active { background: #fbbf24; border-color: #fbbf24; color: #111827; }
+.rem-chip-active:hover { color: #111827; }
+
+/* table */
+.rem-table-wrap { overflow-x: auto; }
+.rem-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rem-table th { text-align: left; padding: 12px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #8b9dc3; background: #0b1120; white-space: nowrap; }
+.rem-table td { padding: 14px 10px; border-bottom: 1px solid #1f2937; white-space: nowrap; }
+.rem-table tbody tr:hover { background: rgba(255,255,255,.02); }
+.rem-name { font-weight: 700; color: #fff; }
+.rem-phone { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.rem-empty { text-align: center; padding: 30px 0 !important; color: #6b7280; }
+
+/* badges */
+.rem-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.rem-badge-red { background: rgba(239,68,68,.18); color: #f87171; }
+.rem-badge-orange { background: rgba(249,115,22,.18); color: #fb923c; }
+.rem-badge-amber { background: rgba(251,191,36,.18); color: #fbbf24; }
+.rem-badge-green { background: rgba(34,197,94,.18); color: #4ade80; }
+.rem-badge-gray { background: rgba(156,163,175,.15); color: #9ca3af; }
+
+/* whatsapp button */
+.rem-wa-btn { display: inline-flex; align-items: center; gap: 6px; background: #22c55e; color: #06220f; text-decoration: none; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 8px; }
+.rem-wa-btn:hover { background: #4ade80; }
+
+@media (max-width: 1100px) {
+  .rem-cards { grid-template-columns: repeat(2, 1fr); }
+  .rem-subtitle { text-align: left; }
+}
+@media (max-width: 600px) {
+  .rem-cards { grid-template-columns: 1fr; }
+}

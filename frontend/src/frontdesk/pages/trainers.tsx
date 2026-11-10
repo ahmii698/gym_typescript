@@ -19,6 +19,7 @@ export interface Trainer {
   cnic: string;
   specialization: string;
   experienceYears: number | null;
+  baseSalary: number | null;
 }
 
 interface ApiTrainer {
@@ -31,6 +32,7 @@ interface ApiTrainer {
   role: string | null;
   status: string | null;
   experience_years: number | null;
+  base_salary: number | string | null;
   is_active: number | boolean;
 }
 
@@ -48,6 +50,21 @@ const SPECIALIZATIONS = [
 ];
 
 const DISPLAY_FALLBACK = "—";
+
+/* ------------------------------------------------------------------ */
+/* NEW: Phone / CNIC input formatters                                  */
+/* ------------------------------------------------------------------ */
+
+// Phone: only digits, max 11
+const formatPhone = (value: string): string => value.replace(/\D/g, "").slice(0, 11);
+
+// CNIC: only digits, max 13, auto format as 12345-1234567-1
+const formatCnic = (value: string): string => {
+  const d = value.replace(/\D/g, "").slice(0, 13);
+  if (d.length <= 5) return d;
+  if (d.length <= 12) return `${d.slice(0, 5)}-${d.slice(5)}`;
+  return `${d.slice(0, 5)}-${d.slice(5, 12)}-${d.slice(12)}`;
+};
 
 /* ------------------------------------------------------------------ */
 /* API helpers                                                         */
@@ -71,6 +88,7 @@ const mapTrainer = (t: ApiTrainer): Trainer => ({
   cnic: t.cnic ?? "",
   specialization: t.specialization ?? "",
   experienceYears: t.experience_years ?? null,
+  baseSalary: t.base_salary != null ? Number(t.base_salary) : null,
 });
 
 // Laravel field -> form field, for mapping 422 validation errors back
@@ -81,6 +99,7 @@ const apiFieldToForm: Record<string, keyof FormState> = {
   email: "email",
   specialization: "specialization",
   experience_years: "experienceYears",
+  base_salary: "baseSalary",
 };
 
 class ApiValidationError extends Error {
@@ -151,6 +170,37 @@ const excelBtnStyle: React.CSSProperties = {
 const pdfBtnStyle: React.CSSProperties = {
   ...baseActionBtnStyle,
   backgroundColor: "#ef4444",
+};
+
+/* ------------------------------------------------------------------ */
+/* Inline styles for the salary field / salary line                    */
+/* ------------------------------------------------------------------ */
+
+const salaryInputWrapStyle: React.CSSProperties = {
+  position: "relative",
+  width: "100%",
+};
+
+const salaryPrefixStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 14,
+  top: "50%",
+  transform: "translateY(-50%)",
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#8b8b95",
+  pointerEvents: "none",
+  userSelect: "none",
+};
+
+const salaryInputStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  paddingLeft: 52,
+};
+
+const salaryTextStyle: React.CSSProperties = {
+  fontWeight: 600,
 };
 
 /* ------------------------------------------------------------------ */
@@ -226,6 +276,13 @@ const Icon = {
       <path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5" strokeLinejoin="round" />
     </svg>
   ),
+  Wallet: () => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 7a2 2 0 0 1 2-2h11v3" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="3" y="7" width="18" height="13" rx="2.5" />
+      <circle cx="16.5" cy="13.5" r="1.2" fill="currentColor" />
+    </svg>
+  ),
   Eye: () => (
     <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z" strokeLinejoin="round" />
@@ -275,6 +332,8 @@ const statusClass = (s: TrainerStatus) =>
 
 const show = (v: string | null | undefined) => (v && v.trim() ? v : DISPLAY_FALLBACK);
 const showYears = (v: number | null) => (v != null ? `${v} Years` : DISPLAY_FALLBACK);
+const showSalary = (v: number | null) =>
+  v != null ? `PKR ${v.toLocaleString("en-US")}` : DISPLAY_FALLBACK;
 
 /* ------------------------------------------------------------------ */
 /* Add / Edit modal                                                    */
@@ -289,6 +348,7 @@ interface FormState {
   cnic: string;
   specialization: string;
   experienceYears: string;
+  baseSalary: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -300,6 +360,7 @@ const EMPTY_FORM: FormState = {
   cnic: "",
   specialization: SPECIALIZATIONS[0],
   experienceYears: "",
+  baseSalary: "",
 };
 
 interface TrainerModalProps {
@@ -324,11 +385,12 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
         name: editing.name,
         role: editing.role,
         status: editing.status,
-        phone: editing.phone,
+        phone: formatPhone(editing.phone), // CHANGED
         email: editing.email,
-        cnic: editing.cnic,
+        cnic: formatCnic(editing.cnic), // CHANGED
         specialization: editing.specialization || SPECIALIZATIONS[0],
         experienceYears: editing.experienceYears != null ? String(editing.experienceYears) : "",
+        baseSalary: editing.baseSalary != null ? String(editing.baseSalary) : "",
       });
     } else {
       setForm(EMPTY_FORM);
@@ -353,9 +415,10 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
     const next: Partial<Record<keyof FormState, string>> = {};
     if (!form.name.trim()) next.name = "Please enter the trainer's name.";
 
+    // CHANGED: phone must be exactly 11 digits
     if (form.phone.trim()) {
       const phoneDigits = form.phone.replace(/\D/g, "");
-      if (phoneDigits.length < 11) next.phone = "Enter an 11-digit phone number.";
+      if (phoneDigits.length !== 11) next.phone = "Phone number must be exactly 11 digits.";
     }
 
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
@@ -363,12 +426,17 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
 
     if (form.cnic.trim()) {
       const cnicDigits = form.cnic.replace(/\D/g, "");
-      if (cnicDigits.length !== 13) next.cnic = "CNIC must be 13 digits.";
+      if (cnicDigits.length !== 13) next.cnic = "CNIC must be exactly 13 digits.";
     }
 
     if (form.experienceYears.trim() !== "") {
       const exp = Number(form.experienceYears);
       if (Number.isNaN(exp) || exp < 0) next.experienceYears = "Enter experience in years.";
+    }
+
+    if (form.baseSalary.trim() !== "") {
+      const sal = Number(form.baseSalary);
+      if (Number.isNaN(sal) || sal < 0) next.baseSalary = "Enter a valid salary amount.";
     }
 
     setErrors(next);
@@ -392,6 +460,7 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
           cnic: form.cnic.trim(),
           specialization: form.specialization.trim(),
           experienceYears: form.experienceYears.trim() === "" ? null : Number(form.experienceYears),
+          baseSalary: form.baseSalary.trim() === "" ? null : Number(form.baseSalary),
         },
         editing?.id
       );
@@ -445,24 +514,30 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
           <div className="trn-field-row">
             <div className="trn-field">
               <label htmlFor="trn-phone">Phone</label>
+              {/* CHANGED: digits only, max 11 */}
               <input
                 id="trn-phone"
                 type="tel"
-                placeholder="0300-1234567"
+                inputMode="numeric"
+                maxLength={11}
+                placeholder="03001234567"
                 value={form.phone}
-                onChange={(e) => update("phone", e.target.value)}
+                onChange={(e) => update("phone", formatPhone(e.target.value))}
               />
               {errors.phone && <span className="trn-error">{errors.phone}</span>}
             </div>
 
             <div className="trn-field">
               <label htmlFor="trn-cnic">CNIC</label>
+              {/* CHANGED: digits only, max 13, auto dashes (15 chars with dashes) */}
               <input
                 id="trn-cnic"
                 type="text"
+                inputMode="numeric"
+                maxLength={15}
                 placeholder="42101-1234567-1"
                 value={form.cnic}
-                onChange={(e) => update("cnic", e.target.value)}
+                onChange={(e) => update("cnic", formatCnic(e.target.value))}
               />
               {errors.cnic && <span className="trn-error">{errors.cnic}</span>}
             </div>
@@ -531,6 +606,24 @@ const TrainerModal: React.FC<TrainerModalProps> = ({ open, editing, onClose, onS
             </div>
           </div>
 
+          <div className="trn-field">
+            <label htmlFor="trn-salary">Monthly salary</label>
+            <div style={salaryInputWrapStyle}>
+              <span style={salaryPrefixStyle}>PKR</span>
+              <input
+                id="trn-salary"
+                type="number"
+                min="0"
+                step="any"
+                placeholder="e.g. 50000"
+                value={form.baseSalary}
+                onChange={(e) => update("baseSalary", e.target.value)}
+                style={salaryInputStyle}
+              />
+            </div>
+            {errors.baseSalary && <span className="trn-error">{errors.baseSalary}</span>}
+          </div>
+
           <footer className="trn-modal__foot">
             <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
               Cancel
@@ -567,6 +660,7 @@ const ViewModal: React.FC<{ trainer: Trainer | null; onClose: () => void }> = ({
     ["CNIC", show(trainer.cnic)],
     ["Specialization", show(trainer.specialization)],
     ["Experience", showYears(trainer.experienceYears)],
+    ["Salary", showSalary(trainer.baseSalary)],
   ];
 
   return (
@@ -574,7 +668,6 @@ const ViewModal: React.FC<{ trainer: Trainer | null; onClose: () => void }> = ({
       <div className="trn-modal trn-modal--view" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <header className="trn-modal__head">
           <div className="trn-view__id">
-            {/* Circle/initials removed */}
             <div>
               <h2>{trainer.name || DISPLAY_FALLBACK}</h2>
               <p>{show(trainer.role)}</p>
@@ -717,6 +810,7 @@ const Trainers: React.FC = () => {
       "CNIC",
       "Specialization",
       "Experience (Years)",
+      "Salary (PKR)",
     ];
     const rows = filtered.map((t) => [
       t.name,
@@ -727,9 +821,9 @@ const Trainers: React.FC = () => {
       t.cnic || "-",
       t.specialization || "-",
       t.experienceYears ?? "-",
+      t.baseSalary ?? "-",
     ]);
     const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
-    // BOM so Excel reads UTF-8 correctly
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -754,7 +848,7 @@ const Trainers: React.FC = () => {
     const bodyRows = filtered
       .map(
         (t, i) =>
-          `<tr><td>${i + 1}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.role)}</td><td>${escapeHtml(t.status)}</td><td>${escapeHtml(t.phone || "-")}</td><td>${escapeHtml(t.email || "-")}</td><td>${escapeHtml(t.cnic || "-")}</td><td>${escapeHtml(t.specialization || "-")}</td><td>${escapeHtml(t.experienceYears ?? "-")}</td></tr>`
+          `<tr><td>${i + 1}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.role)}</td><td>${escapeHtml(t.status)}</td><td>${escapeHtml(t.phone || "-")}</td><td>${escapeHtml(t.email || "-")}</td><td>${escapeHtml(t.cnic || "-")}</td><td>${escapeHtml(t.specialization || "-")}</td><td>${escapeHtml(t.experienceYears ?? "-")}</td><td>${escapeHtml(t.baseSalary != null ? t.baseSalary.toLocaleString("en-US") : "-")}</td></tr>`
       )
       .join("");
 
@@ -789,15 +883,14 @@ const Trainers: React.FC = () => {
 
   <table>
     <thead>
-      <tr><th>#</th><th>Name</th><th>Role</th><th>Status</th><th>Phone</th><th>Email</th><th>CNIC</th><th>Specialization</th><th>Experience (Years)</th></tr>
+      <tr><th>#</th><th>Name</th><th>Role</th><th>Status</th><th>Phone</th><th>Email</th><th>CNIC</th><th>Specialization</th><th>Experience (Years)</th><th>Salary (PKR)</th></tr>
     </thead>
-    <tbody>${bodyRows || '<tr><td colspan="9">No trainers found.</td></tr>'}</tbody>
+    <tbody>${bodyRows || '<tr><td colspan="10">No trainers found.</td></tr>'}</tbody>
   </table>
 </body>
 </html>`);
     win.document.close();
     win.focus();
-    // Give the new window a moment to render before opening the print dialog
     setTimeout(() => {
       win.print();
     }, 300);
@@ -822,6 +915,7 @@ const Trainers: React.FC = () => {
     status: data.status,
     specialization: data.specialization || null,
     experience_years: data.experienceYears,
+    base_salary: data.baseSalary,
   });
 
   const handleSave = async (data: Omit<Trainer, "id">, id?: string) => {
@@ -1008,7 +1102,6 @@ const Trainers: React.FC = () => {
           {visible.map((t) => (
             <article key={t.id} className="trn-card">
               <div className="trn-card__top">
-                {/* Circle/initials removed from here */}
                 <div className="trn-card__id">
                   <h3>{t.name || DISPLAY_FALLBACK}</h3>
                   <p>{show(t.role)}</p>
@@ -1072,6 +1165,10 @@ const Trainers: React.FC = () => {
                 <li>
                   <Icon.Award />
                   <span>Experience: {showYears(t.experienceYears)}</span>
+                </li>
+                <li>
+                  <Icon.Wallet />
+                  <span style={salaryTextStyle}>Salary: {showSalary(t.baseSalary)}</span>
                 </li>
               </ul>
 

@@ -11,6 +11,63 @@ use Illuminate\Support\Facades\Validator;
 
 class SalaryController extends Controller
 {
+    /** Logged-in user's company id (raw DB::table queries need this manually). */
+    private function companyId(): int
+    {
+        return (int) request()->user()->company_id;
+    }
+
+    /**
+     * Does this staff member exist inside the logged-in user's company?
+     * Stops payments / salary edits for another company's staff ID.
+     */
+    private function staffExists(string $type, $id): bool
+    {
+        $cid = $this->companyId();
+
+        if ($type === 'trainer') {
+            // Trainer is Eloquent, the company scope is applied automatically
+            return Trainer::where('id', $id)->exists();
+        }
+
+        if ($type === 'staff') {
+            return DB::table('staff')
+                ->where('company_id', $cid)
+                ->where('id', $id)
+                ->exists();
+        }
+
+        return DB::table('users')
+            ->where('company_id', $cid)
+            ->where('id', $id)
+            ->where('role', 'frontdesk')
+            ->exists();
+    }
+
+    /**
+     * GET /salary-frontdesk
+     * Salary page ke liye front desk users (users table, role = frontdesk)
+     */
+    public function frontdesk()
+    {
+        try {
+            $users = DB::table('users')
+                ->where('company_id', $this->companyId())   // <-- NAYA
+                ->where('role', 'frontdesk')
+                ->select('id', 'name', 'email', 'phone', 'role', 'base_salary')
+                ->orderBy('id')
+                ->get();
+
+            return response()->json(['status' => true, 'data' => $users], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Front desk load nahi ho saka.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     /**
      * GET /salary-payments
      * Saare records (settled + unsettled) return karta hai.
@@ -62,7 +119,7 @@ class SalaryController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'staff_id'   => 'required|integer',
-            'staff_type' => 'required|in:trainer,frontdesk',
+            'staff_type' => 'required|in:trainer,frontdesk,staff',
             'amount'     => 'required|numeric|min:0',
             'commission' => 'nullable|numeric|min:0',
             'month'      => 'required|integer|min:1|max:12',
@@ -80,11 +137,28 @@ class SalaryController extends Controller
         }
 
         try {
+            // <-- NAYA: staff member isi company ka hona chahiye
+            if (!$this->staffExists($request->staff_type, $request->staff_id)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Staff member nahi mila.',
+                ], 404);
+            }
+
+            $cid = $this->companyId();
+
             if ($request->staff_type === 'trainer') {
                 $baseSalary = (float) Trainer::where('id', $request->staff_id)
                                              ->value('base_salary');
+            } elseif ($request->staff_type === 'staff') {
+                // Staff table mein salary ka column "salary" hai
+                $baseSalary = (float) DB::table('staff')
+                                        ->where('company_id', $cid)   // <-- NAYA
+                                        ->where('id', $request->staff_id)
+                                        ->value('salary');
             } else {
                 $baseSalary = (float) DB::table('users')
+                                        ->where('company_id', $cid)   // <-- NAYA
                                         ->where('id', $request->staff_id)
                                         ->where('role', 'frontdesk')
                                         ->value('base_salary');
@@ -107,6 +181,7 @@ class SalaryController extends Controller
                 ], 422);
             }
 
+            // company_id trait ka creating hook khud set karta hai
             $payment = SalaryPayment::create([
                 'staff_id'   => $request->staff_id,
                 'staff_type' => $request->staff_type,
@@ -231,14 +306,21 @@ class SalaryController extends Controller
         try {
             $month = (int) $request->input('month', now()->month);
             $year = (int) $request->input('year', now()->year);
+            $cid = $this->companyId();
 
             $trainerBudget = Trainer::where('is_active', true)->sum('base_salary');
 
             $frontdeskBudget = DB::table('users')
+                ->where('company_id', $cid)   // <-- NAYA
                 ->where('role', 'frontdesk')
                 ->sum('base_salary');
 
-            $totalBudget = $trainerBudget + $frontdeskBudget;
+            // Staff table ki salary bhi budget mein count hogi
+            $staffBudget = DB::table('staff')
+                ->where('company_id', $cid)   // <-- NAYA
+                ->sum('salary');
+
+            $totalBudget = $trainerBudget + $frontdeskBudget + $staffBudget;
 
             $paid = SalaryPayment::where('month', $month)
                                  ->where('year', $year)
@@ -261,6 +343,7 @@ class SalaryController extends Controller
                     'total_budget' => (float) $totalBudget,
                     'trainer_budget' => (float) $trainerBudget,
                     'frontdesk_budget' => (float) $frontdeskBudget,
+                    'staff_budget' => (float) $staffBudget,
                     'paid_this_month' => (float) $paid,
                     'commission_this_month' => (float) $commission,
                     'total_paid_this_month' => (float) $paid + (float) $commission,
@@ -287,6 +370,7 @@ class SalaryController extends Controller
     {
         try {
             $mode = $request->input('mode', 'month');
+            $cid = $this->companyId();
 
             if ($mode === 'date') {
                 $date   = Carbon::parse($request->input('date', now()->toDateString()));
@@ -306,11 +390,20 @@ class SalaryController extends Controller
             };
 
             $trainerQuery = Trainer::where($existedBy);
-            $frontQuery   = DB::table('users')->where('role', 'frontdesk')->where($existedBy);
+            $frontQuery   = DB::table('users')
+                ->where('company_id', $cid)   // <-- NAYA
+                ->where('role', 'frontdesk')
+                ->where($existedBy);
+            $staffQuery   = DB::table('staff')
+                ->where('company_id', $cid)   // <-- NAYA
+                ->where($existedBy);
 
             $trainerCount = (clone $trainerQuery)->count();
             $frontCount   = (clone $frontQuery)->count();
-            $budget       = (float) $trainerQuery->sum('base_salary') + (float) $frontQuery->sum('base_salary');
+            $staffCount   = (clone $staffQuery)->count();
+            $budget       = (float) $trainerQuery->sum('base_salary')
+                          + (float) $frontQuery->sum('base_salary')
+                          + (float) $staffQuery->sum('salary');
 
             // Paid: us month ki payments (date mode mein sirf us date tak ki)
             $paidQuery = SalaryPayment::where('month', $month)
@@ -327,9 +420,10 @@ class SalaryController extends Controller
             return response()->json([
                 'status' => true,
                 'data' => [
-                    'total_staff' => $trainerCount + $frontCount,
+                    'total_staff' => $trainerCount + $frontCount + $staffCount,
                     'trainers'    => $trainerCount,
                     'frontdesk'   => $frontCount,
+                    'staff'       => $staffCount,
                     'budget'      => $budget,
                     'paid'        => $paid,
                     'commission'  => $commission,
@@ -352,7 +446,7 @@ class SalaryController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'staff_id'    => 'required|integer',
-            'staff_type'  => 'required|in:trainer,frontdesk',
+            'staff_type'  => 'required|in:trainer,frontdesk,staff',
             'base_salary' => 'required|numeric|min:0',
         ]);
 
@@ -364,6 +458,8 @@ class SalaryController extends Controller
         }
 
         try {
+            $cid = $this->companyId();
+
             if ($request->staff_type === 'trainer') {
                 $staff = Trainer::find($request->staff_id);
 
@@ -376,8 +472,26 @@ class SalaryController extends Controller
 
                 $staff->base_salary = $request->base_salary;
                 $staff->save();
+            } elseif ($request->staff_type === 'staff') {
+                $exists = DB::table('staff')
+                    ->where('company_id', $cid)   // <-- NAYA
+                    ->where('id', $request->staff_id)
+                    ->exists();
+
+                if (!$exists) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Staff member nahi mila.',
+                    ], 404);
+                }
+
+                DB::table('staff')
+                    ->where('company_id', $cid)   // <-- NAYA
+                    ->where('id', $request->staff_id)
+                    ->update(['salary' => $request->base_salary]);
             } else {
                 $updated = DB::table('users')
+                    ->where('company_id', $cid)   // <-- NAYA
                     ->where('id', $request->staff_id)
                     ->where('role', 'frontdesk')
                     ->update(['base_salary' => $request->base_salary]);
@@ -412,7 +526,7 @@ class SalaryController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'staff_id'   => 'required|integer',
-            'staff_type' => 'required|in:trainer,frontdesk',
+            'staff_type' => 'required|in:trainer,frontdesk,staff',
         ]);
 
         if ($validator->fails()) {

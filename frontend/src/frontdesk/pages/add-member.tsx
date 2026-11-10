@@ -22,6 +22,7 @@ interface FormState {
   endDate: string;
   notes: string;
   feeAmount: string;
+  discount: string; // <-- NAYA
   paymentStatus: string;
   installmentMonths: string;
 }
@@ -36,6 +37,7 @@ interface PackageItem {
 interface TrainerItem {
   id: number;
   name: string;
+  members_count?: number;
   phone?: string | null;
   cnic?: string | null;
   email?: string | null;
@@ -65,6 +67,7 @@ const initialState: FormState = {
   endDate: "",
   notes: "",
   feeAmount: "0",
+  discount: "0", // <-- NAYA
   paymentStatus: "",
   installmentMonths: "1",
 };
@@ -99,11 +102,13 @@ const apiFieldToForm: Record<string, keyof FormState> = {
   member_type: "memberType",
   trainer_id: "trainer",
   fee_amount: "feeAmount",
+  discount: "discount", // <-- NAYA
   payment_status: "paymentStatus",
   installment_months: "installmentMonths",
 };
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const PHONE_LENGTH = 11;
 
 const authHeaders = (): Record<string, string> => {
   const token = localStorage.getItem("token");
@@ -118,6 +123,11 @@ const formatCnic = (value: string): string => {
   if (digits.length <= 5) return digits;
   if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
   return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+};
+
+// sirf digits rakho aur 11 se zyada na hone do
+const formatPhone = (value: string): string => {
+  return value.replace(/\D/g, "").slice(0, PHONE_LENGTH);
 };
 
 const formatPrice = (n: number | string): string => {
@@ -156,23 +166,33 @@ function AddMember() {
 
   const needsTrainer = form.memberType === "normal-trainer" || form.memberType === "package-trainer";
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [pRes, tRes] = await Promise.all([
-          fetch(`${API_URL}/packages`, { headers: authHeaders() }),
-          fetch(`${API_URL}/trainers`, { headers: authHeaders() }),
-        ]);
-        if (pRes.ok) setPackages(await pRes.json());
-        if (tRes.ok) setTrainers(await tRes.json());
-        if (pRes.status === 401 || tRes.status === 401) {
-          showAlert("error", "Session expire ho gaya hai, dobara login karo.");
-        }
-      } catch {
-        showAlert("error", "Packages aur trainers load nahi ho sake. Backend chal raha hai?");
+  // Jo trainer select kiya hai uska data (members_count dikhane ke liye)
+  const selectedTrainer = trainers.find((t) => String(t.id) === form.trainer);
+  const selectedCount = selectedTrainer?.members_count ?? 0;
+
+  // <-- NAYA: Final fee = Fee Amount - Discount (5000 - 1000 = 4000)
+  const finalFee = Math.max((Number(form.feeAmount) || 0) - (Number(form.discount) || 0), 0);
+
+  // Packages + trainers load karna (member add hone ke baad dobara bhi call hota hai)
+  const loadLists = async () => {
+    try {
+      const [pRes, tRes] = await Promise.all([
+        fetch(`${API_URL}/packages`, { headers: authHeaders() }),
+        fetch(`${API_URL}/trainers`, { headers: authHeaders() }),
+      ]);
+      if (pRes.ok) setPackages(await pRes.json());
+      if (tRes.ok) setTrainers(await tRes.json());
+      if (pRes.status === 401 || tRes.status === 401) {
+        showAlert("error", "Session expire ho gaya hai, dobara login karo.");
       }
-    };
-    load();
+    } catch {
+      showAlert("error", "Packages aur trainers load nahi ho sake. Backend chal raha hai?");
+    }
+  };
+
+  useEffect(() => {
+    loadLists();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Package + Start Date select hote hi End Date automatic set ho jaye
@@ -201,6 +221,11 @@ function AddMember() {
 
   const handleCnic = (e: ChangeEvent<HTMLInputElement>) => {
     updateField("cnic", formatCnic(e.target.value));
+  };
+
+  // phone number sirf digits, max 11
+  const handlePhone = (e: ChangeEvent<HTMLInputElement>) => {
+    updateField("contactNumber", formatPhone(e.target.value));
   };
 
   const handleFile = (field: "cnicFront" | "cnicBack") => (e: ChangeEvent<HTMLInputElement>) => {
@@ -235,11 +260,25 @@ function AddMember() {
     // Client-side checks (CNIC images ab optional hain)
     const clientErrors: FormErrors = {};
     if (needsTrainer && !form.trainer) clientErrors.trainer = "Is member type ke liye trainer select karo.";
+
+    // phone number poore 11 digits ka hona chahiye
+    if (form.contactNumber.length !== PHONE_LENGTH) {
+      clientErrors.contactNumber = `Contact number poore ${PHONE_LENGTH} digits ka hona chahiye.`;
+    }
+
     if (!form.installmentMonths || Number(form.installmentMonths) < 1) {
       clientErrors.installmentMonths = "Installment months likhna zaroori hai (kam az kam 1).";
     }
     if (Number(form.installmentMonths) > 60) {
       clientErrors.installmentMonths = "Installment months 60 se zyada nahi ho sakte.";
+    }
+
+    // <-- NAYA: discount checks
+    if (Number(form.discount) < 0) {
+      clientErrors.discount = "Discount negative nahi ho sakta.";
+    }
+    if (Number(form.discount) > Number(form.feeAmount)) {
+      clientErrors.discount = "Discount fee amount se zyada nahi ho sakta.";
     }
 
     if (Object.keys(clientErrors).length > 0) {
@@ -263,7 +302,9 @@ function AddMember() {
     if (form.endDate) fd.append("end_date", form.endDate);
     if (form.notes.trim()) fd.append("notes", form.notes.trim());
     if (needsTrainer && form.trainer) fd.append("trainer_id", form.trainer);
-    fd.append("fee_amount", form.feeAmount || "0");
+    // <-- NAYA: backend ko discount ke baad wali final fee jayegi, discount alag
+    fd.append("fee_amount", String(finalFee));
+    fd.append("discount", form.discount || "0");
     if (form.paymentStatus) fd.append("payment_status", form.paymentStatus);
     fd.append("installment_months", form.installmentMonths || "1");
 
@@ -301,6 +342,7 @@ function AddMember() {
       setForm(initialState);
       setErrors({});
       setFormKey((k) => k + 1);
+      loadLists();
     } catch {
       showAlert("error", "Server se connect nahi ho saka. Backend chal raha hai?");
     } finally {
@@ -308,12 +350,11 @@ function AddMember() {
     }
   };
 
-  // Per month fee preview
+  // Per month fee preview (<-- BADLA HUA: ab finalFee par based hai)
   const perMonthFee = (() => {
-    const total = Number(form.feeAmount) || 0;
     const months = Number(form.installmentMonths) || 1;
-    if (total <= 0 || months <= 0) return 0;
-    return Math.floor(total / months);
+    if (finalFee <= 0 || months <= 0) return 0;
+    return Math.floor(finalFee / months);
   })();
 
   return (
@@ -385,9 +426,14 @@ function AddMember() {
                   <PhoneIcon />
                   <input
                     type="tel"
-                    placeholder="03XX-XXXXXXX"
+                    inputMode="numeric"
+                    placeholder="03XXXXXXXXX"
                     value={form.contactNumber}
-                    onChange={handleInput("contactNumber")}
+                    onChange={handlePhone}
+                    maxLength={PHONE_LENGTH}
+                    minLength={PHONE_LENGTH}
+                    pattern="[0-9]{11}"
+                    title="Phone number 11 digits ka hona chahiye"
                     required
                   />
                 </div>
@@ -483,11 +529,18 @@ function AddMember() {
                 <option value="">Choose Trainer</option>
                 {trainers.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name}
+                    {t.name} ({t.members_count ?? 0} {(t.members_count ?? 0) === 1 ? "member" : "members"})
                   </option>
                 ))}
               </select>
             </Field>
+
+            {selectedTrainer && (
+              <p className="am-trainer-count">
+                <strong>{selectedTrainer.name}</strong> abhi <strong>{selectedCount}</strong>{" "}
+                {selectedCount === 1 ? "banda" : "bande"} train kar raha hai
+              </p>
+            )}
           </section>
 
           <section className="am-card">
@@ -548,6 +601,24 @@ function AddMember() {
               </Field>
             </div>
 
+            {/* <-- NAYA: Discount + Final Fee */}
+            <div className="am-row">
+              <Field label="Discount" optional error={errors.discount}>
+                <div className="am-input-icon am-prefix">
+                  <span className="am-prefix-text">PKR</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.discount}
+                    onChange={handleInput("discount")}
+                  />
+                </div>
+              </Field>
+              <Field label="Final Fee (After Discount)">
+                <div className="am-preview-fee">{formatPrice(finalFee)}</div>
+              </Field>
+            </div>
+
             {/* Installment Months — TYPE karein */}
             <div className="am-row">
               <Field label="Installment Months" required error={errors.installmentMonths}>
@@ -561,7 +632,7 @@ function AddMember() {
                 />
               </Field>
 
-              {Number(form.feeAmount) > 0 && Number(form.installmentMonths) > 0 && (
+              {finalFee > 0 && Number(form.installmentMonths) > 0 && (
                 <Field label="Per Month Fee">
                   <div className="am-preview-fee">
                     {formatPrice(perMonthFee)}

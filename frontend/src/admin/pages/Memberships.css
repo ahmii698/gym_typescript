@@ -1137,3 +1137,63 @@
     flex: 1;
   }
 }
+
+
+
+/* ---------- Trainer change / remove (modal) ---------- */
+.ms-trainer-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ms-trainer-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid #3b82f6;
+  background: transparent;
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ms-trainer-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.ms-trainer-btn.danger {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.ms-trainer-btn.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.ms-trainer-btn.save {
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+.ms-trainer-btn.save:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.ms-trainer-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ms-trainer-select {
+  min-width: 150px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #2a2a2a;
+  background: #0f0f0f;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+}

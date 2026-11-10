@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Member extends Model
 {
+    use BelongsToCompany;
+
     public const TYPES = ['normal_user', 'normal_trainer', 'package_trainer', 'package_only'];
     public const TRAINER_TYPES = ['normal_trainer', 'package_trainer'];
 
@@ -24,7 +27,8 @@ class Member extends Model
         'date_of_birth',
         'gender',
         'member_type',
-        'installment_months',   // <-- NAYA
+        'installment_months',
+        'discount',             // <-- NAYA
         'package_id',
         'trainer_id',
         'start_date',
@@ -42,7 +46,8 @@ class Member extends Model
         'date_of_birth'       => 'date:Y-m-d',
         'start_date'          => 'date:Y-m-d',
         'end_date'            => 'date:Y-m-d',
-        'installment_months'  => 'integer',   // <-- NAYA
+        'installment_months'  => 'integer',
+        'discount'            => 'decimal:2',   // <-- NAYA
         'is_active'           => 'boolean',
     ];
 
@@ -80,7 +85,6 @@ class Member extends Model
         return $this->hasOne(Payment::class)->latestOfMany();
     }
 
-    // <-- NAYA: Monthly fees relation
     public function monthlyFees(): HasMany
     {
         return $this->hasMany(MemberMonthlyFee::class)->orderBy('month_number');

@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class CashInHandEntry extends Model
 {
+    use BelongsToCompany;
+
     protected $table = 'cash_in_hand_entries';
 
     protected $fillable = [
@@ -26,7 +29,7 @@ class CashInHandEntry extends Model
         'balance_after' => 'decimal:2',
     ];
 
-    /** Maujooda cash in hand (sab se aakhri entry ka balance_after). */
+    /** Maujooda cash in hand (sab se aakhri entry ka balance_after). Ab sirf login company ki entries se. */
     public static function currentBalance(): float
     {
         $last = static::orderByDesc('id')->first();
@@ -55,7 +58,7 @@ class CashInHandEntry extends Model
 
             $after = $type === 'add' ? $before + $amount : $before - $amount;
 
-            return static::create([
+            $entry = new static([
                 'type' => $type,
                 'amount' => $amount,
                 'balance_before' => $before,
@@ -64,6 +67,16 @@ class CashInHandEntry extends Model
                 'user_id' => $user?->id,
                 'user_name' => $user?->name ?? $user?->email,
             ]);
+
+            // company_id request se nahi, sirf user se. Trait bhi set karta hai,
+            // lekin yahan explicit rakha taake queue/job mein bhi sahi company aaye.
+            if ($user && isset($user->company_id)) {
+                $entry->company_id = $user->company_id;
+            }
+
+            $entry->save();
+
+            return $entry;
         });
     }
 

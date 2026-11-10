@@ -159,11 +159,18 @@ class CreditController extends Controller
     // Add Vendor
     public function store(Request $request)
     {
+        $cid = $request->user()->company_id; // <-- NAYA
+
         $data = $request->validate([
-            'name'  => ['required', 'string', 'max:255', 'unique:vendors,name'],
+            'name'  => [
+                'required', 'string', 'max:255',
+                // <-- BADLA: ab sirf apni company ke andar unique
+                Rule::unique('vendors', 'name')->where('company_id', $cid),
+            ],
             'phone' => 'nullable|string|max:50',
         ]);
 
+        // company_id trait ka creating hook khud set karta hai
         $vendor = Vendor::create([
             'name'  => trim($data['name']),
             'phone' => $data['phone'] ?? null,
@@ -179,8 +186,16 @@ class CreditController extends Controller
     // Edit Vendor
     public function update(Request $request, Vendor $vendor)
     {
+        $cid = $request->user()->company_id; // <-- NAYA
+
         $data = $request->validate([
-            'name'  => ['required', 'string', 'max:255', Rule::unique('vendors', 'name')->ignore($vendor->id)],
+            'name'  => [
+                'required', 'string', 'max:255',
+                // <-- BADLA: apni company ke andar unique (khud ko ignore)
+                Rule::unique('vendors', 'name')
+                    ->where('company_id', $cid)
+                    ->ignore($vendor->id),
+            ],
             'phone' => 'nullable|string|max:50',
         ]);
 
@@ -270,6 +285,7 @@ class CreditController extends Controller
                     $purchase->paid_amount = round($purchase->paid_amount + $apply, 2);
                     $purchase->save();
 
+                    // company_id trait ka creating hook khud set karta hai
                     VendorPayment::create([
                         'vendor_id'   => $vendor->id,
                         'purchase_id' => $purchase->id,

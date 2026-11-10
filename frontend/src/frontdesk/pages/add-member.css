@@ -656,3 +656,12 @@ textarea {
   text-transform: none;
   letter-spacing: 0;
 }
+
+
+.am-trainer-count {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+}

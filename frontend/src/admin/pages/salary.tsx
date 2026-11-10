@@ -6,8 +6,13 @@ import "./salary.css";
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
-interface Trainer {
+type StaffKind = "trainer" | "staff" | "frontdesk";
+
+// One row in the table: a trainer, a staff member or a front desk user.
+interface Person {
+  key: string; // unique across all types, e.g. "trainer-1" / "staff-1" / "frontdesk-1"
   id: number;
+  staffType: StaffKind;
   name: string;
   role: string;
   status: string;
@@ -17,11 +22,13 @@ interface Trainer {
   specialization: string;
   experienceYears: number | null;
   baseSalary: number;
+  membersCount: number | null; // <-- NAYI LINE (trainer kitnay members train kar raha hai)
 }
 
 interface Payment {
   id: number;
   staffId: number;
+  staffType: string;
   amount: number;
   commission: number;
   total: number;
@@ -63,6 +70,8 @@ const money = (v: number) => `Rs ${v.toLocaleString("en-US")}`;
 
 const show = (v: string | null | undefined) => (v && v.trim() ? v : FALLBACK);
 
+const capitalize = (v: string) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 const todayStr = () => {
@@ -78,8 +87,10 @@ const monthLabel = (value: string) => {
 const shortMonth = (m: number, y: number) =>
   `${new Date(y, m - 1, 1).toLocaleString("en-US", { month: "short" })} ${y}`;
 
-const mapTrainer = (t: any): Trainer => ({
+const mapTrainer = (t: any): Person => ({
+  key: `trainer-${t.id}`,
   id: Number(t.id),
+  staffType: "trainer",
   name: t.name ?? "",
   role: t.role ?? "",
   status: t.status ?? "",
@@ -89,11 +100,47 @@ const mapTrainer = (t: any): Trainer => ({
   specialization: t.specialization ?? "",
   experienceYears: t.experience_years ?? null,
   baseSalary: num(t.base_salary),
+  membersCount: Number(t.members_count ?? 0), // <-- NAYI LINE
+});
+
+// Staff table uses `salary` (not `base_salary`) and has no cnic / specialization / experience.
+const mapStaff = (s: any): Person => ({
+  key: `staff-${s.id}`,
+  id: Number(s.id),
+  staffType: "staff",
+  name: s.name ?? "",
+  role: s.role ?? "Staff",
+  status: capitalize(s.status ?? ""),
+  phone: s.phone ?? "",
+  email: s.email ?? "",
+  cnic: "",
+  specialization: "",
+  experienceYears: null,
+  baseSalary: num(s.salary),
+  membersCount: null, // <-- NAYI LINE
+});
+
+// Front desk lives in the users table (role = frontdesk) and uses `base_salary`.
+const mapFrontdesk = (u: any): Person => ({
+  key: `frontdesk-${u.id}`,
+  id: Number(u.id),
+  staffType: "frontdesk",
+  name: u.name ?? "",
+  role: "Front Desk",
+  status: "Active",
+  phone: u.phone ?? "",
+  email: u.email ?? "",
+  cnic: "",
+  specialization: "",
+  experienceYears: null,
+  baseSalary: num(u.base_salary),
+  membersCount: null, // <-- NAYI LINE
 });
 
 const mapPayment = (p: any): Payment => ({
   id: Number(p.id),
   staffId: Number(p.staff_id),
+  staffType: String(p.staff_type ?? "trainer"),
   amount: num(p.amount),
   commission: num(p.commission),
   total: num(p.amount) + num(p.commission),
@@ -115,6 +162,9 @@ const useEscape = (active: boolean, onClose: () => void) => {
 
 const badgeClass = (label: RowStats["label"]) =>
   label === "Paid" ? "paid" : label === "Partial" ? "partial" : label === "Unpaid" ? "unpaid" : "none";
+
+const detailsTitle = (type: StaffKind) =>
+  type === "trainer" ? "Trainer details" : type === "frontdesk" ? "Front desk details" : "Staff details";
 
 /* ------------------------------------------------------------------ */
 /* Icons                                                                */
@@ -165,7 +215,7 @@ const Icon = {
 /* ------------------------------------------------------------------ */
 
 interface PayModalProps {
-  trainer: Trainer;
+  trainer: Person;
   monthValue: string;
   paidSalary: number;
   onClose: () => void;
@@ -210,7 +260,7 @@ const PayModal: React.FC<PayModalProps> = ({ trainer, monthValue, paidSalary, on
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           staff_id: trainer.id,
-          staff_type: "trainer",
+          staff_type: trainer.staffType,
           amount: amountNum,
           commission: commissionNum,
           month: m,
@@ -336,7 +386,7 @@ const PayModal: React.FC<PayModalProps> = ({ trainer, monthValue, paidSalary, on
 /* ------------------------------------------------------------------ */
 
 interface ViewModalProps {
-  trainer: Trainer;
+  trainer: Person;
   monthValue: string;
   stats: RowStats;
   onClose: () => void;
@@ -355,9 +405,10 @@ const ViewModal: React.FC<ViewModalProps> = ({ trainer, monthValue, stats, onClo
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_URL}/salary-payments?staff_type=trainer&staff_id=${trainer.id}`, {
-          headers: authHeaders(),
-        });
+        const res = await fetch(
+          `${API_URL}/salary-payments?staff_type=${trainer.staffType}&staff_id=${trainer.id}`,
+          { headers: authHeaders() }
+        );
         if (!res.ok) throw new Error();
         const json = await res.json();
         if (!cancelled) setHistory((json.data ?? []).map(mapPayment));
@@ -371,18 +422,26 @@ const ViewModal: React.FC<ViewModalProps> = ({ trainer, monthValue, stats, onClo
     return () => {
       cancelled = true;
     };
-  }, [trainer.id]);
+  }, [trainer.id, trainer.staffType]);
 
   const details: Array<[string, string]> = [
     ["Role", show(trainer.role)],
     ["Status", show(trainer.status)],
     ["Phone", show(trainer.phone)],
     ["Email", show(trainer.email)],
-    ["CNIC", show(trainer.cnic)],
-    ["Specialization", show(trainer.specialization)],
-    ["Experience", trainer.experienceYears != null ? `${trainer.experienceYears} Years` : FALLBACK],
-    ["Monthly Salary", trainer.baseSalary > 0 ? money(trainer.baseSalary) : FALLBACK],
   ];
+
+  // These fields only exist for trainers.
+  if (trainer.staffType === "trainer") {
+    details.push(
+      ["CNIC", show(trainer.cnic)],
+      ["Specialization", show(trainer.specialization)],
+      ["Experience", trainer.experienceYears != null ? `${trainer.experienceYears} Years` : FALLBACK],
+      ["Members Training", String(trainer.membersCount ?? 0)] // <-- NAYI LINE
+    );
+  }
+
+  details.push(["Monthly Salary", trainer.baseSalary > 0 ? money(trainer.baseSalary) : FALLBACK]);
 
   const lifetimeTotal = history.filter((p) => p.status === "paid").reduce((s, p) => s + p.total, 0);
 
@@ -401,7 +460,7 @@ const ViewModal: React.FC<ViewModalProps> = ({ trainer, monthValue, stats, onClo
 
         <div className="sal-view">
           <section>
-            <h3 className="sal-view__title">Trainer details</h3>
+            <h3 className="sal-view__title">{detailsTitle(trainer.staffType)}</h3>
             <div className="sal-view__grid">
               {details.map(([label, value]) => (
                 <div key={label} className="sal-view__row">
@@ -501,35 +560,49 @@ const ViewModal: React.FC<ViewModalProps> = ({ trainer, monthValue, stats, onClo
 
 const Salary: React.FC = () => {
   const [monthValue, setMonthValue] = useState(todayStr().slice(0, 7));
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const [payTarget, setPayTarget] = useState<Trainer | null>(null);
-  const [viewTarget, setViewTarget] = useState<Trainer | null>(null);
+  const [payTarget, setPayTarget] = useState<Person | null>(null);
+  const [viewTarget, setViewTarget] = useState<Person | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     const [y, m] = monthValue.split("-").map(Number);
     try {
-      const [trainersRes, paymentsRes] = await Promise.all([
+      const [trainersRes, staffRes, frontdeskRes, paymentsRes] = await Promise.all([
         fetch(`${API_URL}/trainers`, { headers: authHeaders() }),
-        fetch(`${API_URL}/salary-payments?staff_type=trainer&month=${m}&year=${y}`, { headers: authHeaders() }),
+        fetch(`${API_URL}/staff`, { headers: authHeaders() }),
+        fetch(`${API_URL}/salary-frontdesk`, { headers: authHeaders() }),
+        // No staff_type filter: we need trainer, staff AND frontdesk payments for this month.
+        fetch(`${API_URL}/salary-payments?month=${m}&year=${y}`, { headers: authHeaders() }),
       ]);
 
-      if (trainersRes.status === 401 || paymentsRes.status === 401) {
+      if (
+        trainersRes.status === 401 ||
+        staffRes.status === 401 ||
+        frontdeskRes.status === 401 ||
+        paymentsRes.status === 401
+      ) {
         setError("Your session has expired. Please log in again.");
         return;
       }
-      if (!trainersRes.ok || !paymentsRes.ok) throw new Error();
+      if (!trainersRes.ok || !staffRes.ok || !frontdeskRes.ok || !paymentsRes.ok) throw new Error();
 
       const trainersJson = await trainersRes.json();
+      const staffJson = await staffRes.json();
+      const frontdeskJson = await frontdeskRes.json();
       const paymentsJson = await paymentsRes.json();
 
-      setTrainers((Array.isArray(trainersJson) ? trainersJson : trainersJson.data ?? []).map(mapTrainer));
+      const trainerRows = (Array.isArray(trainersJson) ? trainersJson : trainersJson.data ?? []).map(mapTrainer);
+      const staffRows = (Array.isArray(staffJson) ? staffJson : staffJson.data ?? []).map(mapStaff);
+      const frontdeskRows = (frontdeskJson.data ?? []).map(mapFrontdesk);
+
+      setPeople([...trainerRows, ...staffRows, ...frontdeskRows]);
       setPayments((paymentsJson.data ?? []).map(mapPayment));
     } catch {
       setError("Failed to load salary data. Is the backend running?");
@@ -543,8 +616,9 @@ const Salary: React.FC = () => {
   }, [load]);
 
   const statsFor = useCallback(
-    (t: Trainer): RowStats => {
-      const mine = payments.filter((p) => p.staffId === t.id && p.status === "paid");
+    (t: Person): RowStats => {
+      // Match on BOTH id and type, because trainer #1, staff #1 and frontdesk #1 can exist together.
+      const mine = payments.filter((p) => p.staffId === t.id && p.staffType === t.staffType && p.status === "paid");
       const paidSalary = mine.reduce((s, p) => s + p.amount, 0);
       const commission = mine.reduce((s, p) => s + p.commission, 0);
       const remaining = Math.max(0, t.baseSalary - paidSalary);
@@ -562,24 +636,24 @@ const Salary: React.FC = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return trainers;
-    return trainers.filter(
+    if (!q) return people;
+    return people.filter(
       (t) => t.name.toLowerCase().includes(q) || t.phone.toLowerCase().includes(q) || t.role.toLowerCase().includes(q)
     );
-  }, [trainers, search]);
+  }, [people, search]);
 
   const totals = useMemo(() => {
     let budget = 0;
     let salary = 0;
     let commission = 0;
-    trainers.forEach((t) => {
+    people.forEach((t) => {
       const s = statsFor(t);
       budget += t.baseSalary;
       salary += s.paidSalary;
       commission += s.commission;
     });
     return { budget, salary, commission, total: salary + commission };
-  }, [trainers, statsFor]);
+  }, [people, statsFor]);
 
   const handleSaved = () => {
     setPayTarget(null);
@@ -595,7 +669,7 @@ const Salary: React.FC = () => {
           </span>
           <div>
             <h1>Salary</h1>
-            <p>Trainers salary and commission for {monthLabel(monthValue)}</p>
+            <p>Trainers, staff and front desk salary and commission for {monthLabel(monthValue)}</p>
           </div>
         </div>
 
@@ -625,8 +699,8 @@ const Salary: React.FC = () => {
 
       <section className="sal-cards">
         <div className="sal-card">
-          <span>Total Trainers</span>
-          <strong>{trainers.length}</strong>
+          <span>Total Employees</span>
+          <strong>{people.length}</strong>
         </div>
         <div className="sal-card">
           <span>Monthly Salary Budget</span>
@@ -651,10 +725,10 @@ const Salary: React.FC = () => {
           <Icon.Search />
           <input
             type="search"
-            placeholder="Search trainers by name, phone, or role..."
+            placeholder="Search by name, phone, or role..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search trainers"
+            aria-label="Search employees"
           />
         </div>
       </section>
@@ -667,15 +741,15 @@ const Salary: React.FC = () => {
           </div>
         ) : filtered.length === 0 ? (
           <div className="sal-empty">
-            <h3>No trainers found</h3>
-            <p>Add trainers from the Trainers page to see them here.</p>
+            <h3>No employees found</h3>
+            <p>Add trainers, staff or front desk from the Employees page to see them here.</p>
           </div>
         ) : (
           <table className="sal-table">
             <thead>
               <tr>
                 <th>#</th>
-                <th>Trainer</th>
+                <th>Employee</th>
                 <th>Monthly Salary</th>
                 <th>Salary Paid</th>
                 <th>Commission</th>
@@ -689,12 +763,17 @@ const Salary: React.FC = () => {
               {filtered.map((t, i) => {
                 const s = statsFor(t);
                 return (
-                  <tr key={t.id}>
+                  <tr key={t.key}>
                     <td>{i + 1}</td>
                     <td>
                       <div className="sal-name">
                         <strong>{t.name || FALLBACK}</strong>
-                        <span>{show(t.role)}</span>
+                        {/* BADLA HUA: trainer ke neeche role ke saath members count bhi dikhega */}
+                        <span>
+                          {show(t.role)}
+                          {t.staffType === "trainer" &&
+                            ` · ${t.membersCount ?? 0} ${(t.membersCount ?? 0) === 1 ? "member" : "members"}`}
+                        </span>
                       </div>
                     </td>
                     <td>{t.baseSalary > 0 ? money(t.baseSalary) : FALLBACK}</td>
@@ -727,7 +806,7 @@ const Salary: React.FC = () => {
 
       {!loading && filtered.length > 0 && (
         <p className="sal-footer">
-          Showing {filtered.length} of {trainers.length} trainers
+          Showing {filtered.length} of {people.length} employees
         </p>
       )}
 

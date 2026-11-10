@@ -12,16 +12,20 @@ class TrainerController extends Controller
     public function index()
     {
         return response()->json(
-            Trainer::where('is_active', true)->orderBy('name')->get()
+            Trainer::where('is_active', true)
+                ->withCount('members')
+                ->orderBy('name')
+                ->get()
         );
     }
 
     // Front desk staff (users table, role = frontdesk)
-    public function frontdesk()
+    public function frontdesk(Request $request)
     {
         $users = DB::table('users')
+            ->where('company_id', $request->user()->company_id) // <-- NAYA
             ->where('role', 'frontdesk')
-            ->select('id', 'name', 'phone', 'email', 'base_salary')  // <-- base_salary add kiya
+            ->select('id', 'name', 'phone', 'email', 'base_salary')
             ->orderBy('name')
             ->get();
 
@@ -32,6 +36,7 @@ class TrainerController extends Controller
     {
         $data = $this->validated($request);
 
+        // company_id trait ka creating hook khud set karta hai
         $trainer = Trainer::create($data);
 
         return response()->json([
@@ -66,19 +71,24 @@ class TrainerController extends Controller
 
     private function validated(Request $request, ?int $trainerId = null): array
     {
+        $cid = $request->user()->company_id; // <-- NAYA
+
         return $request->validate([
             'name'              => ['required', 'string', 'max:255'],
             'phone'             => ['nullable', 'string', 'max:20'],
             'cnic'              => [
                 'nullable', 'string',
-                Rule::unique('trainers', 'cnic')->ignore($trainerId),
+                // <-- BADLA: sirf apni company ke andar unique
+                Rule::unique('trainers', 'cnic')
+                    ->where('company_id', $cid)
+                    ->ignore($trainerId),
             ],
             'email'             => ['nullable', 'email', 'max:255'],
             'specialization'    => ['nullable', 'string', 'max:255'],
             'role'              => ['nullable', 'string', 'max:255'],
             'status'            => ['nullable', Rule::in(['Active', 'On Leave', 'Inactive'])],
             'experience_years'  => ['nullable', 'integer', 'min:0', 'max:60'],
-            'base_salary'       => ['nullable', 'numeric', 'min:0'],  // <-- Yeh add kiya
+            'base_salary'       => ['nullable', 'numeric', 'min:0'],
             'photo_url'         => ['nullable', 'url', 'max:2048'],
         ]);
     }

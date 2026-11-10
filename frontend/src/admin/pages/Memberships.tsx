@@ -77,10 +77,18 @@ interface MembershipRecord {
   monthlyFees: MonthlyFee[];
 }
 
+interface TrainerOption {
+  id: number;
+  name: string;
+}
+
 /* ----------------------------- Helpers ----------------------------- */
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const ALL_TRAINERS = "All Trainers";
+const NO_TRAINER = "__no_trainer__";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const fmtDateLong = (d: Date) =>
@@ -137,6 +145,18 @@ const typeClass = (t: MembershipType) => {
   if (t === "Package + Trainer") return "ms-badge trainer";
   if (t === "Normal + Trainer") return "ms-badge normal-trainer";
   return "ms-badge normal";
+};
+
+/* Membership type after a trainer is added / removed */
+const typeAfterTrainerChange = (type: MembershipType, hasTrainer: boolean): MembershipType => {
+  if (hasTrainer) {
+    if (type === "Normal") return "Normal + Trainer";
+    if (type === "Package Only") return "Package + Trainer";
+    return type;
+  }
+  if (type === "Normal + Trainer") return "Normal";
+  if (type === "Package + Trainer") return "Package Only";
+  return type;
 };
 
 const extractList = (json: any): ApiRow[] => {
@@ -315,10 +335,17 @@ const Memberships = () => {
   const [tab, setTab] = useState<TabKey>("All");
   const [query, setQuery] = useState("");
   const [plan, setPlan] = useState("All Plans");
+  const [trainerFilter, setTrainerFilter] = useState(ALL_TRAINERS);
+  const [trainerList, setTrainerList] = useState<TrainerOption[]>([]);
   const [page, setPage] = useState(1);
   const [activeMember, setActiveMember] = useState<MembershipRecord | null>(null);
 
   const [togglingFeeId, setTogglingFeeId] = useState<number | null>(null);
+
+  // Trainer change / remove (inside the modal)
+  const [editingTrainer, setEditingTrainer] = useState(false);
+  const [selectedTrainerId, setSelectedTrainerId] = useState("");
+  const [savingTrainer, setSavingTrainer] = useState(false);
 
   useLayoutEffect(() => {
     const updateHeight = () => {
@@ -345,6 +372,14 @@ const Memberships = () => {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [activeMember]);
+
+  // Reset the trainer editor whenever a different member is opened / modal closed
+  const activeMemberId = activeMember?.id ?? null;
+  useEffect(() => {
+    setEditingTrainer(false);
+    setSelectedTrainerId("");
+    setSavingTrainer(false);
+  }, [activeMemberId]);
 
   const loadMembers = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
@@ -379,9 +414,39 @@ const Memberships = () => {
     return () => controller.abort();
   }, [loadMembers, reloadKey]);
 
+  // Load all trainers (id + name) for the filter dropdown and the change-trainer dropdown
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadTrainers = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_URL}/trainers`, {
+          signal: controller.signal,
+          headers: {
+            Accept: "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        const list: any[] = Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+        const trainers: TrainerOption[] = list
+          .map((t) => ({ id: Number(t?.id), name: String(t?.name ?? "").trim() }))
+          .filter((t) => !Number.isNaN(t.id) && t.name !== "");
+        setTrainerList(trainers);
+      } catch {
+        /* ignore: the filter falls back to trainers found in members */
+      }
+    };
+
+    loadTrainers();
+    return () => controller.abort();
+  }, [reloadKey]);
+
   useEffect(() => {
     setPage(1);
-  }, [tab, query, plan]);
+  }, [tab, query, plan, trainerFilter]);
 
   // Stop the header Refresh button's "Refreshing..." state once loading finishes
   useEffect(() => {
@@ -476,6 +541,16 @@ const Memberships = () => {
     return ["All Plans", ...Array.from(set).sort()];
   }, [members]);
 
+  // Trainer filter options: all trainers from /trainers + any trainer found in members
+  const trainerOptions = useMemo(() => {
+    const set = new Set<string>(trainerList.map((t) => t.name));
+    members.forEach((m) => {
+      const t = m.trainer.trim();
+      if (t) set.add(t);
+    });
+    return Array.from(set).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  }, [members, trainerList]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const qDigits = q.replace(/[\s-]/g, "");
@@ -483,6 +558,13 @@ const Memberships = () => {
     return members.filter((m) => {
       if (tab !== "All" && m.membershipType !== tab) return false;
       if (plan !== "All Plans" && m.plan !== plan) return false;
+
+      if (trainerFilter === NO_TRAINER) {
+        if (m.trainer.trim() !== "") return false;
+      } else if (trainerFilter !== ALL_TRAINERS) {
+        if (m.trainer.trim().toLowerCase() !== trainerFilter.trim().toLowerCase()) return false;
+      }
+
       if (!q) return true;
       return (
         m.name.toLowerCase().includes(q) ||
@@ -492,7 +574,7 @@ const Memberships = () => {
           (m.phone.replace(/\s/g, "").includes(qDigits) || m.cnic.replace(/-/g, "").includes(qDigits)))
       );
     });
-  }, [members, tab, query, plan]);
+  }, [members, tab, query, plan, trainerFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -679,6 +761,70 @@ const Memberships = () => {
     }
   };
 
+  /* ---------- Change / Remove trainer ---------- */
+  const startEditTrainer = () => {
+    if (!activeMember) return;
+    const current = trainerList.find(
+      (t) => t.name.trim().toLowerCase() === activeMember.trainer.trim().toLowerCase()
+    );
+    setSelectedTrainerId(current ? String(current.id) : "");
+    setEditingTrainer(true);
+  };
+
+  const saveTrainer = async (trainerId: number | null) => {
+    if (!activeMember) return;
+    setSavingTrainer(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/members/${activeMember.id}/trainer`, {
+        method: "PUT",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ trainer_id: trainerId }),
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json.message ?? "Could not update trainer");
+        return;
+      }
+
+      const newName =
+        trainerId === null ? "" : trainerList.find((t) => t.id === trainerId)?.name ?? "";
+
+      const updatedMember: MembershipRecord = {
+        ...activeMember,
+        trainer: newName,
+        membershipType: typeAfterTrainerChange(activeMember.membershipType, trainerId !== null),
+      };
+
+      setActiveMember(updatedMember);
+      setMembers((prev) => prev.map((m) => (m.id === updatedMember.id ? updatedMember : m)));
+      setEditingTrainer(false);
+    } catch {
+      alert("Could not connect to the server.");
+    } finally {
+      setSavingTrainer(false);
+    }
+  };
+
+  const handleSaveTrainer = () => {
+    if (!selectedTrainerId) {
+      alert("Please select a trainer.");
+      return;
+    }
+    saveTrainer(Number(selectedTrainerId));
+  };
+
+  const handleRemoveTrainer = () => {
+    if (!activeMember) return;
+    if (!window.confirm(`Remove trainer "${activeMember.trainer}" from ${activeMember.name}?`)) return;
+    saveTrainer(null);
+  };
+
   return (
     <div
       className="ms-page"
@@ -766,6 +912,25 @@ const Memberships = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
+            </div>
+
+            {/* Trainer filter */}
+            <div className="ms-select-wrap">
+              <Users size={14} className="ms-select-lead" />
+              <select
+                className="ms-select"
+                value={trainerFilter}
+                onChange={(e) => setTrainerFilter(e.target.value)}
+              >
+                <option value={ALL_TRAINERS}>{ALL_TRAINERS}</option>
+                {trainerOptions.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+                <option value={NO_TRAINER}>No Trainer</option>
+              </select>
+              <ChevronDown size={14} className="ms-select-icon" />
             </div>
 
             <div className="ms-select-wrap">
@@ -955,10 +1120,68 @@ const Memberships = () => {
                 <span className="ms-detail-label">Plan</span>
                 <span className="ms-detail-value">{activeMember.plan}</span>
               </div>
+
+              {/* Trainer + Change / Remove */}
               <div className="ms-detail">
                 <span className="ms-detail-label">Trainer</span>
                 <span className="ms-detail-value">{activeMember.trainer || "No trainer assigned"}</span>
+
+                {editingTrainer ? (
+                  <div className="ms-trainer-actions">
+                    <select
+                      className="ms-trainer-select"
+                      value={selectedTrainerId}
+                      onChange={(e) => setSelectedTrainerId(e.target.value)}
+                      disabled={savingTrainer}
+                    >
+                      <option value="">Select trainer</option>
+                      {trainerList.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="ms-trainer-btn save"
+                      onClick={handleSaveTrainer}
+                      disabled={savingTrainer}
+                    >
+                      {savingTrainer ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      className="ms-trainer-btn danger"
+                      onClick={() => setEditingTrainer(false)}
+                      disabled={savingTrainer}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="ms-trainer-actions">
+                    <button
+                      type="button"
+                      className="ms-trainer-btn"
+                      onClick={startEditTrainer}
+                      disabled={savingTrainer}
+                    >
+                      {activeMember.trainer ? "Change" : "Assign Trainer"}
+                    </button>
+                    {activeMember.trainer && (
+                      <button
+                        type="button"
+                        className="ms-trainer-btn danger"
+                        onClick={handleRemoveTrainer}
+                        disabled={savingTrainer}
+                      >
+                        {savingTrainer ? "Removing..." : "Remove"}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
+
               <div className="ms-detail">
                 <span className="ms-detail-label">Joined On</span>
                 <span className="ms-detail-value">{fmtISO(activeMember.joinedOn)}</span>

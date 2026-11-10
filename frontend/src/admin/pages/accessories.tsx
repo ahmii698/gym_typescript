@@ -322,6 +322,10 @@ export default function Accessories() {
   // Cash in hand (balance shown in a card + used to warn before saving a purchase)
   const [cashInHand, setCashInHand] = useState<number | null>(null);
 
+  // Vendor Remaining card: money still owed to vendors for ACCESSORIES only
+  const [vendorRemaining, setVendorRemaining] = useState<number | null>(null);
+  const [vendorFailed, setVendorFailed] = useState(false);
+
   // Spend cards (Total spent / filterable / this week / today)
   const [spend, setSpend] = useState<SpendSummary | null>(null);
   const [spendLoading, setSpendLoading] = useState(true);
@@ -393,6 +397,21 @@ export default function Accessories() {
     }
   };
 
+  // Money still owed to vendors for ACCESSORIES only (drinks are counted on their own page)
+  const loadVendorRemaining = async () => {
+    try {
+      const res = await fetch(`${API_URL}/credit/remaining?source=accessory`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setVendorRemaining(Number(json?.remaining) || 0);
+      setVendorFailed(false);
+    } catch {
+      setVendorFailed(true);
+    }
+  };
+
   const loadSpend = async () => {
     // Don't send a request if the date was cleared
     if (filterType === "custom" && !filterDate) {
@@ -430,6 +449,7 @@ export default function Accessories() {
   useEffect(() => {
     loadItems();
     loadCash();
+    loadVendorRemaining();
   }, []);
 
   useEffect(() => {
@@ -494,7 +514,7 @@ export default function Accessories() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([loadItems(), loadSpend(), loadCash()]);
+      await Promise.all([loadItems(), loadSpend(), loadCash(), loadVendorRemaining()]);
     } finally {
       setRefreshing(false);
     }
@@ -599,7 +619,7 @@ export default function Accessories() {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error();
-      await Promise.all([loadItems(), loadSpend()]);
+      await Promise.all([loadItems(), loadSpend(), loadVendorRemaining()]);
     } catch {
       alert("Could not delete the item.");
     }
@@ -614,7 +634,7 @@ export default function Accessories() {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(extractError(json, "Could not save."));
-    await Promise.all([loadItems(), loadSpend(), loadCash()]);
+    await Promise.all([loadItems(), loadSpend(), loadCash(), loadVendorRemaining()]);
   };
 
   const handleRestock = async (id: number, data: RestockPayload) => {
@@ -626,7 +646,7 @@ export default function Accessories() {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(extractError(json, "Could not add stock."));
-    await Promise.all([loadItems(), loadSpend(), loadCash()]);
+    await Promise.all([loadItems(), loadSpend(), loadCash(), loadVendorRemaining()]);
   };
 
   return (
@@ -836,6 +856,18 @@ export default function Accessories() {
             <span className="acc-stat-title">Total Items</span>
             <span className="acc-stat-period">All time</span>
             <span className="acc-stat-value">{items.length}</span>
+          </div>
+        </div>
+
+        {/* 6. Vendor Remaining (accessories only) */}
+        <div className="acc-stat-card">
+          <div className="acc-stat-icon orange"><WalletIcon /></div>
+          <div className="acc-stat-info">
+            <span className="acc-stat-title">Vendor Remaining</span>
+            <span className="acc-stat-period">Left to pay</span>
+            <span className="acc-stat-value">
+              {vendorFailed ? "N/A" : vendorRemaining === null ? "…" : formatPrice(vendorRemaining)}
+            </span>
           </div>
         </div>
       </section>

@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Accessory extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'name',
         'category',

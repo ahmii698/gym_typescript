@@ -3,12 +3,14 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   Home,
   Package,
+  Boxes,            // Packages
   ShoppingBag,
   CupSoda,
   ChevronDown,
   Users,
   CalendarCheck,
   IdCard,
+  Coins,            // Amounts
   UserPlus,
   UserCog,          // Employees
   Wallet,           // Expense group icon
@@ -17,7 +19,6 @@ import {
   Banknote,         // Cash in Hand
   CreditCard,       // Credit Management
   ShieldCheck,      // Create > Admin
-  Headset,          // Create > Front Desk
   History,          // Inventory History
   Menu,
   X,
@@ -62,18 +63,25 @@ const expenseItems = [
   { to: "/admin/expenses", label: "Expenses", icon: Receipt },
 ];
 
-// --- Memberships ke baad Employees ---
+// --- Packages (Expense ke neeche) ---
+const packagesItem = {
+  to: "/admin/packages",
+  label: "Packages",
+  icon: Boxes,
+};
+
+// --- Memberships ke baad Amounts, phir Employees ---
 const bottomItems = [
   { to: "/admin/members", label: "Members", icon: Users },
   { to: "/admin/checkins", label: "Check-ins", icon: CalendarCheck },
   { to: "/admin/memberships", label: "Memberships", icon: IdCard },
+  { to: "/admin/amounts", label: "Amounts", icon: Coins },
   { to: "/admin/employees", label: "Employees", icon: UserCog },
 ];
 
-// --- Create Menu Items (Admin / Front Desk) ---
+// --- Create Menu Items (sirf Admin; Front Desk ab Employees > Front Desk tab mein hai) ---
 const createItems = [
   { to: "/admin/register", label: "Admin", icon: ShieldCheck },
-  { to: "/frontdesk/register", label: "Front Desk", icon: Headset },
 ];
 
 const Sidebar = () => {
@@ -92,10 +100,8 @@ const Sidebar = () => {
     pathname.startsWith("/admin/finance");
   const [expenseOpen, setExpenseOpen] = useState(inExpense);
 
-  // --- Create States (Admin + Front Desk) ---
-  const inCreate =
-    pathname.startsWith("/admin/register") ||
-    pathname.startsWith("/frontdesk/register");
+  // --- Create States (sirf Admin) ---
+  const inCreate = pathname.startsWith("/admin/register");
   const [createOpen, setCreateOpen] = useState(inCreate);
 
   // Auto-open groups
@@ -267,10 +273,13 @@ const Sidebar = () => {
             </div>
           )}
 
-          {/* Members, Check-ins, Memberships, Employees */}
+          {/* --- Packages (Expense ke neeche) --- */}
+          {renderLink(packagesItem)}
+
+          {/* Members, Check-ins, Memberships, Amounts, Employees */}
           {bottomItems.map(renderLink)}
 
-          {/* --- Create Group (Admin / Front Desk) --- */}
+          {/* --- Create Group (sirf Admin) --- */}
           <button
             type="button"
             className={`sidebar-nav-item sidebar-group-btn ${

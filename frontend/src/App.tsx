@@ -23,6 +23,15 @@ import AdminSettings from "./admin/pages/Settings";
 import Accessories from "./admin/pages/accessories";
 import DrinksBeverages from "./admin/pages/drinks&beverages";
 
+// --- Amounts Page Import (Memberships ke neeche sidebar mein) ---
+import Amounts from "./admin/pages/amounts";
+
+// --- Amount Proof Page Import (I've Made the Payment ke baad wala page) ---
+import AmountProof from "./admin/pages/amountproof";
+
+// --- Payment Required Page Import (company block hone par PUBLIC page) ---
+import PaymentRequired from "./admin/pages/PaymentRequired";
+
 // --- Inventory History Page Import ---
 import InvHistory from "./admin/pages/invhistory";
 
@@ -41,6 +50,15 @@ import Expenses from "./admin/pages/Expenses"; // Fixed + Extra + Salary tabs
 // --- Employees Page Import ---
 import Employees from "./admin/pages/employees";
 
+// --- Super Admin Pages Import ---
+import SuperAdminLogin from "./pages/super-admin/SuperAdminLogin";
+import SuperAdminDashboard from "./pages/super-admin/dashboard";
+import SuperAdminPayments from "./pages/super-admin/payments";
+import SuperAdminReminder from "./pages/super-admin/reminder"; // <-- NEW (Reminders)
+import SuperAdminMoneyChannel from "./pages/super-admin/moneychannel"; // <-- NEW (Money Channels)
+import SuperAdminTrial from "./pages/super-admin/trial";
+import SuperAdminCreate from "./pages/super-admin/create";
+
 import "./App.css";
 
 function App() {
@@ -52,6 +70,19 @@ function App() {
       <Route path="/admin/register" element={<AdminRegister />} />
       <Route path="/frontdesk/register" element={<FrontdeskRegister />} />
       <Route path="/forgot-password" element={<ForgotPass />} />
+
+      {/* --- Payment Required (PUBLIC: koi auth guard nahi, token nahi hota) --- */}
+      <Route path="/payment-required" element={<PaymentRequired />} />
+
+      {/* --- Super Admin --- */}
+      <Route path="/super-admin" element={<SuperAdminLogin />} />
+      <Route path="/super-admin/login" element={<SuperAdminLogin />} />
+      <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
+      <Route path="/super-admin/payments" element={<SuperAdminPayments />} />
+      <Route path="/super-admin/reminders" element={<SuperAdminReminder />} /> {/* <-- NEW */}
+      <Route path="/super-admin/money-channels" element={<SuperAdminMoneyChannel />} /> {/* <-- NEW */}
+      <Route path="/super-admin/trial" element={<SuperAdminTrial />} />
+      <Route path="/super-admin/create" element={<SuperAdminCreate />} />
 
       <Route path="/frontdesk" element={<Home />}>
         <Route index element={<Navigate to="dashboard" replace />} />
@@ -72,6 +103,13 @@ function App() {
         <Route path="members" element={<Members />} />
         <Route path="checkins" element={<CheckIns />} />
         <Route path="memberships" element={<Memberships />} />
+
+        {/* --- Amounts (Memberships ke neeche sidebar mein) --- */}
+        <Route path="amounts" element={<Amounts />} />
+
+        {/* --- Amount Proof (I've Made the Payment par click karne ke baad) --- */}
+        <Route path="amount-proof" element={<AmountProof />} />
+
         <Route path="payments" element={<Payments />} />
 
         {/* --- Employees --- */}
@@ -88,6 +126,9 @@ function App() {
         <Route path="finance/fixed" element={<FixedExpense />} />
         <Route path="finance/extra" element={<ExtraExpense />} />
 
+        {/* --- Packages (Expense ke neeche sidebar mein) --- */}
+        <Route path="packages" element={<Packages />} />
+
         {/* --- Inventory --- */}
         <Route path="inventory/accessories" element={<Accessories />} />
         <Route path="inventory/drinks" element={<DrinksBeverages />} />
@@ -103,7 +144,13 @@ function App() {
 
         <Route path="reports" element={<AdminReports />} />
         <Route path="settings" element={<AdminSettings />} />
+
+        {/* Galat ya missing link par black screen ki jagah dashboard */}
+        <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
       </Route>
+
+      {/* Koi bhi unknown URL par login par wapas */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }

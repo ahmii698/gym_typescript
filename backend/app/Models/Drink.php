@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 class Drink extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'name', 'category', 'unit', 'quantity', 'low_stock_threshold',
         'price', 'cost_price', 'image',
